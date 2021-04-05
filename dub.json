@@ -1,0 +1,9 @@
+{
+	"authors": [
+		"Andrey Zherikov"
+	],
+	"copyright": "Copyright © 2021, Andrey Zherikov",
+	"description": "Parser for command-line arguments",
+	"license": "BSL-1.0",
+	"name": "argparse"
+}

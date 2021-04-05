@@ -1,0 +1,16 @@
+.dub
+.idea
+docs.json
+__dummy.html
+docs/
+/argparse
+argparse.so
+argparse.dylib
+argparse.dll
+argparse.a
+argparse.lib
+argparse-test-*
+*.exe
+*.o
+*.obj
+*.lst
