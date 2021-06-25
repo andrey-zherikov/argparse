@@ -1,4 +1,4 @@
-![Tests](https://github.com/andrey-zherikov/argparse/actions/workflows/run_tests.yml/badge.svg)
+![Tests](https://github.com/andrey-zherikov/argparse/actions/workflows/run_tests.yaml/badge.svg)
 
 # Parser for command-line arguments
 
