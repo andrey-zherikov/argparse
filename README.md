@@ -8,7 +8,7 @@
 
 Here is "Hello World" example showing the usage of this utility:
 
-<!-- README_CONTENT_BEGIN file=examples/hello_world.d -->
+[//]: # (README_CONTENT_BEGIN file=examples/hello_world.d)
 ```d
 import argparse;
 
@@ -50,7 +50,7 @@ static assert(params.boolean   == true);
 static assert(params.enumValue == Params.Enum.foo);
 static assert(params.array     == [1,2,3]);
 ```
-<!-- README_CONTENT_END -->
+[//]: # (README_CONTENT_END)
 
 ## Features
 
@@ -79,33 +79,6 @@ static assert(params.array     == [1,2,3]);
     - Hash (associative array) arguments.
     - Callbacks.
 - Built-in reporting of error happened during argument parsing.
-
-<!--
-* Help text:
-Automatic generation of help file during compile time.
-
-    * Automatically generated with slight ability for customisation.
-
-    * Works for the default command.
-
-    * Works for exact matches for named commands.
-
-    * Works for partial matches for named commands.
-
-    * Arguments can be displayed in organised groups.
-
- - **Provided help output**
-   - Generated help output for your program and sub-commands
-   - Can be configured to suit your needs, such as disabling colored output.
-   - Provided usage, help and version information.
-   - Completely detached from core `Program`, giving you complete freedom in writing your own help output.
-   - You can categorize commands for better help output
-
- - **Validators**
-   - Provided validators for common cases: `EnumValidator`, `FileSystemValidator` and `DelegateValidator`
-
-
--->
 
 ## Usage
 
