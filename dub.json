@@ -5,5 +5,7 @@
 	"copyright": "Copyright © 2021, Andrey Zherikov",
 	"description": "Parser for command-line arguments",
 	"license": "BSL-1.0",
-	"name": "argparse"
+	"name": "argparse",
+	"sourcePaths": ["source", "examples"],
+	"importPaths": ["source", "examples"]
 }

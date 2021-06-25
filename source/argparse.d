@@ -1,9 +1,8 @@
-module maked.cli.argparse;
+module argparse;
+
 
 import std.typecons: Nullable;
 import std.traits;
-
-public import std.typecons: Flag, Yes, No;
 
 struct Config
 {
@@ -28,23 +27,23 @@ struct Config
        The option character.
        Defaults to '-'.
      */
-    char optionChar = '-';
+    char namedArgChar = '-';
 
     /**
        The string that conventionally marks the end of all options.
-       Assigning an empty string to `endOfOptions` effectively disables it.
+       Assigning an empty string to `endOfArgs` effectively disables it.
        Defaults to "--".
      */
-    string endOfOptions = "--";
+    string endOfArgs = "--";
 
-    /**
+    /**caseSensitive
        If set then argument names are case-sensitive.
        Defaults to true.
      */
     bool caseSensitive = true;
 
     /**
-        Single-letter options can be bundled together, i.e. "-abc" is the same as "-a -b -c".
+        Single-letter arguments can be bundled together, i.e. "-abc" is the same as "-a -b -c".
         Disabled by default.
      */
     bool bundling = false;
@@ -53,28 +52,35 @@ struct Config
        Delegate that processes error messages if they happen during argument parsing.
        By default all errors are printed to stderr.
      */
-    private void delegate(string s) errorHandlerFunc;
+    private void delegate(string s) nothrow errorHandlerFunc;
 
-    @property auto errorHandler(void function(string s) func)
+    @property auto errorHandler(void function(string s) nothrow func)
     {
         return errorHandlerFunc = (string msg) { func(msg); };
     }
 
-    @property auto errorHandler(void delegate(string s) func)
+    @property auto errorHandler(void delegate(string s) nothrow func)
     {
         return errorHandlerFunc = func;
     }
 
 
-    private bool onError(A...)(A args) const
+    private bool onError(A...)(A args) const nothrow
     {
         import std.conv: text;
         import std.stdio: stderr, writeln;
 
-        if(errorHandlerFunc)
-            errorHandlerFunc(text!A(args));
-        else
-            stderr.writeln("Error: ", args);
+        try
+        {
+            if(errorHandlerFunc)
+                errorHandlerFunc(text!A(args));
+            else
+                stderr.writeln("Error: ", args);
+        }
+        catch(Exception e)
+        {
+            throw new Error(e.msg);
+        }
 
         return false;
     }
@@ -89,68 +95,82 @@ unittest
 }
 
 
-private enum ArgumentType { unknown, positional, shortName, longName };
+struct Param(VALUE_TYPE)
+{
+    const Config config;
+    string name;
+
+    static if(!is(VALUE_TYPE == void))
+        VALUE_TYPE value;
+}
+
+alias RawParam = Param!(string[]);
+
+
+private enum ArgumentType { unknown, positional, shortName, longName }
 
 private auto splitArgumentName(string arg, const Config config)
 {
-    import std.typecons: nullable;
+    import std.typecons : nullable;
+    import std.string : indexOf;
 
     struct Result
     {
-        ArgumentType    type;
+        ArgumentType    type = ArgumentType.unknown;
         string          name;
+        string          origName;
         Nullable!string value;
     }
 
     if(arg.length == 0)
         return Result.init;
 
-    if(arg[0] != config.optionChar)
-        return Result(ArgumentType.positional, string.init, nullable(arg));
+    if(arg[0] != config.namedArgChar)
+        return Result(ArgumentType.positional, string.init, string.init, nullable(arg));
 
     if(arg.length == 1)
         return Result.init;
 
-    ArgumentType type;
+    Result result;
 
-    if(arg[1] == config.optionChar)
+    auto idxAssignChar = config.assignChar == char.init ? -1 : arg.indexOf(config.assignChar);
+    if(idxAssignChar < 0)
+        result.origName = arg;
+    else
     {
-        type = ArgumentType.longName;
-        arg = arg[2..$];
+        result.origName = arg[0 .. idxAssignChar];
+        result.value = nullable(arg[idxAssignChar + 1 .. $]);
+    }
+
+    if(result.origName[1] == config.namedArgChar)
+    {
+        result.type = ArgumentType.longName;
+        result.name = result.origName[2..$];
     }
     else
     {
-        type = ArgumentType.shortName;
-        arg = arg[1..$];
+        result.type = ArgumentType.shortName;
+        result.name = result.origName[1..$];
     }
 
-    if(config.assignChar == char.init)
-        return Result(type, arg);
-
-    import std.string : indexOf;
-
-    auto idx = arg.indexOf(config.assignChar);
-    if(idx < 0)
-        return Result(type, arg);
-
-    return Result(type, arg[0 .. idx], nullable(arg[idx + 1 .. $]));
+    return result;
 }
 
 unittest
 {
     import std.typecons : tuple, nullable;
 
-    static assert(splitArgumentName("", Config.init).tupleof == tuple(ArgumentType.init, string.init, Nullable!string.init).tupleof);
-    static assert(splitArgumentName("-", Config.init).tupleof == tuple(ArgumentType.init, string.init, Nullable!string.init).tupleof);
-    static assert(splitArgumentName("abc=4", Config.init).tupleof == tuple(ArgumentType.positional, string.init, "abc=4").tupleof);
-    static assert(splitArgumentName("-abc", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", Nullable!string.init).tupleof);
-    static assert(splitArgumentName("--abc", Config.init).tupleof == tuple(ArgumentType.longName, "abc", Nullable!string.init).tupleof);
-    static assert(splitArgumentName("-abc=fd", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", "fd").tupleof);
-    static assert(splitArgumentName("--abc=fd", Config.init).tupleof == tuple(ArgumentType.longName, "abc", "fd").tupleof);
-    static assert(splitArgumentName("-abc=", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", nullable("")).tupleof);
-    static assert(splitArgumentName("--abc=", Config.init).tupleof == tuple(ArgumentType.longName, "abc", nullable("")).tupleof);
-    static assert(splitArgumentName("-=abc", Config.init).tupleof == tuple(ArgumentType.shortName, string.init, "abc").tupleof);
-    static assert(splitArgumentName("--=abc", Config.init).tupleof == tuple(ArgumentType.longName, string.init, "abc").tupleof);
+    static assert(splitArgumentName("", Config.init).tupleof == tuple(ArgumentType.init, string.init, string.init, Nullable!string.init).tupleof);
+    static assert(splitArgumentName("-", Config.init).tupleof == tuple(ArgumentType.init, string.init, string.init, Nullable!string.init).tupleof);
+    static assert(splitArgumentName("abc=4", Config.init).tupleof == tuple(ArgumentType.positional, string.init, string.init, "abc=4").tupleof);
+    static assert(splitArgumentName("-abc", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", "-abc", Nullable!string.init).tupleof);
+    static assert(splitArgumentName("--abc", Config.init).tupleof == tuple(ArgumentType.longName, "abc", "--abc", Nullable!string.init).tupleof);
+    static assert(splitArgumentName("-abc=fd", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", "-abc", "fd").tupleof);
+    static assert(splitArgumentName("--abc=fd", Config.init).tupleof == tuple(ArgumentType.longName, "abc", "--abc", "fd").tupleof);
+    static assert(splitArgumentName("-abc=", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", "-abc", nullable("")).tupleof);
+    static assert(splitArgumentName("--abc=", Config.init).tupleof == tuple(ArgumentType.longName, "abc", "--abc", nullable("")).tupleof);
+    static assert(splitArgumentName("-=abc", Config.init).tupleof == tuple(ArgumentType.shortName, string.init, "-", "abc").tupleof);
+    static assert(splitArgumentName("--=abc", Config.init).tupleof == tuple(ArgumentType.longName, string.init, "--", "abc").tupleof);
 }
 
 
@@ -164,7 +184,7 @@ if(!is(T == void))
         enum min = 0;
         enum max = 1;
     }
-    else static if(isSomeString!T || isScalarType!T || isCallable!T)
+    else static if(isSomeString!T || isScalarType!T)
     {
         enum min = 1;
         enum max = 1;
@@ -196,7 +216,7 @@ private auto addDefaultValuesCount(T)(ArgumentInfo info)
 private bool checkMemberWithMultiArgs(T)()
 {
     static foreach (sym; getSymbolsByUDA!(T, ArgumentUDA))
-        static assert(getUDAs!(__traits(getMember, T, sym.stringof), ArgumentUDA).length == 1,
+        static assert(getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA).length == 1,
                       "Member "~T.stringof~"."~sym.stringof~" has multiple '*Argument' UDAs");
 
     return true;
@@ -221,9 +241,9 @@ private bool checkArgumentNames(T)()
         string[] names;
         static foreach (sym; getSymbolsByUDA!(T, ArgumentUDA))
         {{
-            enum argUDA = getUDAs!(__traits(getMember, T, sym.stringof), ArgumentUDA)[0];
+            enum argUDA = getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA)[0];
 
-            static assert(!argUDA.info.positional || argUDA.info.names.length == 1,
+            static assert(!argUDA.info.positional || argUDA.info.names.length <= 1,
                  "Positional argument should have exactly one name: "~T.stringof~"."~sym.stringof);
 
             static foreach (name; argUDA.info.names)
@@ -252,7 +272,7 @@ private bool checkPositionalIndexes(T)()
         uint[] positions;
         static foreach (sym; getSymbolsByUDA!(T, ArgumentUDA))
         {{
-            enum argUDA = getUDAs!(__traits(getMember, T, sym.stringof), ArgumentUDA)[0];
+            enum argUDA = getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA)[0];
 
             static if (argUDA.info.positional)
                 positions ~= argUDA.info.position.get;
@@ -279,7 +299,7 @@ private ulong countPositionalArguments(T)()
 {
     ulong count;
     static foreach (sym; getSymbolsByUDA!(T, ArgumentUDA))
-        static if (getUDAs!(__traits(getMember, T, sym.stringof), ArgumentUDA)[0].info.positional)
+        static if (getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA)[0].info.positional)
             count++;
 
     return count;
@@ -289,6 +309,7 @@ private ulong countPositionalArguments(T)()
 private struct Arguments(T)
 {
     static assert(getSymbolsByUDA!(T, ArgumentUDA).length > 0, "Type "~T.stringof~" has no members with '*Argument' UDA");
+    static assert(getSymbolsByUDA!(T, TrailingArgumentUDA).length <= 1, "Type "~T.stringof~" must have at most one 'TrailingArguments' UDA");
 
     private enum _validate = checkMemberWithMultiArgs!T && checkArgumentNames!T && checkPositionalIndexes!T;
 
@@ -302,13 +323,33 @@ private struct Arguments(T)
 
         bool parse(in Config config, string argName, ref T receiver, string[] rawValues) const
         {
-            return info.checkValuesCount(config, argName, rawValues.length) &&
-                   parsingFunc(config, argName, receiver, rawValues);
+            try
+            {
+                return info.checkValuesCount(config, argName, rawValues.length) &&
+                       parsingFunc(config, argName, receiver, rawValues);
+            }
+            catch(Exception e)
+            {
+                return config.onError(argName, ": ", e.msg);
+            }
         }
     }
 
     immutable string function(string str) convertCase;
 
+    static if(getSymbolsByUDA!(T, TrailingArgumentUDA).length == 1)
+    {
+        private void setTrailingArgs(ref T receiver, string[] rawValues)
+        {
+            alias symbol = getSymbolsByUDA!(T, TrailingArgumentUDA)[0];
+
+            static if(__traits(compiles, { __traits(getMember, receiver, symbol.stringof) = rawValues; }))
+                __traits(getMember, receiver, symbol.stringof) = rawValues;
+            else
+                static assert(false, "Type '"~typeof(__traits(getMember, receiver, symbol.stringof)).stringof~"' of `"~
+                                     T.stringof~"."~symbol.stringof~"` is not supported for 'TrailingArguments' UDA");
+        }
+    }
 
     private Argument[countArguments!T] arguments;
 
@@ -340,7 +381,7 @@ private struct Arguments(T)
 
         static foreach(sym; getSymbolsByUDA!(T, ArgumentUDA))
         {{
-            alias member =__traits(getMember, T, sym.stringof);
+            alias member = __traits(getMember, T, __traits(identifier, sym));
 
             enum argUDA = getUDAs!(member, ArgumentUDA)[0];
 
@@ -354,15 +395,30 @@ private struct Arguments(T)
                 argsRequired[idx] = true;
 
             enum arg = Argument(
-                    (info) {
+                    () {
+                        auto info = argUDA.info;
+
                         static if(!isBoolean!(typeof(member)))
                             info.allowBooleanNegation = false;
 
+                        static if(argUDA.info.positional && argUDA.info.names.length == 0)
+                            info.names ~= sym.stringof;
+
                         return info.addDefaultValuesCount!(typeof(member));
-                    }(argUDA.info),
+                    }(),
                     function (in Config config, string argName, ref T receiver, string[] rawValues)
                     {
-                        return argUDA.parsingFunc.parse(config, argName, __traits(getMember, receiver, sym.stringof), rawValues);
+                        auto param = RawParam(config, argName, rawValues);
+
+                        static if(is(typeof(__traits(getMember, receiver, __traits(identifier, sym))) == function))
+                        {
+                            auto target = &__traits(getMember, receiver, __traits(identifier, sym));
+                            return argUDA.parsingFunc.parse(config, argName, target, rawValues);
+                        }
+                        else
+                            //return argUDA.parsingFunc.parse(config, argName, __traits(getMember, receiver, __traits(identifier, sym)), rawValues);
+                            return argUDA.parsingFunc.parse(__traits(getMember, receiver, __traits(identifier, sym)),
+                             param);
                     }
                 );
 
@@ -412,14 +468,53 @@ unittest
     static assert(Arguments!T(true).requiredArguments.keys == [2,4]);
 }
 
+unittest
+{
+    struct T0
+    {
+        int a;
+    }
+    static assert(!__traits(compiles, { Arguments!T0(true); }));
 
-private void checkArgumentName(T)(char optionChar)
+    struct T1
+    {
+        @(NamedArgument("1"))
+        @(NamedArgument("2"))
+        int a;
+    }
+    static assert(!__traits(compiles, { Arguments!T1(true); }));
+
+    struct T2
+    {
+        @(NamedArgument("1"))
+        int a;
+        @(NamedArgument("1"))
+        int b;
+    }
+    static assert(!__traits(compiles, { Arguments!T1(true); }));
+
+    struct T3
+    {
+        @(PositionalArgument(0)) int a;
+        @(PositionalArgument(0)) int b;
+    }
+    static assert(!__traits(compiles, { Arguments!T3(true); }));
+
+    struct T4
+    {
+        @(PositionalArgument(0)) int a;
+        @(PositionalArgument(2)) int b;
+    }
+    static assert(!__traits(compiles, { Arguments!T4(true); }));
+}
+
+private void checkArgumentName(T)(char namedArgChar)
 {
     import std.exception: enforce;
 
     static foreach(sym; getSymbolsByUDA!(T, ArgumentUDA))
-        static foreach(name; getUDAs!(__traits(getMember, T, sym.stringof), ArgumentUDA)[0].info.names)
-            enforce(name[0] != optionChar, "Name of argument should not begin with '"~optionChar~"': "~name);
+        static foreach(name; getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA)[0].info.names)
+            enforce(name[0] != namedArgChar, "Name of argument should not begin with '"~namedArgChar~"': "~name);
 }
 
 struct CommandLineParser(T)
@@ -434,7 +529,7 @@ struct CommandLineParser(T)
 
     this(in Config config)
     {
-        checkArgumentName!T(config.optionChar);
+        checkArgumentName!T(config.namedArgChar);
 
         this.config = config;
 
@@ -464,8 +559,8 @@ struct CommandLineParser(T)
 
         while(!args.empty &&
             values.length < maxValuesCount &&
-            (config.endOfOptions.length == 0 || args.front != config.endOfOptions) &&
-            (args.front.length == 0 || args.front[0] != config.optionChar))
+            (config.endOfArgs.length == 0 || args.front != config.endOfArgs) &&
+            (args.front.length == 0 || args.front[0] != config.namedArgChar))
         {
             values ~= args.front;
             args.popFront();
@@ -474,7 +569,7 @@ struct CommandLineParser(T)
         return values;
     }
 
-    bool parseArgs(out T receiver, string[] args)
+    bool parseArgs(ref T receiver, string[] args)
     {
         string[] unrecognizedArgs;
         immutable res = parseKnownArgs(receiver, args, unrecognizedArgs);
@@ -487,7 +582,7 @@ struct CommandLineParser(T)
         return true;
     }
 
-    bool parseKnownArgs(out T receiver, string[] args, out string[] unrecognizedArgs)
+    bool parseKnownArgs(ref T receiver, string[] args, out string[] unrecognizedArgs)
     {
         auto requiredArgs = arguments.requiredArguments.dup;
 
@@ -496,7 +591,7 @@ struct CommandLineParser(T)
 
             auto values = arg.value.isNull ? consumeValues(args, res.arg.info) : [ arg.value.get ];
 
-            if(!res.arg.parse(config, arg.name, receiver, values))
+            if(!res.arg.parse(config, arg.origName, receiver, values))
                 return false;
 
             requiredArgs.remove(res.index);
@@ -508,10 +603,13 @@ struct CommandLineParser(T)
 
         while(!args.empty)
         {
-            if(config.endOfOptions.length > 0 && args.front == config.endOfOptions)
+            if(config.endOfArgs.length > 0 && args.front == config.endOfArgs)
             {
                 // End of arguments
-                unrecognizedArgs ~= args[1..$];
+                static if(is(typeof(arguments.setTrailingArgs)))
+                    arguments.setTrailingArgs(receiver, args[1..$]);
+                else
+                    unrecognizedArgs ~= args[1..$];
                 break;
             }
 
@@ -560,7 +658,7 @@ struct CommandLineParser(T)
                         {
                             args.popFront();
 
-                            if(!res.arg.parse(config, arg.name, receiver, ["false"]))
+                            if(!res.arg.parse(config, arg.origName, receiver, ["false"]))
                                 return false;
 
                             requiredArgs.remove(res.index);
@@ -589,39 +687,57 @@ struct CommandLineParser(T)
                     if(arg.name.length == 1)
                         goto case ArgumentType.unknown;
 
-                    while(arg.name.length > 0)
+                    if(!config.bundling)
                     {
                         auto name = [arg.name[0]];
                         res = arguments.findNamedArgument(name);
-                        if(res.arg is null)
+                        if(res.arg is null || res.arg.info.minValuesCount != 1)
                             goto case ArgumentType.unknown;
 
-                        if(res.arg.info.minValuesCount == 0)
-                        {
-                            if(!res.arg.parse(config, name, receiver, []))
-                                return false;
+                        if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
+                            return false;
 
-                            requiredArgs.remove(res.index);
+                        requiredArgs.remove(res.index);
 
-                            arg.name = arg.name[1..$];
-                        }
-                        else if(res.arg.info.minValuesCount == 1)
-                        {
-                            if(!res.arg.parse(config, name, receiver, [arg.name[1..$]]))
-                                return false;
-
-                            requiredArgs.remove(res.index);
-
-                            arg.name = [];
-                        }
-                        else // trigger an error
-                            return res.arg.info.checkValuesCount(config, name, 1);
-                    }
-
-                    if(arg.name.length == 0)
-                    {
                         args.popFront();
                         break;
+                    }
+                    else
+                    {
+                        while(arg.name.length > 0)
+                        {
+                            auto name = [arg.name[0]];
+                            res = arguments.findNamedArgument(name);
+                            if(res.arg is null)
+                                goto case ArgumentType.unknown;
+
+                            if(res.arg.info.minValuesCount == 0)
+                            {
+                                if(!res.arg.parse(config, "-"~name, receiver, []))
+                                    return false;
+
+                                requiredArgs.remove(res.index);
+
+                                arg.name = arg.name[1..$];
+                            }
+                            else if(res.arg.info.minValuesCount == 1)
+                            {
+                                if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
+                                    return false;
+
+                                requiredArgs.remove(res.index);
+
+                                arg.name = [];
+                            }
+                            else // trigger an error
+                                return res.arg.info.checkValuesCount(config, name, 1);
+                        }
+
+                        if(arg.name.length == 0)
+                        {
+                            args.popFront();
+                            break;
+                        }
                     }
 
                     goto case ArgumentType.unknown;
@@ -644,64 +760,43 @@ struct CommandLineParser(T)
     }
 }
 
-auto createParser(T)(Config config = Config.init)
+auto parseCLIArgs(T)(string[] args, Config config = Config.init)
 {
-    return CommandLineParser!T(config);
+    import std.typecons : nullable;
+
+    T receiver;
+
+    return CommandLineParser!T(config).parseArgs(receiver, args) ? receiver.nullable : Nullable!T.init;
 }
+
+auto parseCLIKnownArgs(T)(ref string[] args, Config config = Config.init)
+{
+    import std.typecons : nullable;
+
+    T receiver;
+    string[] unrecognizedArgs;
+
+    if(!CommandLineParser!T(config).parseKnownArgs(receiver, args, unrecognizedArgs))
+        return Nullable!T.init;
+    else
+    {
+        args = unrecognizedArgs;
+        return receiver.nullable;
+    }
+}
+
 
 unittest
 {
     import std.exception;
 
-    struct T0
-    {
-        int a;
-    }
-    static assert(!__traits(compiles, { enum p = createParser!T0; }));
-    static assert(!__traits(compiles, { auto p = createParser!T0; }));
-
-    struct T1
-    {
-        @(NamedArgument("1"))
-        @(NamedArgument("2"))
-        int a;
-    }
-    static assert(!__traits(compiles, { enum p = createParser!T1; }));
-    static assert(!__traits(compiles, { auto p = createParser!T1; }));
-
-    struct T2
-    {
-        @(NamedArgument("1"))
-        int a;
-        @(NamedArgument("1"))
-        int b;
-    }
-    static assert(!__traits(compiles, { enum p = createParser!T2; }));
-    static assert(!__traits(compiles, { auto p = createParser!T2; }));
-
-    struct T3
+    struct T
     {
         @(NamedArgument("--"))
         int a;
     }
-    static assert(!__traits(compiles, { enum p = createParser!T3; }));
-    assertThrown(createParser!T3);
-
-    struct T4
-    {
-        @(PositionalArgument(0, "a")) int a;
-        @(PositionalArgument(0, "b")) int b;
-    }
-    static assert(!__traits(compiles, { enum p = createParser!T4; }));
-    static assert(!__traits(compiles, { auto p = createParser!T4; }));
-
-    struct T5
-    {
-        @(PositionalArgument(0, "a")) int a;
-        @(PositionalArgument(2, "b")) int b;
-    }
-    static assert(!__traits(compiles, { enum p = createParser!T5; }));
-    static assert(!__traits(compiles, { auto p = createParser!T5; }));
+    static assert(!__traits(compiles, { enum p = CommandLineParser!T(Config.init); }));
+    assertThrown(CommandLineParser!T(Config.init));
 }
 
 unittest
@@ -724,7 +819,7 @@ unittest
 
         int no_b;
 
-        @(NamedArgument("b", "boo").HelpText("Flag boo")
+        @(NamedArgument(["b", "boo"]).HelpText("Flag boo")
         .AllowNoValue!55
         )
         int b;
@@ -751,14 +846,32 @@ unittest
 {
     import std.typecons : tuple;
 
-    auto test(T)(string[] args)
+    struct T
     {
-        string[] unrecognizedArgs;
-        T receiver;
-
-        assert(createParser!T.parseKnownArgs(receiver, args, unrecognizedArgs));
-        return tuple(receiver, unrecognizedArgs);
+        @NamedArgument("a") string a;
+        @NamedArgument("b") string b;
     }
+
+    auto test(string[] args)
+    {
+        return tuple(args.parseCLIKnownArgs!T.get, args);
+    }
+
+    static assert(test(["-a","A","--","-b","B"]) == tuple(T("A"), ["-b","B"]));
+
+    {
+        enum parser = CommandLineParser!T(Config.init);
+
+        T args;
+        parser.parseArgs(args, [ "-a", "A"]);
+        parser.parseArgs(args, [ "-b", "B"]);
+
+        assert(args == T("A","B"));
+    }
+}
+
+unittest
+{
 
     struct T
     {
@@ -767,73 +880,68 @@ unittest
         @(PositionalArgument(0, "a").Optional()) string a;
         @(PositionalArgument(1, "b").Optional()) string[] b;
     }
-    static assert(test!T(["--foo","FOO","-x","X"]) == tuple(T("X", "FOO"), []));
-    static assert(test!T(["--foo=FOO","-x=X"]) == tuple(T("X", "FOO"), []));
-    static assert(test!T(["-x","X","--","--foo","FOO"]) == tuple(T("X"), ["--foo","FOO"]));
-    static assert(test!T(["--foo=FOO","1","-x=X"]) == tuple(T("X", "FOO", "1"), []));
-    static assert(test!T(["--foo=FOO","1","2","3","4"]) == tuple(T(string.init, "FOO", "1",["2","3","4"]), []));
-    static assert(test!T(["-xX"]) == tuple(T("X"), []));
+    static assert(["--foo","FOO","-x","X"].parseCLIArgs!T.get == T("X", "FOO"));
+    static assert(["--foo=FOO","-x=X"].parseCLIArgs!T.get == T("X", "FOO"));
+    static assert(["--foo=FOO","1","-x=X"].parseCLIArgs!T.get == T("X", "FOO", "1"));
+    static assert(["--foo=FOO","1","2","3","4"].parseCLIArgs!T.get == T(string.init, "FOO", "1",["2","3","4"]));
+    static assert(["-xX"].parseCLIArgs!T.get == T("X"));
 
     struct T1
     {
         @(PositionalArgument(0, "a")) string[3] a;
         @(PositionalArgument(1, "b")) string[] b;
     }
-    static assert(test!T1(["1","2","3","4","5","6"]) == tuple(T1(["1","2","3"],["4","5","6"]), []));
+    static assert(["1","2","3","4","5","6"].parseCLIArgs!T1.get == T1(["1","2","3"],["4","5","6"]));
 
     struct T2
     {
         @NamedArgument("foo") bool foo = true;
     }
-    static assert(test!T2(["--no-foo"]) == tuple(T2(false), []));
+    static assert(["--no-foo"].parseCLIArgs!T2.get == T2(false));
 }
 
 unittest
 {
-    auto test(T)(string[] args)
+    struct T
     {
-        Config config;
-        config.caseSensitive = false;
+        @(PositionalArgument(0, "a").Optional())
+        string a = "not set";
 
-        T receiver;
-
-        assert(createParser!T(config).parseArgs(receiver, args));
-        return receiver;
+        @(NamedArgument("b").Required())
+        int b;
     }
 
+    static assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
+}
+
+unittest
+{
     struct T
     {
         @NamedArgument("x")   string x;
         @NamedArgument("foo") string foo;
     }
+
+    auto test(T)(string[] args)
+    {
+        Config config;
+        config.caseSensitive = false;
+
+        return args.parseCLIArgs!T(config).get;
+    }
+
     static assert(test!T(["--Foo","FOO","-X","X"]) == T("X", "FOO"));
     static assert(test!T(["--FOo=FOO","-X=X"]) == T("X", "FOO"));
 }
 
 unittest
 {
-    import std.typecons : tuple;
     auto test(T)(string[] args)
     {
         Config config;
         config.bundling = true;
 
-        T receiver;
-
-        assert(createParser!T(config).parseArgs(receiver, args));
-        return receiver;
-    }
-
-    auto test1(T)(string[] args)
-    {
-        Config config;
-        config.bundling = true;
-
-        string[] unrecognizedArgs;
-        T receiver;
-
-        assert(createParser!T(config).parseKnownArgs(receiver, args, unrecognizedArgs));
-        return tuple(receiver, unrecognizedArgs);
+        return args.parseCLIArgs!T(config).get;
     }
 
     struct T
@@ -845,8 +953,22 @@ unittest
     static assert(test!T(["-ab"]) == T(true, true));
 }
 
+unittest
+{
+    struct T
+    {
+        @NamedArgument("b") bool b;
+    }
 
-struct Parsers
+    static assert(["-b"]        .parseCLIArgs!T.get == T(true));
+    static assert(["-b","true"] .parseCLIArgs!T.get == T(true));
+    static assert(["-b","false"].parseCLIArgs!T.get == T(false));
+    static assert(["-b=true"]   .parseCLIArgs!T.get == T(true));
+    static assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
+}
+
+
+private struct Parsers
 {
     static auto Convert(T)(string value)
     {
@@ -870,7 +992,7 @@ unittest
 }
 
 
-struct Actions
+private struct Actions
 {
     static auto Assign(DEST, SRC=DEST)(ref DEST param, SRC value)
     {
@@ -885,101 +1007,6 @@ struct Actions
     static auto Extend(T)(ref T[] param, T value)
     {
         param ~= value;
-    }
-
-    private static auto CallFunction(T)(const ref Config config, ref T param, string[] values)
-    {
-        import std.algorithm : max;
-
-        static if(__traits(compiles, { auto res = cast(bool) param(); }))
-        {
-            // bool F()
-            foreach(i; 0 .. max(1, values.length))
-                if(!cast(bool) param())
-                    return false;
-            return true;
-        }
-        else static if(__traits(compiles, { param(); }))
-        {
-            // void F()
-            foreach(i; 0 .. max(1, values.length))
-                param();
-            return true;
-        }
-        else static if(__traits(compiles, { auto res = cast(bool) param(config); }))
-        {
-            // bool F(Config config)
-            foreach(i; 0 .. max(1, values.length))
-                if(!cast(bool) param(config))
-                    return false;
-            return true;
-        }
-        else static if(__traits(compiles, { param(config); }))
-        {
-            // void F(Config config)
-            foreach(i; 0 .. max(1, values.length))
-                param(config);
-            return true;
-        }
-        else static if(__traits(compiles, { auto res = cast(bool) param(values); }))
-        {
-            // bool F(string[] values)
-            return param(values);
-        }
-        else static if(__traits(compiles, { param(values); }))
-        {
-            // void F(string[] values)
-            param(values);
-            return true;
-        }
-        else static if(__traits(compiles, { auto res = cast(bool) param(values[0]); }))
-        {
-            // bool F(string value)
-            foreach(value; values)
-                if(!cast(bool) param(value))
-                    return false;
-            return true;
-        }
-        else static if(__traits(compiles, { param(values[0]); }))
-        {
-            // void F(string value)
-            foreach(value; values)
-                param(value);
-            return true;
-        }
-        else static if(__traits(compiles, { auto res = cast(bool) param(config, values); }))
-        {
-            // bool F(Config config, string[] values)
-            return param(config, values);
-        }
-        else static if(__traits(compiles, { param(config, values); }))
-        {
-            // void F(Config config, string[] values)
-            param(config, values);
-            return true;
-        }
-        else static if(__traits(compiles, { auto res = cast(bool) param(config, values[0]); }))
-        {
-            // bool F(Config config, string value)
-            foreach(value; values)
-                if(!cast(bool) param(config, value))
-                    return false;
-            return true;
-        }
-        else static if(__traits(compiles, { param(config, values[0]); }))
-        {
-            // void F(Config config, string value)
-            foreach(value; values)
-                param(config, value);
-            return true;
-        }
-        else
-            static assert(false);
-    }
-
-    private static bool CallFunctionNoParam(T)(const ref Config config, ref T param)
-    {
-        return CallFunction!T(config, param, []);
     }
 }
 
@@ -996,6 +1023,20 @@ unittest
     Actions.Append!(int[])(i,[1,2,3]);
     Actions.Append!(int[])(i,[7,8,9]);
     assert(i == [1,2,3,7,8,9]);
+
+    alias test = (int[] v1, int[] v2) {
+        int[] res;
+
+        Param!(int[]) param;
+
+        alias F = Actions.Append!(int[]);
+        param.value = v1;   ActionFunc!(F, int[], int[])(res, param);
+
+        param.value = v2;   ActionFunc!(F, int[], int[])(res, param);
+
+        return res;
+    };
+    static assert(test([1,2,3],[7,8,9]) == [1,2,3,7,8,9]);
 }
 
 unittest
@@ -1006,212 +1047,39 @@ unittest
     assert(i == [[1,2,3],[7,8,9]]);
 }
 
-unittest
-{
-    enum test = [
-    (string[] values)
-    {
-        int counter = 0;
-        auto f = () { counter++; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return counter;
-    },
-    (string[] values)
-    {
-        int counter = 0;
-        auto f = () { counter++; return true; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return counter;
-    },
-    (string[] values)
-    {
-        int counter = 0;
-        auto f = (Config config) { counter++; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return counter;
-    },
-    (string[] values)
-    {
-        int counter = 0;
-        auto f = (const ref Config config) { counter++; return true; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return counter;
-    },
-    ];
-
-    static foreach(t; test)
-    {
-        static assert(t([]) == 1);
-        static assert(t(["1"]) == 1);
-        static assert(t(["1","2","3"]) == 3);
-    }
-}
-
-unittest
-{
-    enum test = [
-    (string[] values)
-    {
-        string[] v;
-        auto f = (string[] s) { v = s; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return v;
-    },
-    (string[] values)
-    {
-        string[] v;
-        auto f = (string[] s) { v = s; return true; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return v;
-    },
-    (string[] values)
-    {
-        string[] v;
-        auto f = (Config config, string[] s) { v = s; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return v;
-    },
-    (string[] values)
-    {
-        string[] v;
-        auto f = (Config config, string[] s) { v = s; return true; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return v;
-    },
-    (string[] values)
-    {
-        string[] v;
-        auto f = (string s) { v ~=s; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return v;
-    },
-    (string[] values)
-    {
-        string[] v;
-        auto f = (string s) { v ~=s; return true; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return v;
-    },
-    (string[] values)
-    {
-        string[] v;
-        auto f = (Config config, string s) { v ~=s; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return v;
-    },
-    (string[] values)
-    {
-        string[] v;
-        auto f = (const ref Config config, string s) { v ~=s; return true; };
-        Config config;
-        assert(Actions.CallFunction!(typeof(f))(config, f, values));
-        return v;
-    },
-    ];
-
-    static foreach(t; test)
-    {
-        static assert(t([]) == []);
-        static assert(t(["1"]) == ["1"]);
-        static assert(t(["1","2","3"]) == ["1","2","3"]);
-    }
-}
 
 // values => bool
-// bool validate(T values)
+// bool validate(T value)
 // bool validate(T[i] value)
-// bool validate(Config config, T values)
-// bool validate(Config config, T[i] value)
+// bool validate(Param!T param)
 private struct ValidateFunc(alias F, T, string funcName="Validation")
 {
-    static bool opCall(const ref Config config, string argName, T values)
+    static bool opCall(Param!T param)
     {
-        static if(isArray!T)
-            alias arrayElemType = typeof(values[0]);
-        else
-            alias arrayElemType = void;
-
         static if(is(F == void))
         {
             return true;
         }
-        else static if(Parameters!F.length < 1)
+        else static if(__traits(compiles, { F(param); }))
         {
-            static assert(false, funcName~" function should have at least one parameter");
+            // bool validate(Param!T param)
+            return cast(bool) F(param);
         }
-        else static if(Parameters!F.length == 1)
+        else static if(__traits(compiles, { F(param.value); }))
         {
-            static if(__traits(compiles, { auto res = cast(bool) F(values); }))
-            {
-                // bool validate(T values)
-                return cast(bool) F(values);
-            }
-            else static if(isArray!T && __traits(compiles, { auto res = cast(bool) F(values[0]); }))
-            {
-                // bool validate(T[i] value)
-                foreach(value; values)
-                    if(!F(value))
-                        return false;
-                return true;
-            }
-            else
-                static assert(false, funcName~" function should accept '"~T.stringof~"'"~
-                (isArray!T ? " or '"~arrayElemType.stringof~"'" : "")~
-                " parameter and return bool");
+            // bool validate(T values)
+            return cast(bool) F(param.value);
         }
-        else static if(Parameters!F.length == 2)
+        else static if(/*isArray!T &&*/ __traits(compiles, { F(param.value[0]); }))
         {
-            static if(__traits(compiles, { auto res = cast(bool) F(config, values); }))
-            {
-                // bool validate(Config config, T values)
-                return cast(bool) F(config, values);
-            }
-            else static if(isArray!T && __traits(compiles, { auto res = cast(bool) F(config, values[0]); }))
-            {
-                // bool validate(Config config, T[i] value)
-                foreach(value; values)
-                    if(!F(config, value))
-                        return false;
-                return true;
-            }
-            else
-                static assert(false, funcName~" function should accept (Config, "~T.stringof~")"~
-                (isArray!T ? " or (Config, "~arrayElemType.stringof~")" : "")~
-                " parameters and return bool");
-        }
-        else static if(Parameters!F.length == 3)
-        {
-            static if(__traits(compiles, { auto res = cast(bool) F(config, argName, values); }))
-            {
-                // bool validate(Config config, string argName, T values)
-                return cast(bool) F(config, argName, values);
-            }
-            else static if(isArray!T && __traits(compiles, { auto res = cast(bool) F(config, argName, values[0]); }))
-            {
-                // bool validate(Config config, string argName, T[i] value)
-                foreach(value; values)
-                    if(!F(config, argName, value))
-                        return false;
-                return true;
-            }
-            else
-                static assert(false, funcName~" function should accept (Config, string, "~T.stringof~")"~
-                (isArray!T ? " or (Config, string, "~arrayElemType.stringof~")" : "")~
-                " parameters and return bool");
+            // bool validate(T[i] value)
+            foreach(value; param.value)
+                if(!F(value))
+                    return false;
+            return true;
         }
         else
-            static assert(false, funcName~" function has too many parameters: "~Parameters!F.stringof);
+            static assert(false, funcName~" function is not supported");
     }
 }
 
@@ -1219,8 +1087,9 @@ unittest
 {
     auto test(alias F, T)(T[] values)
     {
-        Config config;
-        return ValidateFunc!(F, T[])(config, "", values);
+        Param!(T[]) param;
+        param.value = values;
+        return ValidateFunc!(F, T[])(param);
     }
 
     // bool validate(T[] values)
@@ -1231,19 +1100,14 @@ unittest
     static assert(test!((string a) => true, string)(["1","2","3"]));
     static assert(test!((int a) => true, int)([1,2,3]));
 
-    // bool validate(Config config, T[] values)
-    static assert(test!((Config config, string[] a) => true, string)(["1","2","3"]));
-    static assert(test!((Config config, int[] a) => true, int)([1,2,3]));
-
-    // bool validate(Config config, T value)
-    static assert(test!((Config config, string a) => true, string)(["1","2","3"]));
-    static assert(test!((Config config, int a) => true, int)([1,2,3]));
+    // bool validate(Param!T param)
+    static assert(test!((RawParam p) => true, string)(["1","2","3"]));
+    static assert(test!((Param!(int[]) p) => true, int)([1,2,3]));
 }
 
 unittest
 {
-    const Config config;
-    static assert(ValidateFunc!(void, string[])(config, "", ["1","2","3"]));
+    static assert(ValidateFunc!(void, string[])(RawParam(Config.init, "", ["1","2","3"])));
 
     static assert(!__traits(compiles, { ValidateFunc!(() {}, string[])(config, "", ["1","2","3"]); }));
     static assert(!__traits(compiles, { ValidateFunc!((int,int) {}, string[])(config, "", ["1","2","3"]); }));
@@ -1252,21 +1116,23 @@ unittest
 
 private template ParseType(alias F, T)
 {
+    import std.traits : Unqual;
+
     static if(is(F == void))
-        alias ParseType = T;
+        alias ParseType = Unqual!T;
     else static if(Parameters!F.length == 0)
         static assert(false, "Parse function should take at least one parameter");
     else static if(Parameters!F.length == 1)
     {
         // T action(arg)
-        alias ParseType = ReturnType!F;
-        static assert(!is(ReturnType!F == void), "Parse function should return value");
+        alias ParseType = Unqual!(ReturnType!F);
+        static assert(!is(ParseType == void), "Parse function should return value");
     }
     else static if(Parameters!F.length == 2 && is(Parameters!F[0] == Config))
     {
         // T action(Config config, arg)
-        alias ParseType = ReturnType!F;
-        static assert(!is(ReturnType!F == void), "Parse function should return value");
+        alias ParseType = Unqual!(ReturnType!F);
+        static assert(!is(ParseType == void), "Parse function should return value");
     }
     else static if(Parameters!F.length == 2)
     {
@@ -1304,194 +1170,73 @@ unittest
     // ... action(Config config, ref T param, arg)
     static assert(is(ParseType!((Config config, ref int, string v) {}, double) == int));
     // ... action(Config config, string argName, ref T param, arg)
-    static assert(is(ParseType!((Config config, string argName, ref int, string v) {}, double) == int));
+    //static assert(is(ParseType!((Config config, string argName, ref int, string v) {}, double) == int));
 }
 
-private enum bool funcArgByRef(alias F, uint N) = (ParameterStorageClassTuple!F[N] & ParameterStorageClass.ref_) != 0;
 
-// values => PARSE_TYPE + bool
-                // T action(string[] values)
-                // T action(string value)
-                // T action(Config config, string[] values)
-                // T action(Config config, string value)
-                // bool action(ref T param, string[] values)
-                // void action(ref T param, string[] values)
-                // bool action(ref T param, string value)
-                // void action(ref T param, string value)
-                // bool action(Config config, ref T param, string[] values)
-                // void action(Config config, ref T param, string[] values)
-                // bool action(Config config, ref T param, string value)
-                // void action(Config config, ref T param, string value)
-                // bool action(Config config, string argName, ref T param, string[] values)
-                // void action(Config config, string argName, ref T param, string[] values)
-                // bool action(Config config, string argName, ref T param, string value)
-                // void action(Config config, string argName, ref T param, string value)
+// T parse(string[] values)
+// T parse(string value)
+// T parse(RawParam param)
+// bool parse(ref T receiver, RawParam param)
+// void parse(ref T receiver, RawParam param)
 private struct ParseFunc(alias F, T)
 {
     alias ParseType = .ParseType!(F, T);
 
-    static bool opCall(const ref Config config, string argName, ref ParseType param, string[] values)
+    static bool opCall(ref ParseType receiver, RawParam param)
     {
         static if(is(F == void))
         {
-            foreach(value; values)
-                param = Parsers.Convert!T( value);
+            foreach(value; param.value)
+                receiver = Parsers.Convert!T(value);
             return true;
         }
-        else static if(Parameters!F.length == 1)
+        // T parse(string[] values)
+        else static if(__traits(compiles, { receiver = cast(ParseType) F(param.value); }))
         {
-            static if(__traits(compiles, { param = cast(ParseType) F(values); }))
-            {
-                // T action(string[] values)
-                param = cast(ParseType) F(values);
-                return true;
-            }
-            else static if(__traits(compiles, { param = cast(ParseType) F(values[0]); }))
-            {
-                // T action(string value)
-                foreach(value; values)
-                    param = cast(ParseType) F(value);
-                return true;
-            }
-            else
-                static assert(false, "Parse function should return accept 'string' or 'string[]' "~
-                "and return '"~ParseType.stringof~"' type");
+            receiver = cast(ParseType) F(param.value);
+            return true;
         }
-        else static if(Parameters!F.length == 2 && is(Parameters!F[0] == Config))
+        // T parse(string value)
+        else static if(__traits(compiles, { receiver = cast(ParseType) F(param.value[0]); }))
         {
-            static if(__traits(compiles, { param = cast(ParseType) F(config, values); }))
-            {
-                // T action(Config config, string[] values)
-                param = cast(ParseType) F(config, values);
-                return true;
-            }
-            else static if(__traits(compiles, { param = cast(ParseType) F(config, values[0]); }))
-            {
-                // T action(Config config, string value)
-                foreach(value; values)
-                    param = cast(ParseType) F(config, value);
-                return true;
-            }
-            else
-                static assert(false, "Parse function should return accept "~
-                "(Config, string) or (Config, string[]) "~
-                "and return '"~ParseType.stringof~"' type");
+            foreach(value; param.value)
+                receiver = cast(ParseType) F(value);
+            return true;
         }
-        else static if(Parameters!F.length == 2)
+        // T parse(RawParam param)
+        else static if(__traits(compiles, { receiver = cast(ParseType) F(param); }))
         {
-            static assert(funcArgByRef!(F, 0), "Parse function should accept first parameter by ref");
-
-            static if(__traits(compiles, { auto res = cast(bool) F(param, values); }))
-            {
-                // bool action(ref T param, string[] values)
-                return cast(bool) F(param, values);
-            }
-            else static if(__traits(compiles, { F(param, values); }))
-            {
-                // void action(ref T param, string[] values)
-                F(param, values);
-                return true;
-            }
-            else static if(__traits(compiles, { auto res = cast(bool) F(param, values[0]); }))
-            {
-                // bool action(ref T param, string value)
-                foreach(value; values)
-                    if(!cast(bool) F(param, value))
-                        return false;
-                return true;
-            }
-            else static if(__traits(compiles, { F(param, values[0]); }))
-            {
-                // void action(ref T param, string value)
-                foreach(value; values)
-                    F(param, value);
-                return true;
-            }
-            else
-                static assert(false, "Parse function should return accept "~
-                "(ref "~ParseType.stringof~", string) or "~
-                "(ref "~ParseType.stringof~", string[])");
+            receiver = cast(ParseType) F(param);
+            return true;
         }
-        else static if(Parameters!F.length == 3)
+        // bool parse(ref T receiver, RawParam param)
+        // void parse(ref T receiver, RawParam param)
+        else static if(__traits(compiles, { F(receiver, param); }))
         {
-            static assert(funcArgByRef!(F, 1), "Parse function should accept second parameter by ref");
-
-            static if(__traits(compiles, { auto res = cast(bool) F(config, param, values); }))
+            static if(__traits(compiles, { auto res = cast(bool) F(receiver, param); }))
             {
-                // bool action(Config config, ref T param, string[] values)
-                return cast(bool) F(config, param, values);
-            }
-            else static if(__traits(compiles, { F(config, param, values); }))
-            {
-                // void action(Config config, ref T param, string[] values)
-                F(config, param, values);
-                return true;
-            }
-            else static if(__traits(compiles, { auto res = cast(bool) F(config, param, values[0]); }))
-            {
-                // bool action(Config config, ref T param, string value)
-                foreach(value; values)
-                    if(!cast(bool) F(config, param, value))
-                        return false;
-                return true;
-            }
-            else static if(__traits(compiles, { F(config, param, values[0]); }))
-            {
-                // void action(Config config, ref T param, string value)
-                foreach(value; values)
-                    F(config, param, value);
-                return true;
+                // bool parse(ref T receiver, RawParam param)
+                return cast(bool) F(receiver, param);
             }
             else
-                static assert(false, "Parse function should return accept "~
-                "(Config, ref "~ParseType.stringof~", string) or "~
-                "(Config, ref "~ParseType.stringof~", string[])");
-        }
-        else static if(Parameters!F.length == 4)
-        {
-            static assert(funcArgByRef!(F, 2), "Parse function should accept third parameter by ref");
-
-            static if(__traits(compiles, { auto res = cast(bool) F(config, argName, param, values); }))
             {
-                // bool action(Config config, string argName, ref T param, string[] values)
-                return cast(bool) F(config, argName, param, values);
-            }
-            else static if(__traits(compiles, { F(config, argName, param, values); }))
-            {
-                // void action(Config config, string argName, ref T param, string[] values)
-                F(config, argName, param, values);
+                // void parse(ref T receiver, RawParam param)
+                F(receiver, param);
                 return true;
             }
-            else static if(__traits(compiles, { auto res = cast(bool) F(config, argName, param, values[0]); }))
-            {
-                // bool action(Config config, string argName, ref T param, string value)
-                foreach(value; values)
-                    if(!cast(bool) F(config, argName, param, value))
-                        return false;
-                return true;
-            }
-            else static if(__traits(compiles, { F(config, argName, param, values[0]); }))
-            {
-                // void action(Config config, string argName, ref T param, string value)
-                foreach(value; values)
-                    F(config, argName, param, value);
-                return true;
-            }
-            else
-                static assert(false, "Parse function should return accept "~
-                "(Config, string, ref "~ParseType.stringof~", string) or "~
-                "(Config, string, ref "~ParseType.stringof~", string[])");
         }
         else
-            static assert(false, "Parse function has too many parameters: "~Parameters!F.stringof);
+            static assert(false, "Parse function is not supported");
     }
 }
 
 unittest
 {
     int i;
-    Config config;
-    assert(ParseFunc!(void, int)(config, "", i, ["1","2","3"]));
+    RawParam param;
+    param.value = ["1","2","3"];
+    assert(ParseFunc!(void, int)(i, param));
     assert(i == 3);
 }
 
@@ -1500,262 +1245,160 @@ unittest
     auto test(alias F, T)(string[] values)
     {
         T value;
-        Config config;
-        assert(ParseFunc!(F, T)(config, "", value, values));
+        RawParam param;
+        param.value = values;
+        assert(ParseFunc!(F, T)(value, param));
         return value;
     }
-    auto testResult(alias F, T)(string[] values)
-    {
-        T value;
-        Config config;
-        return ParseFunc!(F, T)(config, "", value, values);
-    }
-    const Config config;
 
-    // T action(string value)
+    // T parse(string value)
     static assert(test!((string a) => a, string)(["1","2","3"]) == "3");
 
-    // T action(SRc[] values)
+    // T parse(string[] values)
     static assert(test!((string[] a) => a, string[])(["1","2","3"]) == ["1","2","3"]);
 
-    // T action(int values)  (invalid)
-    static assert(!__traits(compiles, { int a; ParseFunc!((int a) => a, string[])(config, "", a, ["1","2","3"]); }));
+    // T parse(RawParam param)
+    static assert(test!((RawParam p) => p.value[0], string)(["1","2","3"]) == "1");
 
-    // T action(Config config, string value)
-    static assert(test!((Config config, string a) => a, string)(["1","2","3"]) == "3");
+    // bool parse(ref T receiver, RawParam param)
+    static assert(test!((ref string[] r, RawParam p) { r = p.value; return true; }, string[])(["1","2","3"]) == ["1","2","3"]);
 
-    // T action(Config config, string[] values)
-    static assert(test!((Config config, string[] a) => a, string[])(["1","2","3"]) == ["1","2","3"]);
-
-    // T action(Config config, int values)  (invalid)
-    static assert(!__traits(compiles, { int a; ParseFunc!((Config config, int a) => a, string[])(config, "", a, ["1","2","3"]); }));
-
-    // bool action(ref T param, string   value)
-    static assert(test!((ref string p, string a) { p = a; return true; }, string)(["1","2","3"]) == "3");
-    static assert(!testResult!((ref string p, string a) => false, string)(["1","2","3"]));
-
-    // void action(ref T param, string   value)
-    static assert(test!((ref string p, string a) { p = a; }, string)(["1","2","3"]) == "3");
-
-    // bool action(ref T param, string[] values)
-    static assert(test!((ref string[] p, string[] a) { p = a; return true; }, string[])(["1","2","3"]) == ["1","2","3"]);
-    static assert(!testResult!((ref string[] p, string[] a) => false, string[])(["1","2","3"]));
-
-    // void action(ref T param, string[] values)
-    static assert(test!((ref string[] p, string[] a) { p = a; }, string[])(["1","2","3"]) == ["1","2","3"]);
-
-    // void action(ref T param, int values)  (invalid)
-    static assert(!__traits(compiles, { int a; ParseFunc!((ref string[] p, int a) {}, string[])(config, "", a, ["1","2","3"]); }));
-
-    // bool action(Config config, ref T param, string   value)
-    static assert(test!((Config config, ref string p, string a) { p = a; return true; }, string)(["1","2","3"]) == "3");
-    static assert(!testResult!((Config config, ref string p, string a) => false, string)(["1","2","3"]));
-
-    // void action(Config config, ref T param, string   value)
-    static assert(test!((Config config, ref string p, string a) { p = a; }, string)(["1","2","3"]) == "3");
-
-    // bool action(Config config, ref T param, string[] values)
-    static assert(test!((Config config, ref string[] p, string[] a) { p = a; return true; }, string[])(["1","2","3"]) == ["1","2","3"]);
-    static assert(!testResult!((Config config, ref string[] p, string[] a) => false, string[])(["1","2","3"]));
-
-    // void action(Config config, ref T param, string[] values)
-    static assert(test!((Config config, ref string[] p, string[] a) { p = a; }, string[])(["1","2","3"]) == ["1","2","3"]);
-
-    // void action(Config config, ref T param, int values)  (invalid)
-    static assert(!__traits(compiles, { int a; ParseFunc!((Config config, ref string[] p, int a) {}, string[])(config, "", a, ["1","2","3"]); }));
-}
-
-unittest
-{
-    const Config config;
-    static assert(!__traits(compiles, { string v; ParseFunc!((string a) {}, string)(config, "", v, ["1","2","3"]); }));
-    static assert(!__traits(compiles, { int a; ParseFunc!(() {}, int)(config, "", a, ["1","2","3"]); }));
-    static assert(!__traits(compiles, { int a; ParseFunc!((int,int,int,int) {}, int)(config, "", a, ["1","2","3"]); }));
+    // void parse(ref T receiver, RawParam param)
+    static assert(test!((ref string[] r, RawParam p) { r = p.value; }, string[])(["1","2","3"]) == ["1","2","3"]);
 }
 
 
-// parsed values => receiver + bool
+// bool action(ref T receiver, ParseType value)
+// void action(ref T receiver, ParseType value)
+// bool action(ref T receiver, Param!ParseType param)
+// void action(ref T receiver, Param!ParseType param)
 private struct ActionFunc(alias F, T, ParseType)
 {
-    static bool opCall(const ref Config config, string argName, ref T param, ParseType value)
+    static bool opCall(ref T receiver, Param!ParseType param)
     {
         static if(is(F == void))
         {
-            Actions.Assign!(T, ParseType)(param, value);
+            Actions.Assign!(T, ParseType)(receiver, param.value);
             return true;
         }
-        else static if(Parameters!F.length < 2)
+        // bool action(ref T receiver, ParseType value)
+        // void action(ref T receiver, ParseType value)
+        else static if(__traits(compiles, { F(receiver, param.value); }))
         {
-            static assert(false, "Action function should have at least two parameters");
-        }
-        else static if(Parameters!F.length == 2)
-        {
-            static assert(funcArgByRef!(F, 0), "Action function should accept first parameter by ref");
-
-            static if(__traits(compiles, { auto res = cast(bool) F(param, value); }))
+            static if(__traits(compiles, { auto res = cast(bool) F(receiver, param.value); }))
             {
-                // bool action(ref T param, ParseType value)
-                return cast(bool) F(param, value);
-            }
-            else static if(__traits(compiles, { F(param, value); }))
-            {
-                // void action(ref T param, ParseType value)
-                F(param, value);
-                return true;
+                // bool action(ref T receiver, ParseType value)
+                return cast(bool) F(receiver, param.value);
             }
             else
-                static assert(false, "Action function should accept "~
-                "(ref "~T.stringof~", "~ParseType.stringof~") parameters "~
-                "instead of "~Parameters!F.stringof);
-        }
-        else static if(Parameters!F.length == 3)
-        {
-            static assert(funcArgByRef!(F, 1), "Action function should accept second parameter by ref");
-
-            static if(__traits(compiles, { auto res = cast(bool) F(config, param, value); }))
             {
-                // bool action(Config config, ref T param, ParseType value)
-                return cast(bool) F(config, param, value);
-            }
-            else static if(__traits(compiles, { F(config, param, value); }))
-            {
-                // void action(Config config, ref T param, ParseType value)
-                F(config, param, value);
+                // void action(ref T receiver, ParseType value)
+                F(receiver, param.value);
                 return true;
             }
-            else
-                static assert(false, "Action function should accept "~
-                "(Config, ref "~T.stringof~", "~ParseType.stringof~") parameters "~
-                "instead of "~Parameters!F.stringof);
         }
-        else static if(Parameters!F.length == 4)
+        // bool action(ref T receiver, Param!ParseType param)
+        // void action(ref T receiver, Param!ParseType param)
+        else static if(__traits(compiles, { F(receiver, param); }))
         {
-            static assert(funcArgByRef!(F, 2), "Action function should accept third parameter by ref");
-
-            static if(__traits(compiles, { auto res = cast(bool) F(config, argName, param, value); }))
+            static if(__traits(compiles, { auto res = cast(bool) F(receiver, param); }))
             {
-                // bool action(Config config, string argName, ref T param, ParseType value)
-                return cast(bool) F(config, argName, param, value);
+                // bool action(ref T receiver, Param!ParseType param)
+                return cast(bool) F(receiver, param);
             }
-            else static if(__traits(compiles, { F(config, argName, param, value); }))
+            else
             {
-                // void action(Config config, string argName, ref T param, ParseType value)
-                F(config, argName, param, value);
+                // void action(ref T receiver, Param!ParseType param)
+                F(receiver, param);
                 return true;
             }
-            else
-                static assert(false, "Action function should accept "~
-                "(Config, string argName, ref "~T.stringof~", "~ParseType.stringof~") parameters "~
-                "instead of "~Parameters!F.stringof);
         }
         else
-            static assert(false, "Action function has too many parameters: "~Parameters!F.stringof);
+            static assert(false, "Action function is not supported");
     }
 }
 
 unittest
 {
+    auto param(T)(T values)
+    {
+        Param!T param;
+        param.value = values;
+        return param;
+    }
     auto test(alias F, T)(T values)
     {
-        T param;
-        Config config;
-        assert(ActionFunc!(F, T, T)(config, "", param, values));
-        return param;
+        T receiver;
+        assert(ActionFunc!(F, T, T)(receiver, param(values)));
+        return receiver;
     }
 
     static assert(test!(void, string[])(["1","2","3"]) == ["1","2","3"]);
 
-    static assert(!__traits(compiles, { ActionFunc!(() {}, string[])(config, "", ["1","2","3"]); }));
-    static assert(!__traits(compiles, { ActionFunc!((int,int) {}, string[])(config, "", ["1","2","3"]); }));
+    static assert(!__traits(compiles, { test!(() {}, string[])(["1","2","3"]); }));
+    static assert(!__traits(compiles, { test!((int,int) {}, string[])(["1","2","3"]); }));
 
-    // bool action(ref DEST param, SRC value)
+    // bool action(ref T receiver, ParseType value)
     static assert(test!((ref string[] p, string[] a) { p=a; return true; }, string[])(["1","2","3"]) == ["1","2","3"]);
 
-    // void action(ref DEST param, SRC value)
+    // void action(ref T receiver, ParseType value)
     static assert(test!((ref string[] p, string[] a) { p=a; }, string[])(["1","2","3"]) == ["1","2","3"]);
 
-    // bool action(Config config, ref DEST param, SRC value)
-    static assert(test!((Config config, ref string[] p, string[] a) { p=a; return true; }, string[])(["1","2","3"]) == ["1","2","3"]);
+    // bool action(ref T receiver, Param!ParseType param)
+    static assert(test!((ref string[] p, Param!(string[]) a) { p=a.value; return true; }, string[]) (["1","2","3"]) == ["1","2","3"]);
 
-    // void action(Config config, ref DEST param, SRC value)
-    static assert(test!((Config config, ref string[] p, string[] a) { p=a; }, string[])(["1","2","3"]) == ["1","2","3"]);
+    // void action(ref T receiver, Param!ParseType param)
+    static assert(test!((ref string[] p, Param!(string[]) a) { p=a.value; }, string[])(["1","2","3"]) == ["1","2","3"]);
 }
 
 
 // => receiver + bool
+// DEST action()
+// bool action(ref DEST receiver)
+// void action(ref DEST receiver)
+// bool action(ref DEST receiver, Param!void param)
+// void action(ref DEST receiver, Param!void param)
 private struct NoValueActionFunc(alias F, T)
 {
-    static bool opCall(const ref Config config, string argName, ref T param)
+    static bool opCall(ref T receiver, Param!void param)
     {
         static if(is(F == void))
         {
             assert(false, "No-value action function is not provided");
         }
-        else static if(Parameters!F.length == 0)
+        else static if(__traits(compiles, { receiver = cast(T) F(); }))
         {
-            param = cast(T) F();
-            static if(__traits(compiles, { param = cast(T) F(); }))
-            {
-                // DEST action()
-                param = cast(T) F();
-                return true;
-            }
-            else
-                static assert(false, "No-value action function should return '"~T.stringof~"' type instead of "~ReturnType!F.stringof);
+            // DEST action()
+            receiver = cast(T) F();
+            return true;
         }
-        else static if(Parameters!F.length == 1)
+        else static if(__traits(compiles, { F(receiver); }))
         {
-            static assert(funcArgByRef!(F, 0), "No-value action function should accept parameter by ref");
-
-            static if(__traits(compiles, { auto res = cast(bool) F(param); }))
+            static if(__traits(compiles, { auto res = cast(bool) F(receiver); }))
             {
-                // bool action(ref DEST param)
-                return cast(bool) F(param);
-            }
-            else static if(__traits(compiles, { F(param); }))
-            {
-                // void action(ref DEST param)
-                F(param);
-                return true;
+                // bool action(ref DEST receiver)
+                return cast(bool) F(receiver);
             }
             else
-                static assert(false, "No-value action function should accept 'ref "~T.stringof~"' parameter instead of "~Parameters!F[0].stringof);
+            {
+                // void action(ref DEST receiver)
+                F(receiver);
+                return true;
+            }
         }
-        else static if(Parameters!F.length == 2)
+        else static if(__traits(compiles, { F(receiver, param); }))
         {
-            static assert(funcArgByRef!(F, 1), "No-value action function should accept second parameter by ref");
-
-            static if(__traits(compiles, { auto res = cast(bool) F(config, param); }))
+            static if(__traits(compiles, { auto res = cast(bool) F(receiver, param); }))
             {
-                // bool action(Config config, ref T param)
-                return cast(bool) F(config, param);
-            }
-            else static if(__traits(compiles, { F(config, param); }))
-            {
-                // void action(Config config, ref T param)
-                F(config, param);
-                return true;
+                // bool action(ref DEST receiver, Param!void param)
+                return cast(bool) F(receiver, param);
             }
             else
-                static assert(false, "No-value action function should accept (Config, ref "~T.stringof~") parameters instead of "~Parameters!F.stringof);
-        }
-        else static if(Parameters!F.length == 3)
-        {
-            static assert(funcArgByRef!(F, 2), "No-value action function should accept third parameter by ref");
-
-            static if(__traits(compiles, { auto res = cast(bool) F(config, argName, param); }))
             {
-                // bool action(Config config, string argName, ref T param)
-                return cast(bool) F(config, argName, param);
-            }
-            else static if(__traits(compiles, { F(config, argName, param); }))
-            {
-                // void action(Config config, string argName, ref T param)
-                F(config, argName, param);
+                // void action(ref DEST receiver, Param!void param)
+                F(receiver, param);
                 return true;
             }
-            else
-                static assert(false, "No-value action function should accept (Config, string, ref "~T.stringof~") parameters instead of "~Parameters!F.stringof);
         }
         else
             static assert(false, "No-value action function has too many parameters: "~Parameters!F.stringof);
@@ -1766,10 +1409,9 @@ unittest
 {
     auto test(alias F, T)()
     {
-        T param;
-        Config config;
-        assert(NoValueActionFunc!(F, T)(config, "", param));
-        return param;
+        T receiver;
+        assert(NoValueActionFunc!(F, T)(receiver, Param!void.init));
+        return receiver;
     }
 
     static assert(!__traits(compiles, { NoValueActionFunc!(() {}, int); }));
@@ -1786,30 +1428,43 @@ unittest
     // void action(ref DEST param)
     static assert(test!((ref int p) { p=7; }, int) == 7);
 
-    // bool action(Config config, ref T param)
-    static assert(test!((Config config, ref int p) { p=7; return true; }, int) == 7);
+    // bool action(ref DEST receiver, Param!void param)
+    static assert(test!((ref int r, Param!void p) { r=7; return true; }, int) == 7);
 
-    // void action(Config config, ref T param)
-    static assert(test!((Config config, ref int p) { p=7; }, int) == 7);
+    // void action(ref DEST receiver, Param!void param)
+    static assert(test!((ref int r, Param!void p) { r=7; }, int) == 7);
 }
 
 
-private string[] splitValues(Config config, string argName, string[] values)
+private void splitValues(ref RawParam param)
 {
+    if(param.config.arraySep == char.init)
+        return;
+
     import std.array : array, split;
     import std.algorithm : map, joiner;
 
-    return config.arraySep == char.init ?
-    values :
-    values.map!((string s) => s.split(config.arraySep)).joiner.array;
+    param.value = param.value.map!((string s) => s.split(param.config.arraySep)).joiner.array;
 }
 
 unittest
 {
-    static assert(splitValues(Config('=',','), "", []) == []);
-    static assert(splitValues(Config('=',','), "", ["a","b","c"]) == ["a","b","c"]);
-    static assert(splitValues(Config('=',','), "", ["a,b","c","d,e,f"]) == ["a","b","c","d","e","f"]);
-    static assert(splitValues(Config('=',' '), "", ["a,b","c","d,e,f"]) == ["a,b","c","d,e,f"]);
+    alias test = (char arraySep, string[] values)
+    {
+        Config config;
+        config.arraySep = arraySep;
+
+        auto param = RawParam(config, "", values);
+
+        splitValues(param);
+
+        return param.value;
+    };
+
+    static assert(test(',', []) == []);
+    static assert(test(',', ["a","b","c"]) == ["a","b","c"]);
+    static assert(test(',', ["a,b","c","d,e,f"]) == ["a","b","c","d","e","f"]);
+    static assert(test(' ', ["a,b","c","d,e,f"]) == ["a,b","c","d,e,f"]);
 }
 
 
@@ -1870,11 +1525,11 @@ private struct ValueParseFunctions(alias PreProcess,
     //  - if there is no value:
     //      - action if no value
     // Requirement: rawValues.length must be correct
-    static bool parse(T)(const ref Config config, string argName, ref T param, string[] rawValues)
+    static bool parse(T)(ref T receiver, RawParam param)
     {
-        return addDefaults!T.parseImpl(config, argName, param, rawValues);
+        return addDefaults!T.parseImpl(receiver, param);
     }
-    static bool parseImpl(T)(const ref Config config, string argName, ref T param, string[] rawValues)
+    static bool parseImpl(T)(ref T receiver, ref RawParam rawParam)
     {
         alias ParseType(T)     = .ParseType!(Parse, T);
 
@@ -1884,27 +1539,27 @@ private struct ValueParseFunctions(alias PreProcess,
         alias action(T)        = ActionFunc!(Action, T, ParseType!T);
         alias noValueAction(T) = NoValueActionFunc!(NoValueAction, T);
 
-        if(rawValues.length == 0)
+        if(rawParam.value.length == 0)
         {
-            return noValueAction!T(config, argName, param);
+            return noValueAction!T(receiver, Param!void(rawParam.config, rawParam.name));
         }
         else
         {
             static if(!is(PreProcess == void))
-                rawValues = PreProcess(config, argName, rawValues);
+                PreProcess(rawParam);
 
-            if(!preValidation(config, argName, rawValues))
+            if(!preValidation(rawParam))
                 return false;
 
-            ParseType!T parsedValue;
+            auto parsedParam = Param!(ParseType!T)(rawParam.config, rawParam.name);
 
-            if(!parse!T(config, argName, parsedValue, rawValues))
+            if(!parse!T(parsedParam.value, rawParam))
                 return false;
 
-            if(!validation!T(config, argName, parsedValue))
+            if(!validation!T(parsedParam))
                 return false;
 
-            if(!action!T(config, argName, param, parsedValue))
+            if(!action!T(receiver, parsedParam))
                 return false;
 
             return true;
@@ -1966,17 +1621,6 @@ if(!is(T == void))
         void                          // no-value action
         );
     }
-    else static if(isCallable!T)
-    {
-        alias DefaultValueParseFunctions = ValueParseFunctions!(
-        void,                           // pre process
-        void,                           // pre validate
-        Parsers.PassThrough,            // parse
-        void,                           // validate
-        Actions.CallFunction!T,         // action
-        Actions.CallFunctionNoParam!T   // no-value action
-        );
-    }
     else static if(isArray!T)
     {
         import std.traits: ForeachType;
@@ -1992,17 +1636,21 @@ if(!is(T == void))
 
             alias DefaultValueParseFunctions = DefaultValueParseFunctions!TElement
             .changePreProcess!splitValues
-            .changeParse!((const ref Config config, string argName, ref T param, string[] values)
+            .changeParse!((ref T receiver, RawParam param)
             {
                 static if(!isStaticArray!T)
                 {
-                    if(param.length < values.length)
-                        param.length = values.length;
+                    if(receiver.length < param.value.length)
+                        receiver.length = param.value.length;
                 }
 
-                foreach(i, value; values)
-                    if(!DefaultValueParseFunctions!TElement.parse(config, argName, param[i], [value]))
+                foreach(i, value; param.value)
+                {
+                    if(!DefaultValueParseFunctions!TElement.parse(receiver[i],
+                        RawParam(param.config, param.name, [value])))
                         return false;
+                }
+
                 return true;
             })
             .changeAction!(action)
@@ -2027,26 +1675,26 @@ if(!is(T == void))
         void,                                                       // pre validate
         Parsers.PassThrough,                                        // parse
         void,                                                       // validate
-        (const ref Config config, string argName, ref T param, string[] inputValues)  // action
+        (ref T recepient, Param!(string[]) param)                   // action
         {
             alias K = KeyType!T;
             alias V = ValueType!T;
 
-            foreach(input; inputValues)
+            foreach(input; param.value)
             {
-                auto j = indexOf(input, config.assignChar);
+                auto j = indexOf(input, param.config.assignChar);
                 if(j < 0)
                     return false;
 
                 K key;
-                if(!DefaultValueParseFunctions!K.parse(config, argName, key, [input[0 .. j]]))
+                if(!DefaultValueParseFunctions!K.parse(key, RawParam(param.config, param.name, [input[0 .. j]])))
                     return false;
 
                 V value;
-                if(!DefaultValueParseFunctions!V.parse(config, argName, value, [input[j + 1 .. $]]))
+                if(!DefaultValueParseFunctions!V.parse(value, RawParam(param.config, param.name, [input[j + 1 .. $]])))
                     return false;
 
-                param[key] = value;
+                recepient[key] = value;
             }
             return true;
         },
@@ -2066,21 +1714,24 @@ unittest
         static foreach(R; AliasSeq!(T, T[], T[][]))
         {{
             // ensure that this compiles
-            R param;
-            Config config;
-            DefaultValueParseFunctions!R.parse(config, "", param, [""]);
+            R receiver;
+            RawParam param;
+            param.value = [""];
+            DefaultValueParseFunctions!R.parse(receiver, param);
         }}
 }
 
 unittest
 {
-    alias test(T) = (string[][] values)
+    alias test(R) = (string[][] values)
     {
         auto config = Config('=', ',');
-        T param;
+        R receiver;
         foreach(value; values)
-            assert(DefaultValueParseFunctions!T.parse(config, "", param, value));
-        return param;
+        {
+            assert(DefaultValueParseFunctions!R.parse(receiver, RawParam(config, "", value)));
+        }
+        return receiver;
     };
 
     static assert(test!(string[])([["1","2","3"], [], ["4"]]) == ["1","2","3","4"]);
@@ -2103,10 +1754,11 @@ unittest
 
     alias test(T) = (string[] values)
     {
-        T param;
-        Config config;
-        assert(DefaultValueParseFunctions!T.parse(config, "", param, values));
-        return param;
+        T receiver;
+        RawParam param;
+        param.value = values;
+        assert(DefaultValueParseFunctions!T.parse(receiver, param));
+        return receiver;
     };
 
     static assert(test!string([""]) == "");
@@ -2135,30 +1787,6 @@ unittest
     static assert(test!(int[MyEnum])(["bar=3","foo=5"]) == [MyEnum.bar:3, MyEnum.foo:5]);
 }
 
-unittest
-{
-    bool test(alias F)()
-    {
-        alias T = typeof(F);
-        T f = F;
-        Config config;
-        return DefaultValueParseFunctions!T.parse(config, "", f, [""]);
-    }
-    static assert(test!((){}));
-    static assert(test!(() => true));
-    static assert(test!((string[] s) {}));
-    static assert(test!((string[] s) => true));
-    static assert(test!((string   s) {}));
-    static assert(test!((string   s) => true));
-    static assert(test!((Config config) {}));
-    static assert(test!((Config config) => true));
-    static assert(test!((Config config, string[] s) {}));
-    static assert(test!((Config config, string[] s) => true));
-    static assert(test!((Config config, string   s) {}));
-    static assert(test!((Config config, string   s) => true));
-}
-
-
 
 private struct ArgumentInfo
 {
@@ -2166,15 +1794,9 @@ private struct ArgumentInfo
 
     string helpText;
 
-    string metaName;    // option name in help text
-
     bool hideFromHelp = false;      // if true then this argument is not printed on help page
 
-    private Nullable!bool required_;
-
-    @property private void required(bool value) { required_ = value; }
-
-    @property bool required() const { return required_.get(positional); }
+    bool required;
 
     Nullable!uint position;
 
@@ -2188,12 +1810,16 @@ private struct ArgumentInfo
         immutable min = minValuesCount.get;
         immutable max = maxValuesCount.get;
 
-        if(minValuesCount == maxValuesCount && count != minValuesCount)
-            return config.onError("argument ",argName,": expected ",minValuesCount,minValuesCount == 1 ? " value" : " values");
-        if(count < minValuesCount)
-            return config.onError("argument ",argName,": expected at least ",minValuesCount," values");
-        if(count > maxValuesCount)
-            return config.onError("argument ",argName,": expected at most ",maxValuesCount," values");
+        // override for boolean flags
+        if(allowBooleanNegation && count == 1)
+            return true;
+
+        if(min == max && count != min)
+            return config.onError("argument ",argName,": expected ",min,min == 1 ? " value" : " values");
+        if(count < min)
+            return config.onError("argument ",argName,": expected at least ",min," values");
+        if(count > max)
+            return config.onError("argument ",argName,": expected at most ",max," values");
 
         return true;
     }
@@ -2214,12 +1840,6 @@ private struct ArgumentUDA(alias ValueParseFunctions)
     auto ref HelpText(string text)
     {
         info.helpText = text;
-        return this;
-    }
-
-    auto ref MetaName(string name)
-    {
-        info.metaName = name;
         return this;
     }
 
@@ -2269,7 +1889,7 @@ private struct ArgumentUDA(alias ValueParseFunctions)
     auto ref MaxNumberOfValues(ulong max)()
     if(0 < max)
     {
-        assert(max >= info.manValuesCount.get(0));
+        assert(max >= info.minValuesCount.get(0));
 
         info.maxValuesCount = max;
         return this;
@@ -2317,6 +1937,7 @@ auto RequireNoValue(alias valueToUse, ARG)(ARG arg)
 if(isArgumentUDA!ARG)
 {
     auto desc = arg.AllowNoValue!valueToUse;
+    desc.info.minValuesCount = 0;
     desc.info.maxValuesCount = 0;
     return desc;
 }
@@ -2326,11 +1947,11 @@ if(isArgumentUDA!ARG)
 {
     struct CounterParsingFunction
     {
-        static bool parse(T)(const ref Config config, string argName, ref T param, string[] rawValues)
+        static bool parse(T)(ref T receiver, const ref RawParam param)
         {
-            assert(rawValues.length == 0);
+            assert(param.value.length == 0);
 
-            ++param;
+            ++receiver;
 
             return true;
         }
@@ -2345,67 +1966,199 @@ if(isArgumentUDA!ARG)
 
 unittest
 {
-    auto test(T)(string[] args)
-    {
-        T receiver;
-        assert(createParser!T.parseArgs(receiver, args));
-        return receiver;
-    }
-
-    struct T1
+    struct T
     {
         @(NamedArgument("a").Counter()) int a;
     }
 
-    static assert(test!T1(["-a","-a","-a"]) == T1(3));
+    static assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
 }
 
 
-//auto AllowedValues(ARG, T)(ARG arg, immutable T[] values...)
-//auto AllowedValues(values, ARG)(ARG arg)
-//if(isArgumentUDA!ARG)
-template AllowedValues(alias values)
+auto AllowedValues(alias values, ARG)(ARG arg)
 {
     import std.array : assocArray;
     import std.range : cycle;
 
     enum valuesAA = assocArray(values, cycle([false]));
 
-    auto AllowedValues(ARG)(ARG arg)
-    {
-        return arg.Validation!((KeyType!(typeof(valuesAA)) value) => value in valuesAA);
-    }
+    return arg.Validation!((KeyType!(typeof(valuesAA)) value) => value in valuesAA);
 }
 
 
 unittest
 {
-    import std.typecons : tuple;
-
-    auto test(T)(string[] args)
-    {
-        T receiver;
-        auto res = createParser!T.parseArgs(receiver, args);
-        return tuple(res, receiver);
-    }
-
     struct T
     {
         @(NamedArgument("a").AllowedValues!([1,3,5])) int a;
     }
 
-    static assert(test!T(["-a","2"]) == tuple(false, T.init));
-    static assert(test!T(["-a","3"]) == tuple(true, T(3)));
+    static assert(["-a","2"].parseCLIArgs!T.isNull);
+    static assert(["-a","3"].parseCLIArgs!T.get == T(3));
 }
 
 
-auto PositionalArgument(uint pos, string[] name ...)
+auto PositionalArgument(uint pos)
 {
-    auto arg = ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo(name));
+    auto arg = ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo()).Required();
     arg.info.position = pos;
     return arg;
 }
-auto NamedArgument(string[] name ...)
+
+auto PositionalArgument(uint pos, string name)
 {
-    return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo(name));
+    auto arg = ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo([name])).Required();
+    arg.info.position = pos;
+    return arg;
+}
+
+auto NamedArgument(string[] name)
+{
+    return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo(name)).Optional();
+}
+
+auto NamedArgument(string name)
+{
+    return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo([name])).Optional();
+}
+
+private struct TrailingArgumentUDA
+{
+}
+
+auto TrailingArguments()
+{
+    return TrailingArgumentUDA();
+}
+
+unittest
+{
+    struct T
+    {
+        @NamedArgument("a")  string a;
+        @NamedArgument("b")  string b;
+
+        @TrailingArguments() string[] args;
+    }
+
+    static assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
+}
+
+unittest
+{
+    struct T
+    {
+        @NamedArgument("i")  int i;
+        @NamedArgument("u")  uint u;
+        @NamedArgument("d")  double d;
+    }
+
+    static assert(["-i","-5","-u","8","-d","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
+}
+
+unittest
+{
+    struct T
+    {
+        @(NamedArgument("a")) int[]   a;
+        @(NamedArgument("b")) int[][] b;
+    }
+
+    static assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
+    static assert(["-b","1","2","3","-b","4","5"].parseCLIArgs!T.get.b == [[1,2,3],[4,5]]);
+}
+
+unittest
+{
+    struct T
+    {
+        @(NamedArgument("a")) int[] a;
+    }
+
+    Config cfg;
+    cfg.arraySep = ',';
+
+    assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T(cfg).get == T([1,2,3,4,5]));
+}
+
+unittest
+{
+    struct T
+    {
+        @(NamedArgument("a")) int[string] a;
+    }
+
+    static assert(["-a=foo=3","-a","boo=7"].parseCLIArgs!T.get.a == ["foo":3,"boo":7]);
+}
+
+unittest
+{
+    struct T
+    {
+        @(NamedArgument("a")) int[string] a;
+    }
+
+    Config cfg;
+    cfg.arraySep = ',';
+
+    assert(["-a=foo=3,boo=7"].parseCLIArgs!T(cfg).get.a == ["foo":3,"boo":7]);
+    assert(["-a","foo=3,boo=7"].parseCLIArgs!T(cfg).get.a == ["foo":3,"boo":7]);
+}
+
+unittest
+{
+    struct T
+    {
+        enum Fruit { apple, pear };
+
+        @(NamedArgument("a")) Fruit a;
+    }
+
+    static assert(["-a","apple"].parseCLIArgs!T.get == T(T.Fruit.apple));
+    static assert(["-a=pear"].parseCLIArgs!T.get == T(T.Fruit.pear));
+}
+
+unittest
+{
+    struct T
+    {
+        @(NamedArgument("a")) string[] a;
+    }
+
+    assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T.get == T(["1,2,3","4","5"]));
+
+    Config cfg;
+    cfg.arraySep = ',';
+
+    assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T(cfg).get == T(["1","2","3","4","5"]));
+}
+
+unittest
+{
+    struct T
+    {
+        @(NamedArgument("a").AllowNoValue  !10) int a;
+        @(NamedArgument("b").RequireNoValue!20) int b;
+    }
+
+    static assert(["-a"].parseCLIArgs!T.get.a == 10);
+    static assert(["-b"].parseCLIArgs!T.get.b == 20);
+    static assert(["-a", "30"].parseCLIArgs!T.get.a == 30);
+    assert(["-b", "30"].parseCLIArgs!T.isNull);
+}
+
+unittest
+{
+    struct T
+    {
+        @(NamedArgument("a")
+         .PreValidation!((string s) { return s.length > 1 && s[0] == '!'; })
+         .Parse        !((string s) { return s[1]; })
+         .Validation   !((char v) { return v >= '0' && v <= '9'; })
+         .Action       !((ref int a, char v) { a = v - '0'; })
+        )
+        int a;
+    }
+
+    static assert(["-a","!4"].parseCLIArgs!T.get.a == 4);
 }

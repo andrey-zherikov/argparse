@@ -1,9 +1,11 @@
 .dub
 .idea
+out/
 docs.json
 __dummy.html
 docs/
 /argparse
+argparse.iml
 argparse.so
 argparse.dylib
 argparse.dll
