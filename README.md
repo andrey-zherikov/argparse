@@ -1,3 +1,5 @@
+![Tests](https://github.com/andrey-zherikov/argparse/actions/workflows/run_tests.yml/badge.svg)
+
 # Parser for command-line arguments
 
 `argparse` is a self-contained flexible utility to parse command line arguments that can work at compile-time.
