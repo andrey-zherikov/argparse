@@ -38,10 +38,31 @@ struct Params
     // Use array to store multiple values
     @NamedArgument("array")
     int[] array;
+
+    // Callback with no args (flag)
+    @NamedArgument("cb")
+    void callback() {}
+
+    // Callback with single value
+    @NamedArgument("cb1")
+    void callback1(string value) { assert(value == "cb-value"); }
+
+    // Callback with zero or more values
+    @NamedArgument("cb2")
+    void callback2(string[] value) { assert(value == ["cb-v1","cb-v2"]); }
 }
 
 // Can even work at compile time
-enum params = (["--flag","--num","100","Jake","--array","1","2","3","--enum","foo"].parseCLIArgs!Params).get;
+enum params = ([
+    "--flag",
+    "--num","100",
+    "Jake",
+    "--array","1","2","3",
+    "--enum","foo",
+    "--cb",
+    "--cb1","cb-value",
+    "--cb2","cb-v1","cb-v2",
+    ].parseCLIArgs!Params).get;
 
 static assert(params.name      == "Jake");
 static assert(params.unused    == Params.init.unused);
