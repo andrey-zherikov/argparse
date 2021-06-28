@@ -1817,9 +1817,9 @@ private struct ArgumentInfo
         if(min == max && count != min)
             return config.onError("argument ",argName,": expected ",min,min == 1 ? " value" : " values");
         if(count < min)
-            return config.onError("argument ",argName,": expected at least ",min," values");
+            return config.onError("argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
         if(count > max)
-            return config.onError("argument ",argName,": expected at most ",max," values");
+            return config.onError("argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
 
         return true;
     }
