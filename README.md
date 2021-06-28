@@ -376,6 +376,42 @@ assert(["-a","foo=3,boo=7"].parseCLIArgs!T(cfg).get.a == ["foo":3,"boo":7]);
 
 In general, the keys and values can be of any parsable types.
 
+### Callback
+
+An argument can be bound to a function with one of the following signatures
+(return value, if any, is ignored):
+
+- `... function()`
+
+  In this case, the argument is treated as a flag and the function is called every time when
+  the argument is seen in command line.
+
+- `... function(string)`
+
+  In this case, the argument has exactly one value and the function is called every time when
+  the argument is seen in command line and the value specified in command line is provided into `string` parameter.
+
+- `... function(string[])`
+
+  In this case, the argument has zero or more values and the function is called every time when
+  the argument is seen in command line and the set of values specified in command line is provided into `string[]` parameter.
+
+- `... function(RawParam)`
+
+  In this case, the argument has one or more values and the function is called every time when
+  the argument is seen in command line and the set of values specified in command line is provided into parameter.
+
+```d
+static struct T
+{
+    int a;
+
+    @(NamedArgument("a")) void foo() { a++; }
+}
+
+static assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
+```
+
 ## Parsing customization
 
 Some time the functionality provided out of the box is not enough and it needs to be tuned.

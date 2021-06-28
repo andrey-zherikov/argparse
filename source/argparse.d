@@ -199,6 +199,35 @@ if(!is(T == void))
         enum min = 1;
         enum max = ulong.max;
     }
+    else static if(is(T == function))
+    {
+        // ... function()
+        static if(__traits(compiles, { T(); }))
+        {
+            enum min = 0;
+            enum max = 0;
+        }
+        // ... function(string value)
+        else static if(__traits(compiles, { T(string.init); }))
+        {
+            enum min = 1;
+            enum max = 1;
+        }
+        // ... function(string[] value)
+        else static if(__traits(compiles, { T([string.init]); }))
+        {
+            enum min = 0;
+            enum max = ulong.max;
+        }
+        // ... function(RawParam param)
+        else static if(__traits(compiles, { T(RawParam.init); }))
+        {
+            enum min = 1;
+            enum max = ulong.max;
+        }
+        else
+            static assert(false, "Unsupported callback: " ~ T.stringof);
+    }
     else
         static assert(false, "Type is not supported: " ~ T.stringof);
 }
@@ -413,12 +442,10 @@ private struct Arguments(T)
                         static if(is(typeof(__traits(getMember, receiver, __traits(identifier, sym))) == function))
                         {
                             auto target = &__traits(getMember, receiver, __traits(identifier, sym));
-                            return argUDA.parsingFunc.parse(config, argName, target, rawValues);
+                            return argUDA.parsingFunc.parse(target, param);
                         }
                         else
-                            //return argUDA.parsingFunc.parse(config, argName, __traits(getMember, receiver, __traits(identifier, sym)), rawValues);
-                            return argUDA.parsingFunc.parse(__traits(getMember, receiver, __traits(identifier, sym)),
-                             param);
+                            return argUDA.parsingFunc.parse(__traits(getMember, receiver, __traits(identifier, sym)), param);
                     }
                 );
 
@@ -1007,6 +1034,59 @@ private struct Actions
     static auto Extend(T)(ref T[] param, T value)
     {
         param ~= value;
+    }
+
+    static auto CallFunction(F)(ref F func, RawParam param)
+    {
+        // ... func()
+        static if(__traits(compiles, { func(); }))
+        {
+            func();
+        }
+        // ... func(string value)
+        else static if(__traits(compiles, { func(param.value[0]); }))
+        {
+            foreach(value; param.value)
+                func(value);
+        }
+        // ... func(string[] value)
+        else static if(__traits(compiles, { func(param.value); }))
+        {
+            func(param.value);
+        }
+        // ... func(RawParam param)
+        else static if(__traits(compiles, { func(param); }))
+        {
+            func(param);
+        }
+        else
+            static assert(false, "Unsupported callback: " ~ F.stringof);
+    }
+
+    static auto CallFunctionNoParam(F)(ref F func, Param!void param)
+    {
+        // ... func()
+        static if(__traits(compiles, { func(); }))
+        {
+            func();
+        }
+        // ... func(string value)
+        else static if(__traits(compiles, { func(string.init); }))
+        {
+            func(string.init);
+        }
+        // ... func(string[] value)
+        else static if(__traits(compiles, { func([]); }))
+        {
+            func([]);
+        }
+        // ... func(Param!void param)
+        else static if(__traits(compiles, { func(param); }))
+        {
+            func(param);
+        }
+        else
+            static assert(false, "Unsupported callback: " ~ F.stringof);
     }
 }
 
@@ -1701,7 +1781,18 @@ if(!is(T == void))
         (ref T param) {}    // no-value action
         );
     }
-    else
+    else static if(is(T == delegate))
+    {
+        alias DefaultValueParseFunctions = ValueParseFunctions!(
+            void,                           // pre process
+            void,                           // pre validate
+            Parsers.PassThrough,            // parse
+            void,                           // validate
+            Actions.CallFunction!T,         // action
+            Actions.CallFunctionNoParam!T   // no-value action
+        );
+    }
+     else
         static assert(false, "Type is not supported: " ~ T.stringof);
 }
 
@@ -2161,4 +2252,16 @@ unittest
     }
 
     static assert(["-a","!4"].parseCLIArgs!T.get.a == 4);
+}
+
+unittest
+{
+    static struct T
+    {
+        int a;
+
+        @(NamedArgument("a")) void foo() { a++; }
+    }
+
+    static assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
 }
