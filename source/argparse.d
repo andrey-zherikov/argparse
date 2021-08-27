@@ -65,7 +65,7 @@ struct Config
     }
 
 
-    private bool onError(A...)(A args) const nothrow
+    private void onError(A...)(A args) const nothrow
     {
         import std.conv: text;
         import std.stdio: stderr, writeln;
@@ -81,8 +81,6 @@ struct Config
         {
             throw new Error(e.msg);
         }
-
-        return false;
     }
 }
 
@@ -359,7 +357,8 @@ private struct Arguments(T)
             }
             catch(Exception e)
             {
-                return config.onError(argName, ": ", e.msg);
+                config.onError(argName, ": ", e.msg);
+                return false;
             }
         }
     }
@@ -604,8 +603,10 @@ struct CommandLineParser(T)
             return false;
 
         if(unrecognizedArgs.length > 0)
-            return config.onError("Unrecognized arguments: ", unrecognizedArgs);
-
+        {
+            config.onError( "Unrecognized arguments: ", unrecognizedArgs);
+            return false;
+        }
         return true;
     }
 
@@ -665,7 +666,10 @@ struct CommandLineParser(T)
                 case ArgumentType.longName:
                 {
                     if(arg.name.length == 0)
-                        return config.onError("Empty argument name: ", args.front);
+                    {
+                        config.onError( "Empty argument name: ", args.front);
+                        return false;
+                    }
 
                     auto res = arguments.findNamedArgument(arg.name);
                     if(res.arg !is null)
@@ -700,8 +704,10 @@ struct CommandLineParser(T)
                 case ArgumentType.shortName:
                 {
                     if(arg.name.length == 0)
-                        return config.onError("Empty argument name: ", args.front);
-
+                    {
+                        config.onError( "Empty argument name: ", args.front);
+                        return false;
+                    }
                     auto res = arguments.findNamedArgument(arg.name);
                     if(res.arg !is null)
                     {
@@ -779,8 +785,9 @@ struct CommandLineParser(T)
         if(requiredArgs.length > 0)
         {
             import std.algorithm : map;
-            return config.onError("The following arguments are required: ",
+            config.onError("The following arguments are required: ",
                 requiredArgs.keys.map!(idx => arguments.arguments[idx].info.names[0]).join(", "));
+            return false;
         }
 
         return true;
@@ -1906,11 +1913,20 @@ private struct ArgumentInfo
             return true;
 
         if(min == max && count != min)
-            return config.onError("argument ",argName,": expected ",min,min == 1 ? " value" : " values");
+        {
+            config.onError( "argument ",argName,": expected ",min,min == 1 ? " value" : " values");
+            return false;
+        }
         if(count < min)
-            return config.onError("argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
+        {
+            config.onError( "argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
+            return false;
+        }
         if(count > max)
-            return config.onError("argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
+        {
+            config.onError( "argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
+            return false;
+        }
 
         return true;
     }
