@@ -4,6 +4,9 @@
 
 `argparse` is a self-contained flexible utility to parse command line arguments that can work at compile-time.
 
+**NOTICE: The API is not finalized yet so there might be backward incompatible changes until 1.0 version.
+Please refer to [releases](https://github.com/andrey-zherikov/argparse/releases) for breaking changes.**  
+
 ## Getting started
 
 Here is "Hello World" example showing the usage of this utility:
