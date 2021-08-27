@@ -36,7 +36,7 @@ struct Config
      */
     string endOfArgs = "--";
 
-    /**caseSensitive
+    /**
        If set then argument names are case-sensitive.
        Defaults to true.
      */
@@ -367,7 +367,7 @@ private struct Arguments(T)
 
     static if(getSymbolsByUDA!(T, TrailingArgumentUDA).length == 1)
     {
-        private void setTrailingArgs(ref T receiver, string[] rawValues)
+        private void setTrailingArgs(ref T receiver, string[] rawValues) const
         {
             alias symbol = getSymbolsByUDA!(T, TrailingArgumentUDA)[0];
 
