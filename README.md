@@ -124,8 +124,7 @@ enum result = parseCLIArgs!T([ "-a", "A", "-b", "B"]);
 assert(result.get == T("A","B"));
 ```
 
-If you want to reuse the parser and parse multiple command lines then you can use `CommandLineParser`
-struct:
+If you want to reuse the parser and parse multiple command lines then you can do this easily:
 
 ```d
 struct T
@@ -134,16 +133,12 @@ struct T
     @NamedArgument("b") string b;
 }
 
-enum parser = CommandLineParser!T(Config.init);
-
 T result;
-parser.parseArgs(result, [ "-a", "A" ]);
-parser.parseArgs(result, [ "-b", "B" ]);
+result.parseCLIArgs([ "-a", "A" ]);
+result.parseCLIArgs([ "-b", "B" ]);
 
 assert(result == T("A","B"));
 ```
-
-`CommandLineParser.parseArgs` returns `false` if there is an error happened during the parsing. 
 
 #### Partial parsing
 

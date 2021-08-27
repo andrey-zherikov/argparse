@@ -543,256 +543,286 @@ private void checkArgumentName(T)(char namedArgChar)
             enforce(name[0] != namedArgChar, "Name of argument should not begin with '"~namedArgChar~"': "~name);
 }
 
-struct CommandLineParser(T)
+private auto consumeValuesFromCLI(ref string[] args, in ArgumentInfo argumentInfo, in Config config)
 {
-    import std.range;
-    import std.typecons : tuple;
+    import std.range: empty, front, popFront;
 
-    private immutable Config config;
+    immutable minValuesCount = argumentInfo.minValuesCount.get;
+    immutable maxValuesCount = argumentInfo.maxValuesCount.get;
 
-    private Arguments!T arguments;
+    string[] values;
 
-
-    this(in Config config)
+    if(minValuesCount > 0)
     {
-        checkArgumentName!T(config.namedArgChar);
+        if(minValuesCount < args.length)
+        {
+            values = args[0..minValuesCount];
+            args = args[minValuesCount..$];
+        }
+        else
+        {
+            values = args;
+            args = [];
+        }
+    }
 
-        this.config = config;
+    while(!args.empty &&
+        values.length < maxValuesCount &&
+        (config.endOfArgs.length == 0 || args.front != config.endOfArgs) &&
+        (args.front.length == 0 || args.front[0] != config.namedArgChar))
+    {
+        values ~= args.front;
+        args.popFront();
+    }
 
+    return values;
+}
+
+
+struct ParseCLIResult(T)
+{
+    const Arguments!T arguments;
+
+    private this(in Config config)
+    {
         arguments = Arguments!T(config.caseSensitive);
     }
+}
 
-    private auto consumeValues(ref string[] args, in ArgumentInfo argumentInfo) const
-    {
-        immutable minValuesCount = argumentInfo.minValuesCount.get;
-        immutable maxValuesCount = argumentInfo.maxValuesCount.get;
+auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecognizedArgs, in Config config = Config.init)
+{
+    import std.range: empty, front, popFront, join;
+    import std.typecons : tuple;
 
-        string[] values;
+    checkArgumentName!T(config.namedArgChar);
 
-        if(minValuesCount > 0)
-        {
-            if(minValuesCount < args.length)
-            {
-                values = args[0..minValuesCount];
-                args = args[minValuesCount..$];
-            }
-            else
-            {
-                values = args;
-                args = [];
-            }
-        }
+    auto result = ParseCLIResult!T(config);
 
-        while(!args.empty &&
-            values.length < maxValuesCount &&
-            (config.endOfArgs.length == 0 || args.front != config.endOfArgs) &&
-            (args.front.length == 0 || args.front[0] != config.namedArgChar))
-        {
-            values ~= args.front;
-            args.popFront();
-        }
+    auto requiredArgs = result.arguments.requiredArguments.dup;
 
-        return values;
-    }
+    alias parseNamedArg = (arg, res) {
+        args.popFront();
 
-    bool parseArgs(ref T receiver, string[] args)
-    {
-        string[] unrecognizedArgs;
-        immutable res = parseKnownArgs(receiver, args, unrecognizedArgs);
-        if(!res)
+        auto values = arg.value.isNull ? consumeValuesFromCLI(args, res.arg.info, config) : [ arg.value.get ];
+
+        if(!res.arg.parse(config, arg.origName, receiver, values))
             return false;
 
-        if(unrecognizedArgs.length > 0)
-        {
-            config.onError( "Unrecognized arguments: ", unrecognizedArgs);
-            return false;
-        }
+        requiredArgs.remove(res.index);
+
         return true;
-    }
+    };
 
-    bool parseKnownArgs(ref T receiver, string[] args, out string[] unrecognizedArgs)
+    ulong positionalArgIdx = 0;
+
+    while(!args.empty)
     {
-        auto requiredArgs = arguments.requiredArguments.dup;
-
-        alias parseNamedArg = (arg, res) {
-            args.popFront();
-
-            auto values = arg.value.isNull ? consumeValues(args, res.arg.info) : [ arg.value.get ];
-
-            if(!res.arg.parse(config, arg.origName, receiver, values))
-                return false;
-
-            requiredArgs.remove(res.index);
-
-            return true;
-        };
-
-        ulong positionalArgIdx = 0;
-
-        while(!args.empty)
+        if(config.endOfArgs.length > 0 && args.front == config.endOfArgs)
         {
-            if(config.endOfArgs.length > 0 && args.front == config.endOfArgs)
+            // End of arguments
+            static if(is(typeof(result.arguments.setTrailingArgs)))
+                result.arguments.setTrailingArgs(receiver, args[1..$]);
+            else
+                unrecognizedArgs ~= args[1..$];
+            break;
+        }
+
+        auto arg = splitArgumentName(args.front, config);
+
+        final switch(arg.type)
+        {
+            case ArgumentType.positional:
             {
-                // End of arguments
-                static if(is(typeof(arguments.setTrailingArgs)))
-                    arguments.setTrailingArgs(receiver, args[1..$]);
-                else
-                    unrecognizedArgs ~= args[1..$];
+                auto res = result.arguments.findPositionalArgument(positionalArgIdx);
+                if(res.arg is null)
+                    goto case ArgumentType.unknown;
+
+                auto values = consumeValuesFromCLI(args, res.arg.info, config);
+
+                if(!res.arg.parse(config, res.arg.info.names[0], receiver, values))
+                    return false;
+
+                positionalArgIdx++;
+
+                requiredArgs.remove(res.index);
+
                 break;
             }
 
-            auto arg = splitArgumentName(args.front, config);
-
-            final switch(arg.type)
+            case ArgumentType.longName:
             {
-                case ArgumentType.positional:
+                if(arg.name.length == 0)
                 {
-                    auto res = arguments.findPositionalArgument(positionalArgIdx);
-                    if(res.arg is null)
-                        goto case ArgumentType.unknown;
+                    config.onError( "Empty argument name: ", args.front);
+                    return false;
+                }
 
-                    auto values = consumeValues(args, res.arg.info);
-
-                    if(!res.arg.parse(config, res.arg.info.names[0], receiver, values))
+                auto res = result.arguments.findNamedArgument(arg.name);
+                if(res.arg !is null)
+                {
+                    if(!parseNamedArg(arg, res))
                         return false;
-
-                    positionalArgIdx++;
-
-                    requiredArgs.remove(res.index);
 
                     break;
                 }
 
-                case ArgumentType.longName:
+                import std.algorithm : startsWith;
+
+                if(arg.name.startsWith("no-"))
                 {
-                    if(arg.name.length == 0)
+                    res = result.arguments.findNamedArgument(arg.name[3..$]);
+                    if(res.arg !is null && res.arg.info.allowBooleanNegation)
                     {
-                        config.onError( "Empty argument name: ", args.front);
-                        return false;
-                    }
+                        args.popFront();
 
-                    auto res = arguments.findNamedArgument(arg.name);
-                    if(res.arg !is null)
-                    {
-                        if(!parseNamedArg(arg, res))
-                            return false;
-
-                        break;
-                    }
-
-                    import std.algorithm : startsWith;
-
-                    if(arg.name.startsWith("no-"))
-                    {
-                        res = arguments.findNamedArgument(arg.name[3..$]);
-                        if(res.arg !is null && res.arg.info.allowBooleanNegation)
-                        {
-                            args.popFront();
-
-                            if(!res.arg.parse(config, arg.origName, receiver, ["false"]))
-                                return false;
-
-                            requiredArgs.remove(res.index);
-
-                            break;
-                        }
-                    }
-
-                    goto case ArgumentType.unknown;
-                }
-
-                case ArgumentType.shortName:
-                {
-                    if(arg.name.length == 0)
-                    {
-                        config.onError( "Empty argument name: ", args.front);
-                        return false;
-                    }
-                    auto res = arguments.findNamedArgument(arg.name);
-                    if(res.arg !is null)
-                    {
-                        if(!parseNamedArg(arg, res))
-                            return false;
-
-                        break;
-                    }
-
-                    if(arg.name.length == 1)
-                        goto case ArgumentType.unknown;
-
-                    if(!config.bundling)
-                    {
-                        auto name = [arg.name[0]];
-                        res = arguments.findNamedArgument(name);
-                        if(res.arg is null || res.arg.info.minValuesCount != 1)
-                            goto case ArgumentType.unknown;
-
-                        if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
+                        if(!res.arg.parse(config, arg.origName, receiver, ["false"]))
                             return false;
 
                         requiredArgs.remove(res.index);
 
+                        break;
+                    }
+                }
+
+                goto case ArgumentType.unknown;
+            }
+
+            case ArgumentType.shortName:
+            {
+                if(arg.name.length == 0)
+                {
+                    config.onError( "Empty argument name: ", args.front);
+                    return false;
+                }
+
+                auto res = result.arguments.findNamedArgument(arg.name);
+                if(res.arg !is null)
+                {
+                    if(!parseNamedArg(arg, res))
+                        return false;
+
+                    break;
+                }
+
+                if(arg.name.length == 1)
+                    goto case ArgumentType.unknown;
+
+                if(!config.bundling)
+                {
+                    auto name = [arg.name[0]];
+                    res = result.arguments.findNamedArgument(name);
+                    if(res.arg is null || res.arg.info.minValuesCount != 1)
+                        goto case ArgumentType.unknown;
+
+                    if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
+                        return false;
+
+                    requiredArgs.remove(res.index);
+
+                    args.popFront();
+                    break;
+                }
+                else
+                {
+                    while(arg.name.length > 0)
+                    {
+                        auto name = [arg.name[0]];
+                        res = result.arguments.findNamedArgument(name);
+                        if(res.arg is null)
+                            goto case ArgumentType.unknown;
+
+                        if(res.arg.info.minValuesCount == 0)
+                        {
+                            if(!res.arg.parse(config, "-"~name, receiver, []))
+                                return false;
+
+                            requiredArgs.remove(res.index);
+
+                            arg.name = arg.name[1..$];
+                        }
+                        else if(res.arg.info.minValuesCount == 1)
+                        {
+                            if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
+                                return false;
+
+                            requiredArgs.remove(res.index);
+
+                            arg.name = [];
+                        }
+                        else // trigger an error
+                            return res.arg.info.checkValuesCount(config, name, 1);
+                    }
+
+                    if(arg.name.length == 0)
+                    {
                         args.popFront();
                         break;
                     }
-                    else
-                    {
-                        while(arg.name.length > 0)
-                        {
-                            auto name = [arg.name[0]];
-                            res = arguments.findNamedArgument(name);
-                            if(res.arg is null)
-                                goto case ArgumentType.unknown;
-
-                            if(res.arg.info.minValuesCount == 0)
-                            {
-                                if(!res.arg.parse(config, "-"~name, receiver, []))
-                                    return false;
-
-                                requiredArgs.remove(res.index);
-
-                                arg.name = arg.name[1..$];
-                            }
-                            else if(res.arg.info.minValuesCount == 1)
-                            {
-                                if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
-                                    return false;
-
-                                requiredArgs.remove(res.index);
-
-                                arg.name = [];
-                            }
-                            else // trigger an error
-                                return res.arg.info.checkValuesCount(config, name, 1);
-                        }
-
-                        if(arg.name.length == 0)
-                        {
-                            args.popFront();
-                            break;
-                        }
-                    }
-
-                    goto case ArgumentType.unknown;
                 }
 
-                case ArgumentType.unknown:
-                    unrecognizedArgs ~= args.front;
-                    args.popFront();
+                goto case ArgumentType.unknown;
             }
-        }
 
-        if(requiredArgs.length > 0)
-        {
-            import std.algorithm : map;
-            config.onError("The following arguments are required: ",
-                requiredArgs.keys.map!(idx => arguments.arguments[idx].info.names[0]).join(", "));
-            return false;
+            case ArgumentType.unknown:
+                unrecognizedArgs ~= args.front;
+                args.popFront();
         }
-
-        return true;
     }
+
+    if(requiredArgs.length > 0)
+    {
+        import std.algorithm : map;
+        config.onError("The following arguments are required: ",
+            requiredArgs.keys.map!(idx => result.arguments.arguments[idx].info.names[0]).join(", "));
+        return false;
+    }
+
+    return true;
 }
+
+auto parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)
+{
+    string[] unrecognizedArgs;
+
+    auto res = parseCLIKnownArgs(receiver, args, unrecognizedArgs, config);
+
+    if(res)
+        args = unrecognizedArgs;
+
+    return res;
+}
+
+auto parseCLIKnownArgs(T)(ref string[] args, in Config config = Config.init)
+{
+    T receiver;
+
+    string[] unrecognizedArgs;
+
+    auto res = parseCLIKnownArgs(receiver, args, unrecognizedArgs, config);
+
+    if(res)
+        args = unrecognizedArgs;
+
+    import std.typecons : nullable;
+    return res ? receiver.nullable : Nullable!T.init;
+}
+
+auto parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)
+{
+    string[] unrecognizedArgs;
+    immutable res = parseCLIKnownArgs(receiver, args, unrecognizedArgs, config);
+    if(!res)
+        return false;
+
+    if(unrecognizedArgs.length > 0)
+    {
+        config.onError( "Unrecognized arguments: ", unrecognizedArgs);
+        return false;
+    }
+
+    return true;
+}
+
 
 auto parseCLIArgs(T)(string[] args, Config config = Config.init)
 {
@@ -800,23 +830,7 @@ auto parseCLIArgs(T)(string[] args, Config config = Config.init)
 
     T receiver;
 
-    return CommandLineParser!T(config).parseArgs(receiver, args) ? receiver.nullable : Nullable!T.init;
-}
-
-auto parseCLIKnownArgs(T)(ref string[] args, Config config = Config.init)
-{
-    import std.typecons : nullable;
-
-    T receiver;
-    string[] unrecognizedArgs;
-
-    if(!CommandLineParser!T(config).parseKnownArgs(receiver, args, unrecognizedArgs))
-        return Nullable!T.init;
-    else
-    {
-        args = unrecognizedArgs;
-        return receiver.nullable;
-    }
+    return parseCLIArgs(receiver, args, config) ? receiver.nullable : Nullable!T.init;
 }
 
 
@@ -829,8 +843,8 @@ unittest
         @(NamedArgument("--"))
         int a;
     }
-    static assert(!__traits(compiles, { enum p = CommandLineParser!T(Config.init); }));
-    assertThrown(CommandLineParser!T(Config.init));
+    static assert(!__traits(compiles, { enum p = parseCLIArgs!T([]); }));
+    assertThrown(parseCLIArgs!T([]));
 }
 
 unittest
@@ -894,11 +908,10 @@ unittest
     static assert(test(["-a","A","--","-b","B"]) == tuple(T("A"), ["-b","B"]));
 
     {
-        enum parser = CommandLineParser!T(Config.init);
-
         T args;
-        parser.parseArgs(args, [ "-a", "A"]);
-        parser.parseArgs(args, [ "-b", "B"]);
+
+        args.parseCLIArgs([ "-a", "A"]);
+        args.parseCLIArgs([ "-b", "B"]);
 
         assert(args == T("A","B"));
     }
