@@ -4,6 +4,9 @@
 
 `argparse` is a self-contained flexible utility to parse command line arguments that can work at compile-time.
 
+**NOTICE: The API is not finalized yet so there might be backward incompatible changes until 1.0 version.
+Please refer to [releases](https://github.com/andrey-zherikov/argparse/releases) for breaking changes.**  
+
 ## Getting started
 
 Here is "Hello World" example showing the usage of this utility:
@@ -121,8 +124,7 @@ enum result = parseCLIArgs!T([ "-a", "A", "-b", "B"]);
 assert(result.get == T("A","B"));
 ```
 
-If you want to reuse the parser and parse multiple command lines then you can use `CommandLineParser`
-struct:
+If you want to reuse the parser and parse multiple command lines then you can do this easily:
 
 ```d
 struct T
@@ -131,16 +133,12 @@ struct T
     @NamedArgument("b") string b;
 }
 
-enum parser = CommandLineParser!T(Config.init);
-
 T result;
-parser.parseArgs(result, [ "-a", "A" ]);
-parser.parseArgs(result, [ "-b", "B" ]);
+result.parseCLIArgs([ "-a", "A" ]);
+result.parseCLIArgs([ "-b", "B" ]);
 
 assert(result == T("A","B"));
 ```
-
-`CommandLineParser.parseArgs` returns `false` if there is an error happened during the parsing. 
 
 #### Partial parsing
 
