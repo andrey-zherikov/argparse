@@ -49,6 +49,12 @@ struct Config
     bool bundling = false;
 
     /**
+       Add a -h/--help option to the parser.
+       Defaults to true.
+     */
+    bool addHelp = true;
+
+    /**
        Delegate that processes error messages if they happen during argument parsing.
        By default all errors are printed to stderr.
      */
@@ -582,14 +588,36 @@ private auto consumeValuesFromCLI(ref string[] args, in ArgumentInfo argumentInf
 struct ParseCLIResult(T)
 {
     const Arguments!T arguments;
+    bool success;  // true if parsing succeeded
+
+    bool opCast(type)() if (is(type == bool))
+    {
+        return success;
+    }
+
 
     private this(in Config config)
     {
         arguments = Arguments!T(config.caseSensitive);
     }
+
+    private auto setSuccess()
+    {
+        success = true;
+        return this;
+    }
+
+    private auto setFailure()
+    {
+        success = false;
+        return this;
+    }
 }
 
-auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecognizedArgs, in Config config = Config.init)
+ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
+                                      string[] args,
+                                      out string[] unrecognizedArgs,
+                                      in Config config = Config.init)
 {
     import std.range: empty, front, popFront, join;
     import std.typecons : tuple;
@@ -640,7 +668,7 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                 auto values = consumeValuesFromCLI(args, res.arg.info, config);
 
                 if(!res.arg.parse(config, res.arg.info.names[0], receiver, values))
-                    return false;
+                    return result;
 
                 positionalArgIdx++;
 
@@ -654,14 +682,14 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                 if(arg.name.length == 0)
                 {
                     config.onError( "Empty argument name: ", args.front);
-                    return false;
+                    return result;
                 }
 
                 auto res = result.arguments.findNamedArgument(arg.name);
                 if(res.arg !is null)
                 {
                     if(!parseNamedArg(arg, res))
-                        return false;
+                        return result;
 
                     break;
                 }
@@ -676,7 +704,7 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                         args.popFront();
 
                         if(!res.arg.parse(config, arg.origName, receiver, ["false"]))
-                            return false;
+                            return result;
 
                         requiredArgs.remove(res.index);
 
@@ -692,14 +720,14 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                 if(arg.name.length == 0)
                 {
                     config.onError( "Empty argument name: ", args.front);
-                    return false;
+                    return result;
                 }
 
                 auto res = result.arguments.findNamedArgument(arg.name);
                 if(res.arg !is null)
                 {
                     if(!parseNamedArg(arg, res))
-                        return false;
+                        return result;
 
                     break;
                 }
@@ -715,7 +743,7 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                         goto case ArgumentType.unknown;
 
                     if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
-                        return false;
+                        return result;
 
                     requiredArgs.remove(res.index);
 
@@ -734,7 +762,7 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                         if(res.arg.info.minValuesCount == 0)
                         {
                             if(!res.arg.parse(config, "-"~name, receiver, []))
-                                return false;
+                                return result;
 
                             requiredArgs.remove(res.index);
 
@@ -743,14 +771,18 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                         else if(res.arg.info.minValuesCount == 1)
                         {
                             if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
-                                return false;
+                                return result;
 
                             requiredArgs.remove(res.index);
 
                             arg.name = [];
                         }
-                        else // trigger an error
-                            return res.arg.info.checkValuesCount(config, name, 1);
+                        else
+                        {
+                            // trigger an error
+                            res.arg.info.checkValuesCount( config, name, 1);
+                            return result;
+                        }
                     }
 
                     if(arg.name.length == 0)
@@ -774,57 +806,67 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
         import std.algorithm : map;
         config.onError("The following arguments are required: ",
             requiredArgs.keys.map!(idx => result.arguments.arguments[idx].info.names[0]).join(", "));
-        return false;
+        return result;
     }
 
-    return true;
+    return result.setSuccess();
 }
 
-auto parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)
+ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)
 {
     string[] unrecognizedArgs;
 
     auto res = parseCLIKnownArgs(receiver, args, unrecognizedArgs, config);
-
     if(res)
         args = unrecognizedArgs;
 
     return res;
 }
 
-auto parseCLIKnownArgs(T)(ref string[] args, in Config config = Config.init)
+Nullable!T parseCLIKnownArgs(T)(ref string[] args, in Config config = Config.init)
 {
+    import std.typecons : nullable;
+
     T receiver;
 
+    return parseCLIKnownArgs(receiver, args, config) ? receiver.nullable : Nullable!T.init;
+}
+
+int parseCLIKnownArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)
+if(__traits(compiles, { func(T.init, args); }))
+{
+    alias value = initialValue;
+
+    auto res = parseCLIKnownArgs(value, args, config);
+    if(!res)
+        return int.max;
+
+    static if(__traits(compiles, { int a = cast(int) func(value, args); }))
+        return cast(int) func(value, args);
+    else
+    {
+        func(value, args);
+        return 0;
+    }
+}
+
+
+ParseCLIResult!T parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)
+{
     string[] unrecognizedArgs;
 
     auto res = parseCLIKnownArgs(receiver, args, unrecognizedArgs, config);
 
-    if(res)
-        args = unrecognizedArgs;
-
-    import std.typecons : nullable;
-    return res ? receiver.nullable : Nullable!T.init;
-}
-
-auto parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)
-{
-    string[] unrecognizedArgs;
-    immutable res = parseCLIKnownArgs(receiver, args, unrecognizedArgs, config);
-    if(!res)
-        return false;
-
-    if(unrecognizedArgs.length > 0)
+    if(res && unrecognizedArgs.length > 0)
     {
         config.onError( "Unrecognized arguments: ", unrecognizedArgs);
-        return false;
+        return res.setFailure();
     }
 
-    return true;
+    return res;
 }
 
-
-auto parseCLIArgs(T)(string[] args, Config config = Config.init)
+Nullable!T parseCLIArgs(T)(string[] args, in Config config = Config.init)
 {
     import std.typecons : nullable;
 
@@ -833,6 +875,23 @@ auto parseCLIArgs(T)(string[] args, Config config = Config.init)
     return parseCLIArgs(receiver, args, config) ? receiver.nullable : Nullable!T.init;
 }
 
+int parseCLIArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)
+if(__traits(compiles, { func(T.init); }))
+{
+    alias value = initialValue;
+
+    auto res = parseCLIArgs(value, args, config);
+    if(!res)
+        return int.max;
+
+    static if(__traits(compiles, { int a = cast(int) func(value); }))
+        return cast(int) func(value);
+    else
+    {
+        func(value);
+        return 0;
+    }
+}
 
 unittest
 {
@@ -915,6 +974,73 @@ unittest
 
         assert(args == T("A","B"));
     }
+}
+
+unittest
+{
+    struct T
+    {
+        @NamedArgument("a") string a;
+    }
+
+    {
+        auto test_called(string[] args)
+        {
+            bool called;
+            auto dg = (T t) {
+                called = true;
+            };
+            assert(args.parseCLIArgs!T(dg) == 0 || !called);
+            return called;
+        }
+
+        static assert(test_called([]));
+        assert(!test_called(["-g"]));
+    }
+    {
+        auto test_called(string[] args)
+        {
+            bool called;
+            auto dg = (T t, string[] args) {
+                assert(args.length == 0 || args == ["-g"]);
+                called = true;
+            };
+            assert(args.parseCLIKnownArgs!T(dg) == 0);
+            return called;
+        }
+
+        static assert(test_called([]));
+        static assert(test_called(["-g"]));
+    }
+}
+
+unittest
+{
+    struct T
+    {
+        @NamedArgument( "a") string a;
+    }
+
+    int my_main(T command)
+    {
+        // do something
+        return 0;
+    }
+
+    static assert([ "-a","aa"].parseCLIArgs!T( &my_main) == 0);
+}
+
+unittest
+{
+    struct T
+    {
+        @NamedArgument("a") string a;
+    }
+
+    auto args = [ "-a", "A", "-c", "C" ];
+
+    assert(parseCLIKnownArgs!T(args).get == T("A"));
+    assert(args == ["-c", "C"]);
 }
 
 unittest
