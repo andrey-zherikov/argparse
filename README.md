@@ -1,4 +1,5 @@
 ![Build](https://github.com/andrey-zherikov/argparse/actions/workflows/build.yaml/badge.svg)
+[![codecov](https://codecov.io/gh/andrey-zherikov/argparse/branch/master/graph/badge.svg?token=H810TEZEHP)](https://codecov.io/gh/andrey-zherikov/argparse)
 
 # Parser for command-line arguments
 
