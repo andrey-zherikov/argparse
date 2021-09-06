@@ -964,6 +964,7 @@ unittest
         return tuple(args.parseCLIKnownArgs!T.get, args);
     }
 
+    assert(test(["-a","A","--"]) == tuple(T("A"), []));
     static assert(test(["-a","A","--","-b","B"]) == tuple(T("A"), ["-b","B"]));
 
     {
@@ -995,6 +996,7 @@ unittest
         }
 
         static assert(test_called([]));
+        assert(test_called([]));
         assert(!test_called(["-g"]));
     }
     {
@@ -1009,7 +1011,7 @@ unittest
             return called;
         }
 
-        static assert(test_called([]));
+        assert(test_called([]));
         static assert(test_called(["-g"]));
     }
 }
@@ -1018,7 +1020,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument( "a") string a;
+        @NamedArgument("a") string a;
     }
 
     int my_main(T command)
@@ -1027,7 +1029,8 @@ unittest
         return 0;
     }
 
-    static assert([ "-a","aa"].parseCLIArgs!T( &my_main) == 0);
+    static assert(["-a","aa"].parseCLIArgs!T(&my_main) == 0);
+    assert(["-a","aa"].parseCLIArgs!T(&my_main) == 0);
 }
 
 unittest
@@ -1058,6 +1061,11 @@ unittest
     static assert(["--foo=FOO","1","-x=X"].parseCLIArgs!T.get == T("X", "FOO", "1"));
     static assert(["--foo=FOO","1","2","3","4"].parseCLIArgs!T.get == T(string.init, "FOO", "1",["2","3","4"]));
     static assert(["-xX"].parseCLIArgs!T.get == T("X"));
+    assert(["--foo","FOO","-x","X"].parseCLIArgs!T.get == T("X", "FOO"));
+    assert(["--foo=FOO","-x=X"].parseCLIArgs!T.get == T("X", "FOO"));
+    assert(["--foo=FOO","1","-x=X"].parseCLIArgs!T.get == T("X", "FOO", "1"));
+    assert(["--foo=FOO","1","2","3","4"].parseCLIArgs!T.get == T(string.init, "FOO", "1",["2","3","4"]));
+    assert(["-xX"].parseCLIArgs!T.get == T("X"));
 
     struct T1
     {
@@ -1065,12 +1073,14 @@ unittest
         @(PositionalArgument(1, "b")) string[] b;
     }
     static assert(["1","2","3","4","5","6"].parseCLIArgs!T1.get == T1(["1","2","3"],["4","5","6"]));
+    assert(["1","2","3","4","5","6"].parseCLIArgs!T1.get == T1(["1","2","3"],["4","5","6"]));
 
     struct T2
     {
         @NamedArgument("foo") bool foo = true;
     }
     static assert(["--no-foo"].parseCLIArgs!T2.get == T2(false));
+    assert(["--no-foo"].parseCLIArgs!T2.get == T2(false));
 }
 
 unittest
@@ -1085,6 +1095,7 @@ unittest
     }
 
     static assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
+    assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
 }
 
 unittest
@@ -1105,6 +1116,8 @@ unittest
 
     static assert(test!T(["--Foo","FOO","-X","X"]) == T("X", "FOO"));
     static assert(test!T(["--FOo=FOO","-X=X"]) == T("X", "FOO"));
+    assert(test!T(["--Foo","FOO","-X","X"]) == T("X", "FOO"));
+    assert(test!T(["--FOo=FOO","-X=X"]) == T("X", "FOO"));
 }
 
 unittest
@@ -1124,6 +1137,8 @@ unittest
     }
     static assert(test!T(["-a","-b"]) == T(true, true));
     static assert(test!T(["-ab"]) == T(true, true));
+    assert(test!T(["-a","-b"]) == T(true, true));
+    assert(test!T(["-ab"]) == T(true, true));
 }
 
 unittest
@@ -1138,6 +1153,11 @@ unittest
     static assert(["-b","false"].parseCLIArgs!T.get == T(false));
     static assert(["-b=true"]   .parseCLIArgs!T.get == T(true));
     static assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
+    assert(["-b"]        .parseCLIArgs!T.get == T(true));
+    assert(["-b","true"] .parseCLIArgs!T.get == T(true));
+    assert(["-b","false"].parseCLIArgs!T.get == T(false));
+    assert(["-b=true"]   .parseCLIArgs!T.get == T(true));
+    assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
 }
 
 
@@ -2218,6 +2238,7 @@ unittest
     }
 
     static assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
+    assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
 }
 
 
@@ -2241,6 +2262,8 @@ unittest
 
     static assert(["-a","2"].parseCLIArgs!T.isNull);
     static assert(["-a","3"].parseCLIArgs!T.get == T(3));
+    assert(["-a","2"].parseCLIArgs!T.isNull);
+    assert(["-a","3"].parseCLIArgs!T.get == T(3));
 }
 
 
@@ -2288,6 +2311,7 @@ unittest
     }
 
     static assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
+    assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
 }
 
 unittest
@@ -2300,6 +2324,7 @@ unittest
     }
 
     static assert(["-i","-5","-u","8","-d","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
+    assert(["-i","-5","-u","8","-d","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
 }
 
 unittest
@@ -2312,6 +2337,8 @@ unittest
 
     static assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
     static assert(["-b","1","2","3","-b","4","5"].parseCLIArgs!T.get.b == [[1,2,3],[4,5]]);
+    assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
+    assert(["-b","1","2","3","-b","4","5"].parseCLIArgs!T.get.b == [[1,2,3],[4,5]]);
 }
 
 unittest
@@ -2335,6 +2362,7 @@ unittest
     }
 
     static assert(["-a=foo=3","-a","boo=7"].parseCLIArgs!T.get.a == ["foo":3,"boo":7]);
+    assert(["-a=foo=3","-a","boo=7"].parseCLIArgs!T.get.a == ["foo":3,"boo":7]);
 }
 
 unittest
@@ -2362,6 +2390,8 @@ unittest
 
     static assert(["-a","apple"].parseCLIArgs!T.get == T(T.Fruit.apple));
     static assert(["-a=pear"].parseCLIArgs!T.get == T(T.Fruit.pear));
+    assert(["-a","apple"].parseCLIArgs!T.get == T(T.Fruit.apple));
+    assert(["-a=pear"].parseCLIArgs!T.get == T(T.Fruit.pear));
 }
 
 unittest
@@ -2390,6 +2420,9 @@ unittest
     static assert(["-a"].parseCLIArgs!T.get.a == 10);
     static assert(["-b"].parseCLIArgs!T.get.b == 20);
     static assert(["-a", "30"].parseCLIArgs!T.get.a == 30);
+    assert(["-a"].parseCLIArgs!T.get.a == 10);
+    assert(["-b"].parseCLIArgs!T.get.b == 20);
+    assert(["-a", "30"].parseCLIArgs!T.get.a == 30);
     assert(["-b", "30"].parseCLIArgs!T.isNull);
 }
 
@@ -2407,6 +2440,7 @@ unittest
     }
 
     static assert(["-a","!4"].parseCLIArgs!T.get.a == 4);
+    assert(["-a","!4"].parseCLIArgs!T.get.a == 4);
 }
 
 unittest
@@ -2419,4 +2453,5 @@ unittest
     }
 
     static assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
+    assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
 }
