@@ -109,9 +109,47 @@ static assert(params.array     == [1,2,3]);
 
 ### Calling the parser
 
-There is a top-level function `parseCLIArgs(T)(string[] args, Config config)` that parses command line
-specified in `args` parameter and returns `Nullable!T` which is `null` if there is an error happened
-during parsing. Otherwise it returns object of type `T` filled with data from command line.
+There is a top-level function `parseCLIArgs` that parses the command line. It has the following signatures:
+
+- `ParseCLIResult!T parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)`
+
+    **Parameters:**
+
+    - `receiver` - the object that's populated with parsed values.
+    - `args` - raw command line arguments.
+    - `config` - settings that are used for parsing.
+
+    **Return value:**
+    
+    An object that can be casted to `bool` to check whether the parsing was successful or not.  
+
+- `Nullable!T parseCLIArgs(T)(string[] args, in Config config = Config.init)`
+
+    **Parameters:**
+
+    - `args` - raw command line arguments.
+    - `config` - settings that are used for parsing.
+
+    **Return value:**
+    
+    If there is an error happened during the parsing then `null` is returned. Otherwise, an object of
+    type `T` filled with values from the command line.
+
+- `int parseCLIArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)`
+
+    **Parameters:**
+
+    - `args` - raw command line arguments.
+    - `func` - function that's called with object of type `T` filled with data parsed from command line.
+    - `config` - settings that are used for parsing.
+    - `initialValue` - initial value for the object passed to `func`.
+
+    **Return value:**
+    
+    If there is an error happened during the parsing then `int.max` is returned. In other case if
+    `func` returns a value that can be casted to `int` then this value is returned. Otherwise, `0` is returned.
+
+**Usage example:**
 
 ```d
 struct T
@@ -120,45 +158,104 @@ struct T
     @NamedArgument("b") string b;
 }
 
-enum result = parseCLIArgs!T([ "-a", "A", "-b", "B"]);
-
-assert(result.get == T("A","B"));
+enum result1 = parseCLIArgs!T([ "-a", "A", "-b", "B"]);
+assert(result1.get == T("A","B"));
 ```
 
-If you want to reuse the parser and parse multiple command lines then you can do this easily:
+If you want to parse multiple command lines into single object then you can do this easily:
 
 ```d
-struct T
+T result2;
+result2.parseCLIArgs([ "-a", "A" ]);
+result2.parseCLIArgs([ "-b", "B" ]);
+assert(result2 == T("A","B"));
+```
+
+You can even write your own `main` function that accepts
+
+```d
+int my_main(T command)
 {
-    @NamedArgument("a") string a;
-    @NamedArgument("b") string b;
+    // do something
+    return 0;
 }
 
-T result;
-result.parseCLIArgs([ "-a", "A" ]);
-result.parseCLIArgs([ "-b", "B" ]);
-
-assert(result == T("A","B"));
+int main(string[] args)
+{
+    return args.parseCLIArgs!T(&my_main);
+}
 ```
 
 #### Partial parsing
 
 Sometimes a program may only parse a few of the command-line arguments, passing the remaining arguments on to another
-program. In these cases, `parseCLIKnownArgs(T)(ref string[] args, Config config)` method can be used.
-It works much like `parseCLIArgs()` except that it does not produce an error when extra arguments are present.
-Instead, it removes parsed arguments from `args` parameter leaving remaining arguments.
+program. In these cases, `parseCLIKnownArgs` function can be used.
+It works much like `parseCLIArgs` except that it does not produce an error when extra arguments are present.
+It has the following signatures:
+
+- `ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecognizedArgs, in Config config = Config.init)`
+
+    **Parameters:**
+
+    - `receiver` - the object that's populated with parsed values.
+    - `args` - raw command line arguments.
+    - `unrecognizedArgs` - raw command line arguments that were not parsed.
+    - `config` - settings that are used for parsing.
+
+    **Return value:**
+    
+    An object that can be casted to `bool` to check whether the parsing was successful or not.  
+
+- `ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)`
+
+    **Parameters:**
+
+    - `receiver` - the object that's populated with parsed values.
+    - `args` - raw command line arguments that are modified to have parsed arguments removed.
+    - `config` - settings that are used for parsing.
+
+    **Return value:**
+    
+    An object that can be casted to `bool` to check whether the parsing was successful or not.  
+
+- `Nullable!T parseCLIKnownArgs(T)(ref string[] args, in Config config = Config.init)`
+
+    **Parameters:**
+
+    - `args` - raw command line arguments that are modified to have parsed arguments removed.
+    - `config` - settings that are used for parsing.
+
+    **Return value:**
+    
+    If there is an error happened during the parsing then `null` is returned. Otherwise, an object of
+    type `T` filled with values from the command line.
+
+- `int parseCLIKnownArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)`
+
+    **Parameters:**
+
+    - `args` - raw command line arguments.
+    - `func` - function that's called with object of type `T` filled with data parsed from command line
+        and the unrecognized arguments having the type of `string[]`.
+    - `config` - settings that are used for parsing.
+    - `initialValue` - initial value for the object passed to `func`.
+
+    **Return value:**
+    
+    If there is an error happened during the parsing then `int.max` is returned. In other case if
+    `func` returns a value that can be casted to `int` then this value is returned. Otherwise, `0` is returned.
+
+**Usage example:**
 
 ```d
 struct T
 {
     @NamedArgument("a") string a;
-    @NamedArgument("b") string b;
 }
 
-enum args = [ "-a", "A", "-c", "C" ];
-enum result = parseCLIKnownArgs!T();
+auto args = [ "-a", "A", "-c", "C" ];
 
-assert(result.get == T("A",""));
+assert(parseCLIKnownArgs!T(args).get == T("A"));
 assert(args == ["-c", "C"]);
 ```
 

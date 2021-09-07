@@ -49,6 +49,12 @@ struct Config
     bool bundling = false;
 
     /**
+       Add a -h/--help option to the parser.
+       Defaults to true.
+     */
+    bool addHelp = true;
+
+    /**
        Delegate that processes error messages if they happen during argument parsing.
        By default all errors are printed to stderr.
      */
@@ -582,14 +588,36 @@ private auto consumeValuesFromCLI(ref string[] args, in ArgumentInfo argumentInf
 struct ParseCLIResult(T)
 {
     const Arguments!T arguments;
+    bool success;  // true if parsing succeeded
+
+    bool opCast(type)() if (is(type == bool))
+    {
+        return success;
+    }
+
 
     private this(in Config config)
     {
         arguments = Arguments!T(config.caseSensitive);
     }
+
+    private auto setSuccess()
+    {
+        success = true;
+        return this;
+    }
+
+    private auto setFailure()
+    {
+        success = false;
+        return this;
+    }
 }
 
-auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecognizedArgs, in Config config = Config.init)
+ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
+                                      string[] args,
+                                      out string[] unrecognizedArgs,
+                                      in Config config = Config.init)
 {
     import std.range: empty, front, popFront, join;
     import std.typecons : tuple;
@@ -640,7 +668,7 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                 auto values = consumeValuesFromCLI(args, res.arg.info, config);
 
                 if(!res.arg.parse(config, res.arg.info.names[0], receiver, values))
-                    return false;
+                    return result;
 
                 positionalArgIdx++;
 
@@ -653,15 +681,15 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
             {
                 if(arg.name.length == 0)
                 {
-                    config.onError( "Empty argument name: ", args.front);
-                    return false;
+                    config.onError("Empty argument name: ", args.front);
+                    return result;
                 }
 
                 auto res = result.arguments.findNamedArgument(arg.name);
                 if(res.arg !is null)
                 {
                     if(!parseNamedArg(arg, res))
-                        return false;
+                        return result;
 
                     break;
                 }
@@ -676,7 +704,7 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                         args.popFront();
 
                         if(!res.arg.parse(config, arg.origName, receiver, ["false"]))
-                            return false;
+                            return result;
 
                         requiredArgs.remove(res.index);
 
@@ -691,15 +719,15 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
             {
                 if(arg.name.length == 0)
                 {
-                    config.onError( "Empty argument name: ", args.front);
-                    return false;
+                    config.onError("Empty argument name: ", args.front);
+                    return result;
                 }
 
                 auto res = result.arguments.findNamedArgument(arg.name);
                 if(res.arg !is null)
                 {
                     if(!parseNamedArg(arg, res))
-                        return false;
+                        return result;
 
                     break;
                 }
@@ -715,7 +743,7 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                         goto case ArgumentType.unknown;
 
                     if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
-                        return false;
+                        return result;
 
                     requiredArgs.remove(res.index);
 
@@ -734,7 +762,7 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                         if(res.arg.info.minValuesCount == 0)
                         {
                             if(!res.arg.parse(config, "-"~name, receiver, []))
-                                return false;
+                                return result;
 
                             requiredArgs.remove(res.index);
 
@@ -743,14 +771,18 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
                         else if(res.arg.info.minValuesCount == 1)
                         {
                             if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
-                                return false;
+                                return result;
 
                             requiredArgs.remove(res.index);
 
                             arg.name = [];
                         }
-                        else // trigger an error
-                            return res.arg.info.checkValuesCount(config, name, 1);
+                        else
+                        {
+                            // trigger an error
+                            res.arg.info.checkValuesCount(config, name, 1);
+                            return result;
+                        }
                     }
 
                     if(arg.name.length == 0)
@@ -774,57 +806,67 @@ auto parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecogniz
         import std.algorithm : map;
         config.onError("The following arguments are required: ",
             requiredArgs.keys.map!(idx => result.arguments.arguments[idx].info.names[0]).join(", "));
-        return false;
+        return result;
     }
 
-    return true;
+    return result.setSuccess();
 }
 
-auto parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)
+ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)
 {
     string[] unrecognizedArgs;
 
     auto res = parseCLIKnownArgs(receiver, args, unrecognizedArgs, config);
-
     if(res)
         args = unrecognizedArgs;
 
     return res;
 }
 
-auto parseCLIKnownArgs(T)(ref string[] args, in Config config = Config.init)
+Nullable!T parseCLIKnownArgs(T)(ref string[] args, in Config config = Config.init)
 {
+    import std.typecons : nullable;
+
     T receiver;
 
+    return parseCLIKnownArgs(receiver, args, config) ? receiver.nullable : Nullable!T.init;
+}
+
+int parseCLIKnownArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)
+if(__traits(compiles, { func(T.init, args); }))
+{
+    alias value = initialValue;
+
+    auto res = parseCLIKnownArgs(value, args, config);
+    if(!res)
+        return int.max;
+
+    static if(__traits(compiles, { int a = cast(int) func(value, args); }))
+        return cast(int) func(value, args);
+    else
+    {
+        func(value, args);
+        return 0;
+    }
+}
+
+
+ParseCLIResult!T parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)
+{
     string[] unrecognizedArgs;
 
     auto res = parseCLIKnownArgs(receiver, args, unrecognizedArgs, config);
 
-    if(res)
-        args = unrecognizedArgs;
-
-    import std.typecons : nullable;
-    return res ? receiver.nullable : Nullable!T.init;
-}
-
-auto parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)
-{
-    string[] unrecognizedArgs;
-    immutable res = parseCLIKnownArgs(receiver, args, unrecognizedArgs, config);
-    if(!res)
-        return false;
-
-    if(unrecognizedArgs.length > 0)
+    if(res && unrecognizedArgs.length > 0)
     {
-        config.onError( "Unrecognized arguments: ", unrecognizedArgs);
-        return false;
+        config.onError("Unrecognized arguments: ", unrecognizedArgs);
+        return res.setFailure();
     }
 
-    return true;
+    return res;
 }
 
-
-auto parseCLIArgs(T)(string[] args, Config config = Config.init)
+Nullable!T parseCLIArgs(T)(string[] args, in Config config = Config.init)
 {
     import std.typecons : nullable;
 
@@ -833,6 +875,23 @@ auto parseCLIArgs(T)(string[] args, Config config = Config.init)
     return parseCLIArgs(receiver, args, config) ? receiver.nullable : Nullable!T.init;
 }
 
+int parseCLIArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)
+if(__traits(compiles, { func(T.init); }))
+{
+    alias value = initialValue;
+
+    auto res = parseCLIArgs(value, args, config);
+    if(!res)
+        return int.max;
+
+    static if(__traits(compiles, { int a = cast(int) func(value); }))
+        return cast(int) func(value);
+    else
+    {
+        func(value);
+        return 0;
+    }
+}
 
 unittest
 {
@@ -905,6 +964,7 @@ unittest
         return tuple(args.parseCLIKnownArgs!T.get, args);
     }
 
+    assert(test(["-a","A","--"]) == tuple(T("A"), []));
     static assert(test(["-a","A","--","-b","B"]) == tuple(T("A"), ["-b","B"]));
 
     {
@@ -915,6 +975,75 @@ unittest
 
         assert(args == T("A","B"));
     }
+}
+
+unittest
+{
+    struct T
+    {
+        @NamedArgument("a") string a;
+    }
+
+    {
+        auto test_called(string[] args)
+        {
+            bool called;
+            auto dg = (T t) {
+                called = true;
+            };
+            assert(args.parseCLIArgs!T(dg) == 0 || !called);
+            return called;
+        }
+
+        static assert(test_called([]));
+        assert(test_called([]));
+        assert(!test_called(["-g"]));
+    }
+    {
+        auto test_called(string[] args)
+        {
+            bool called;
+            auto dg = (T t, string[] args) {
+                assert(args.length == 0 || args == ["-g"]);
+                called = true;
+            };
+            assert(args.parseCLIKnownArgs!T(dg) == 0);
+            return called;
+        }
+
+        assert(test_called([]));
+        static assert(test_called(["-g"]));
+    }
+}
+
+unittest
+{
+    struct T
+    {
+        @NamedArgument("a") string a;
+    }
+
+    int my_main(T command)
+    {
+        // do something
+        return 0;
+    }
+
+    static assert(["-a","aa"].parseCLIArgs!T(&my_main) == 0);
+    assert(["-a","aa"].parseCLIArgs!T(&my_main) == 0);
+}
+
+unittest
+{
+    struct T
+    {
+        @NamedArgument("a") string a;
+    }
+
+    auto args = [ "-a", "A", "-c", "C" ];
+
+    assert(parseCLIKnownArgs!T(args).get == T("A"));
+    assert(args == ["-c", "C"]);
 }
 
 unittest
@@ -932,6 +1061,11 @@ unittest
     static assert(["--foo=FOO","1","-x=X"].parseCLIArgs!T.get == T("X", "FOO", "1"));
     static assert(["--foo=FOO","1","2","3","4"].parseCLIArgs!T.get == T(string.init, "FOO", "1",["2","3","4"]));
     static assert(["-xX"].parseCLIArgs!T.get == T("X"));
+    assert(["--foo","FOO","-x","X"].parseCLIArgs!T.get == T("X", "FOO"));
+    assert(["--foo=FOO","-x=X"].parseCLIArgs!T.get == T("X", "FOO"));
+    assert(["--foo=FOO","1","-x=X"].parseCLIArgs!T.get == T("X", "FOO", "1"));
+    assert(["--foo=FOO","1","2","3","4"].parseCLIArgs!T.get == T(string.init, "FOO", "1",["2","3","4"]));
+    assert(["-xX"].parseCLIArgs!T.get == T("X"));
 
     struct T1
     {
@@ -939,12 +1073,14 @@ unittest
         @(PositionalArgument(1, "b")) string[] b;
     }
     static assert(["1","2","3","4","5","6"].parseCLIArgs!T1.get == T1(["1","2","3"],["4","5","6"]));
+    assert(["1","2","3","4","5","6"].parseCLIArgs!T1.get == T1(["1","2","3"],["4","5","6"]));
 
     struct T2
     {
         @NamedArgument("foo") bool foo = true;
     }
     static assert(["--no-foo"].parseCLIArgs!T2.get == T2(false));
+    assert(["--no-foo"].parseCLIArgs!T2.get == T2(false));
 }
 
 unittest
@@ -959,6 +1095,7 @@ unittest
     }
 
     static assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
+    assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
 }
 
 unittest
@@ -979,6 +1116,8 @@ unittest
 
     static assert(test!T(["--Foo","FOO","-X","X"]) == T("X", "FOO"));
     static assert(test!T(["--FOo=FOO","-X=X"]) == T("X", "FOO"));
+    assert(test!T(["--Foo","FOO","-X","X"]) == T("X", "FOO"));
+    assert(test!T(["--FOo=FOO","-X=X"]) == T("X", "FOO"));
 }
 
 unittest
@@ -998,6 +1137,8 @@ unittest
     }
     static assert(test!T(["-a","-b"]) == T(true, true));
     static assert(test!T(["-ab"]) == T(true, true));
+    assert(test!T(["-a","-b"]) == T(true, true));
+    assert(test!T(["-ab"]) == T(true, true));
 }
 
 unittest
@@ -1012,6 +1153,11 @@ unittest
     static assert(["-b","false"].parseCLIArgs!T.get == T(false));
     static assert(["-b=true"]   .parseCLIArgs!T.get == T(true));
     static assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
+    assert(["-b"]        .parseCLIArgs!T.get == T(true));
+    assert(["-b","true"] .parseCLIArgs!T.get == T(true));
+    assert(["-b","false"].parseCLIArgs!T.get == T(false));
+    assert(["-b=true"]   .parseCLIArgs!T.get == T(true));
+    assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
 }
 
 
@@ -1927,17 +2073,17 @@ private struct ArgumentInfo
 
         if(min == max && count != min)
         {
-            config.onError( "argument ",argName,": expected ",min,min == 1 ? " value" : " values");
+            config.onError("argument ",argName,": expected ",min,min == 1 ? " value" : " values");
             return false;
         }
         if(count < min)
         {
-            config.onError( "argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
+            config.onError("argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
             return false;
         }
         if(count > max)
         {
-            config.onError( "argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
+            config.onError("argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
             return false;
         }
 
@@ -2092,6 +2238,7 @@ unittest
     }
 
     static assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
+    assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
 }
 
 
@@ -2115,6 +2262,8 @@ unittest
 
     static assert(["-a","2"].parseCLIArgs!T.isNull);
     static assert(["-a","3"].parseCLIArgs!T.get == T(3));
+    assert(["-a","2"].parseCLIArgs!T.isNull);
+    assert(["-a","3"].parseCLIArgs!T.get == T(3));
 }
 
 
@@ -2162,6 +2311,7 @@ unittest
     }
 
     static assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
+    assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
 }
 
 unittest
@@ -2174,6 +2324,7 @@ unittest
     }
 
     static assert(["-i","-5","-u","8","-d","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
+    assert(["-i","-5","-u","8","-d","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
 }
 
 unittest
@@ -2186,6 +2337,8 @@ unittest
 
     static assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
     static assert(["-b","1","2","3","-b","4","5"].parseCLIArgs!T.get.b == [[1,2,3],[4,5]]);
+    assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
+    assert(["-b","1","2","3","-b","4","5"].parseCLIArgs!T.get.b == [[1,2,3],[4,5]]);
 }
 
 unittest
@@ -2209,6 +2362,7 @@ unittest
     }
 
     static assert(["-a=foo=3","-a","boo=7"].parseCLIArgs!T.get.a == ["foo":3,"boo":7]);
+    assert(["-a=foo=3","-a","boo=7"].parseCLIArgs!T.get.a == ["foo":3,"boo":7]);
 }
 
 unittest
@@ -2236,6 +2390,8 @@ unittest
 
     static assert(["-a","apple"].parseCLIArgs!T.get == T(T.Fruit.apple));
     static assert(["-a=pear"].parseCLIArgs!T.get == T(T.Fruit.pear));
+    assert(["-a","apple"].parseCLIArgs!T.get == T(T.Fruit.apple));
+    assert(["-a=pear"].parseCLIArgs!T.get == T(T.Fruit.pear));
 }
 
 unittest
@@ -2264,6 +2420,9 @@ unittest
     static assert(["-a"].parseCLIArgs!T.get.a == 10);
     static assert(["-b"].parseCLIArgs!T.get.b == 20);
     static assert(["-a", "30"].parseCLIArgs!T.get.a == 30);
+    assert(["-a"].parseCLIArgs!T.get.a == 10);
+    assert(["-b"].parseCLIArgs!T.get.b == 20);
+    assert(["-a", "30"].parseCLIArgs!T.get.a == 30);
     assert(["-b", "30"].parseCLIArgs!T.isNull);
 }
 
@@ -2281,6 +2440,7 @@ unittest
     }
 
     static assert(["-a","!4"].parseCLIArgs!T.get.a == 4);
+    assert(["-a","!4"].parseCLIArgs!T.get.a == 4);
 }
 
 unittest
@@ -2293,4 +2453,5 @@ unittest
     }
 
     static assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
+    assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
 }
