@@ -681,7 +681,7 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
             {
                 if(arg.name.length == 0)
                 {
-                    config.onError( "Empty argument name: ", args.front);
+                    config.onError("Empty argument name: ", args.front);
                     return result;
                 }
 
@@ -719,7 +719,7 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
             {
                 if(arg.name.length == 0)
                 {
-                    config.onError( "Empty argument name: ", args.front);
+                    config.onError("Empty argument name: ", args.front);
                     return result;
                 }
 
@@ -780,7 +780,7 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
                         else
                         {
                             // trigger an error
-                            res.arg.info.checkValuesCount( config, name, 1);
+                            res.arg.info.checkValuesCount(config, name, 1);
                             return result;
                         }
                     }
@@ -859,7 +859,7 @@ ParseCLIResult!T parseCLIArgs(T)(ref T receiver, string[] args, in Config config
 
     if(res && unrecognizedArgs.length > 0)
     {
-        config.onError( "Unrecognized arguments: ", unrecognizedArgs);
+        config.onError("Unrecognized arguments: ", unrecognizedArgs);
         return res.setFailure();
     }
 
@@ -2073,17 +2073,17 @@ private struct ArgumentInfo
 
         if(min == max && count != min)
         {
-            config.onError( "argument ",argName,": expected ",min,min == 1 ? " value" : " values");
+            config.onError("argument ",argName,": expected ",min,min == 1 ? " value" : " values");
             return false;
         }
         if(count < min)
         {
-            config.onError( "argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
+            config.onError("argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
             return false;
         }
         if(count > max)
         {
-            config.onError( "argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
+            config.onError("argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
             return false;
         }
 
