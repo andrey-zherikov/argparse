@@ -587,12 +587,13 @@ private auto consumeValuesFromCLI(ref string[] args, in ArgumentInfo argumentInf
 
 struct ParseCLIResult(T)
 {
-    const Arguments!T arguments;
-    bool success;  // true if parsing succeeded
+    Arguments!T arguments;
+
+    int resultCode = 1;  // 0 if parsing succeeded
 
     bool opCast(type)() if (is(type == bool))
     {
-        return success;
+        return resultCode == 0;
     }
 
 
@@ -603,13 +604,13 @@ struct ParseCLIResult(T)
 
     private auto setSuccess()
     {
-        success = true;
+        resultCode = 0;
         return this;
     }
 
-    private auto setFailure()
+    private auto setResultCode(int code)
     {
-        success = false;
+        resultCode = code;
         return this;
     }
 }
@@ -860,7 +861,7 @@ ParseCLIResult!T parseCLIArgs(T)(ref T receiver, string[] args, in Config config
     if(res && unrecognizedArgs.length > 0)
     {
         config.onError("Unrecognized arguments: ", unrecognizedArgs);
-        return res.setFailure();
+        return res.setResultCode(1);
     }
 
     return res;
