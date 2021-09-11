@@ -236,14 +236,44 @@ if(!is(T == void))
         static assert(false, "Type is not supported: " ~ T.stringof);
 }
 
-private auto addDefaultValuesCount(T)(ArgumentInfo info)
+private auto setDefaults(TYPE, alias defaultName)(ArgumentInfo info)
 {
-    if(info.minValuesCount.isNull) info.minValuesCount = defaultValuesCount!T.min;
-    if(info.maxValuesCount.isNull) info.maxValuesCount = defaultValuesCount!T.max;
+    static if(!isBoolean!TYPE)
+        info.allowBooleanNegation = false;
+
+    if(info.positional && info.names.length == 0)
+        info.names = [defaultName ];
+
+    if(info.minValuesCount.isNull) info.minValuesCount = defaultValuesCount!TYPE.min;
+    if(info.maxValuesCount.isNull) info.maxValuesCount = defaultValuesCount!TYPE.max;
 
     return info;
 }
 
+unittest
+{
+    ArgumentInfo info;
+    info.allowBooleanNegation = true;
+    info.position = 0;
+
+    auto res = info.setDefaults!(int, "default-name");
+    assert(!res.allowBooleanNegation);
+    assert(res.names == [ "default-name" ]);
+    assert(res.minValuesCount == defaultValuesCount!int.min);
+    assert(res.maxValuesCount == defaultValuesCount!int.max);
+}
+
+unittest
+{
+    ArgumentInfo info;
+    info.allowBooleanNegation = true;
+
+    auto res = info.setDefaults!(bool, "default-name");
+    assert(res.allowBooleanNegation);
+    assert(res.names == []);
+    assert(res.minValuesCount == defaultValuesCount!bool.min);
+    assert(res.maxValuesCount == defaultValuesCount!bool.max);
+}
 
 
 private bool checkMemberWithMultiArgs(T)()
@@ -323,43 +353,37 @@ private bool checkPositionalIndexes(T)()
     return true;
 }
 
-private ulong countArguments(T)()
+private struct Argument(RECEIVER)
 {
-    return getSymbolsByUDA!(T, ArgumentUDA).length;
+    ArgumentInfo info;
+
+    private bool function(in Config config, string argName, ref RECEIVER receiver, string[] rawValues) parse;
 }
 
-private ulong countPositionalArguments(T)()
+private auto createArgument(RECEIVER, alias symbol)()
 {
-    ulong count;
-    static foreach (sym; getSymbolsByUDA!(T, ArgumentUDA))
-        static if (getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA)[0].info.positional)
-            count++;
+    alias member = __traits(getMember, RECEIVER, symbol);
 
-    return count;
-}
+    enum uda = getUDAs!(member, ArgumentUDA)[0];
 
+    enum info = uda.info.setDefaults!(typeof(member), symbol);
 
-private struct Arguments(T)
-{
-    static assert(getSymbolsByUDA!(T, ArgumentUDA).length > 0, "Type "~T.stringof~" has no members with '*Argument' UDA");
-    static assert(getSymbolsByUDA!(T, TrailingArgumentUDA).length <= 1, "Type "~T.stringof~" must have at most one 'TrailingArguments' UDA");
-
-    private enum _validate = checkMemberWithMultiArgs!T && checkArgumentNames!T && checkPositionalIndexes!T;
-
-
-    struct Argument
-    {
-        ArgumentInfo info;
-
-        private bool function(in Config config, string argName, ref T receiver, string[] rawValues) parsingFunc;
-
-
-        bool parse(in Config config, string argName, ref T receiver, string[] rawValues) const
+    return Argument!RECEIVER(info,
+        function (in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
         {
             try
             {
-                return info.checkValuesCount(config, argName, rawValues.length) &&
-                       parsingFunc(config, argName, receiver, rawValues);
+                if(!info.checkValuesCount(config, argName, rawValues.length))
+                    return false;
+
+                auto param = RawParam(config, argName, rawValues);
+
+                auto target = &__traits(getMember, receiver, symbol);
+
+                static if(is(typeof(target) == function) || is(typeof(target) == delegate))
+                    return uda.parsingFunc.parse(target, param);
+                else
+                    return uda.parsingFunc.parse(*target, param);
             }
             catch(Exception e)
             {
@@ -367,31 +391,45 @@ private struct Arguments(T)
                 return false;
             }
         }
-    }
+    );
+}
+
+private struct Arguments(RECEIVER)
+{
+    static assert(getSymbolsByUDA!(RECEIVER, ArgumentUDA).length > 0,
+                  "Type "~RECEIVER.stringof~" has no members with '*Argument' UDA");
+    static assert(getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA).length <= 1,
+                  "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
+
+    private enum _validate = checkMemberWithMultiArgs!RECEIVER &&
+                             checkArgumentNames!RECEIVER &&
+                             checkPositionalIndexes!RECEIVER;
 
     immutable string function(string str) convertCase;
 
-    static if(getSymbolsByUDA!(T, TrailingArgumentUDA).length == 1)
-    {
-        private void setTrailingArgs(ref T receiver, string[] rawValues) const
-        {
-            alias symbol = getSymbolsByUDA!(T, TrailingArgumentUDA)[0];
 
-            static if(__traits(compiles, { __traits(getMember, receiver, symbol.stringof) = rawValues; }))
-                __traits(getMember, receiver, symbol.stringof) = rawValues;
+    static if(getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA).length == 1)
+    {
+        private void setTrailingArgs(ref RECEIVER receiver, string[] rawValues) const
+        {
+            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA)[0]);
+            auto target = &__traits(getMember, receiver, symbol);
+
+            static if(__traits(compiles, { *target = rawValues; }))
+                *target = rawValues;
             else
-                static assert(false, "Type '"~typeof(__traits(getMember, receiver, symbol.stringof)).stringof~"' of `"~
-                                     T.stringof~"."~symbol.stringof~"` is not supported for 'TrailingArguments' UDA");
+                static assert(false, "Type '"~typeof(*target).stringof~"' of `"~
+                                     RECEIVER.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
         }
     }
 
-    private Argument[countArguments!T] arguments;
+    private Argument!RECEIVER[] arguments;
 
     // named arguments
     private ulong[string] argsNamed;
 
     // positional arguments
-    private ulong[countPositionalArguments!T] argsPositional;
+    private ulong[] argsPositional;
 
     // required arguments
     private bool[ulong] argsRequired;
@@ -411,53 +449,33 @@ private struct Arguments(T)
                 return str.toUpper;
             };
 
-        ulong idx = 0;
+        alias symbols = getSymbolsByUDA!(RECEIVER, ArgumentUDA);
 
-        static foreach(sym; getSymbolsByUDA!(T, ArgumentUDA))
-        {{
-            alias member = __traits(getMember, T, __traits(identifier, sym));
+        arguments     .reserve(symbols.length);
+        argsPositional.reserve(symbols.length);
 
-            enum argUDA = getUDAs!(member, ArgumentUDA)[0];
-
-            static if(argUDA.info.positional)
-                argsPositional[argUDA.info.position.get] = idx;
-            else
-                static foreach (name; argUDA.info.names)
-                    argsNamed[convertCase(name)] = idx;
-
-            static if(argUDA.info.required)
-                argsRequired[idx] = true;
-
-            enum arg = Argument(
-                    () {
-                        auto info = argUDA.info;
-
-                        static if(!isBoolean!(typeof(member)))
-                            info.allowBooleanNegation = false;
-
-                        static if(argUDA.info.positional && argUDA.info.names.length == 0)
-                            info.names ~= sym.stringof;
-
-                        return info.addDefaultValuesCount!(typeof(member));
-                    }(),
-                    function (in Config config, string argName, ref T receiver, string[] rawValues)
-                    {
-                        auto param = RawParam(config, argName, rawValues);
-
-                        static if(is(typeof(__traits(getMember, receiver, __traits(identifier, sym))) == function))
-                        {
-                            auto target = &__traits(getMember, receiver, __traits(identifier, sym));
-                            return argUDA.parsingFunc.parse(target, param);
-                        }
-                        else
-                            return argUDA.parsingFunc.parse(__traits(getMember, receiver, __traits(identifier, sym)), param);
-                    }
-                );
-
-            arguments[idx++] = arg;
-        }}
+        static foreach(sym; symbols)
+            addArgument!(createArgument!(RECEIVER, __traits(identifier, sym)));
     }
 
+    private void addArgument(Argument!RECEIVER arg)()
+    {
+        static if(arg.info.positional)
+        {
+            if(argsPositional.length <= arg.info.position.get)
+                argsPositional.length = arg.info.position.get + 1;
+
+            argsPositional[arg.info.position.get] = arguments.length;
+        }
+        else
+            static foreach (name; arg.info.names)
+                argsNamed[convertCase(name)] = arguments.length;
+
+        static if(arg.info.required)
+            argsRequired[arguments.length] = true;
+
+        arguments ~= arg;
+    }
 
     private auto findArgumentImpl(const ulong* pIndex) const
     {
@@ -587,12 +605,13 @@ private auto consumeValuesFromCLI(ref string[] args, in ArgumentInfo argumentInf
 
 struct ParseCLIResult(T)
 {
-    const Arguments!T arguments;
-    bool success;  // true if parsing succeeded
+    Arguments!T arguments;
+
+    int resultCode = 1;  // 0 if parsing succeeded
 
     bool opCast(type)() if (is(type == bool))
     {
-        return success;
+        return resultCode == 0;
     }
 
 
@@ -603,13 +622,13 @@ struct ParseCLIResult(T)
 
     private auto setSuccess()
     {
-        success = true;
+        resultCode = 0;
         return this;
     }
 
-    private auto setFailure()
+    private auto setResultCode(int code)
     {
-        success = false;
+        resultCode = code;
         return this;
     }
 }
@@ -860,7 +879,7 @@ ParseCLIResult!T parseCLIArgs(T)(ref T receiver, string[] args, in Config config
     if(res && unrecognizedArgs.length > 0)
     {
         config.onError("Unrecognized arguments: ", unrecognizedArgs);
-        return res.setFailure();
+        return res.setResultCode(1);
     }
 
     return res;
@@ -2095,6 +2114,9 @@ private struct ArgumentInfo
 
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// User defined attributes
+////////////////////////////////////////////////////////////////////////////////////////////////////
 private struct ArgumentUDA(alias ValueParseFunctions)
 {
     ArgumentInfo info;
