@@ -250,6 +250,30 @@ private auto setDefaults(TYPE, alias defaultName)(ArgumentInfo info)
     return info;
 }
 
+unittest
+{
+    ArgumentInfo info;
+    info.allowBooleanNegation = true;
+    info.position = 0;
+
+    auto res = info.setDefaults!(int, "default-name");
+    assert(!res.allowBooleanNegation);
+    assert(res.names == [ "default-name" ]);
+    assert(res.minValuesCount == defaultValuesCount!int.min);
+    assert(res.maxValuesCount == defaultValuesCount!int.max);
+}
+
+unittest
+{
+    ArgumentInfo info;
+    info.allowBooleanNegation = true;
+
+    auto res = info.setDefaults!(bool, "default-name");
+    assert(res.allowBooleanNegation);
+    assert(res.names == []);
+    assert(res.minValuesCount == defaultValuesCount!bool.min);
+    assert(res.maxValuesCount == defaultValuesCount!bool.max);
+}
 
 
 private bool checkMemberWithMultiArgs(T)()
