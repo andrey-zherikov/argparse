@@ -23,7 +23,7 @@ unittest
         bool boolean;
 
         // Enums are also supported
-        enum Enum { unset, foo, boo };
+        enum Enum { unset, foo, boo }
         @NamedArgument("enum")
         Enum enumValue;
 
@@ -43,6 +43,22 @@ unittest
         @NamedArgument("cb2")
         void callback2(string[] value) { assert(value == ["cb-v1","cb-v2"]); }
     }
+
+    // Define your main function that takes an object with parsed CLI arguments
+    int myMain(Params args)
+    {
+        // do whatever you need
+        return 0;
+    }
+
+version(with_main)
+{
+    // Main function should call the parser and drop argv[0]
+    int main(string[] argv)
+    {
+        return parseCLIArgs!Params(argv[1..$], &myMain);
+    }
+}
 
     // Can even work at compile time
     enum params = ([
