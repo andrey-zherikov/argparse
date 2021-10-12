@@ -340,12 +340,19 @@ private bool checkMemberWithMultiArgs(T)()
 }
 
 private auto checkDuplicates(alias sortedRange, string errorMsg)() {
-    import std.range : lockstep;
-    import std.conv  : to;
-
     static if(sortedRange.length >= 2)
-        static foreach(value1, value2; lockstep(sortedRange[0..$-1], sortedRange[1..$]))
-            static assert(value1 != value2, errorMsg ~ value1.to!string);
+    {
+        enum value = {
+            import std.conv : to;
+
+            foreach(i; 1..sortedRange.length-1)
+                if(sortedRange[i-1] == sortedRange[i])
+                    return sortedRange[i].to!string;
+
+            return "";
+        }();
+        static assert(value.length == 0, errorMsg ~ value);
+    }
 
     return true;
 }
