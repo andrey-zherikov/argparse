@@ -56,6 +56,19 @@ struct Params
     void callback2(string[] value) { assert(value == ["cb-v1","cb-v2"]); }
 }
 
+// Define your main function that takes an object with parsed CLI arguments
+int myMain(Params args)
+{
+  // do whatever you need
+  return 0;
+}
+
+// Main function should call the parser and drop argv[0]
+int main(string[] argv)
+{
+  return parseCLIArgs!Params(argv[1..$], &myMain);
+}
+
 // Can even work at compile time
 enum params = ([
     "--flag",
@@ -104,6 +117,7 @@ static assert(params.array     == [1,2,3]);
     - Hash (associative array) arguments.
     - Callbacks.
 - Built-in reporting of error happened during argument parsing.
+- Built-in help generation
 
 ## Usage
 
@@ -111,7 +125,7 @@ static assert(params.array     == [1,2,3]);
 
 There is a top-level function `parseCLIArgs` that parses the command line. It has the following signatures:
 
-- `ParseCLIResult!T parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)`
+- `ParseCLIResult parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)`
 
     **Parameters:**
 
@@ -121,7 +135,7 @@ There is a top-level function `parseCLIArgs` that parses the command line. It ha
 
     **Return value:**
     
-    An object that can be casted to `bool` to check whether the parsing was successful or not.  
+    An object that can be cast to `bool` to check whether the parsing was successful or not.  
 
 - `Nullable!T parseCLIArgs(T)(string[] args, in Config config = Config.init)`
 
@@ -147,7 +161,7 @@ There is a top-level function `parseCLIArgs` that parses the command line. It ha
     **Return value:**
     
     If there is an error happened during the parsing then `int.max` is returned. In other case if
-    `func` returns a value that can be casted to `int` then this value is returned. Otherwise, `0` is returned.
+    `func` returns a value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
 
 **Usage example:**
 
@@ -193,7 +207,7 @@ program. In these cases, `parseCLIKnownArgs` function can be used.
 It works much like `parseCLIArgs` except that it does not produce an error when extra arguments are present.
 It has the following signatures:
 
-- `ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecognizedArgs, in Config config = Config.init)`
+- `ParseCLIResult parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecognizedArgs, in Config config = Config.init)`
 
     **Parameters:**
 
@@ -204,9 +218,9 @@ It has the following signatures:
 
     **Return value:**
     
-    An object that can be casted to `bool` to check whether the parsing was successful or not.  
+    An object that can be cast to `bool` to check whether the parsing was successful or not.  
 
-- `ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)`
+- `ParseCLIResult parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)`
 
     **Parameters:**
 
@@ -216,7 +230,7 @@ It has the following signatures:
 
     **Return value:**
     
-    An object that can be casted to `bool` to check whether the parsing was successful or not.  
+    An object that can be cast to `bool` to check whether the parsing was successful or not.  
 
 - `Nullable!T parseCLIKnownArgs(T)(ref string[] args, in Config config = Config.init)`
 
@@ -243,7 +257,7 @@ It has the following signatures:
     **Return value:**
     
     If there is an error happened during the parsing then `int.max` is returned. In other case if
-    `func` returns a value that can be casted to `int` then this value is returned. Otherwise, `0` is returned.
+    `func` returns a value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
 
 **Usage example:**
 
@@ -352,6 +366,72 @@ struct T
 }
 
 static assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
+```
+
+### Help generation
+
+To customize generated help text one can use `Command` UDA that receives optional parameter of a program name.
+If this parameter is not provided then `Runtime.args[0]` is used. Additional parameters are also available for customization:
+- `Usage`. By default, the parser calculates the usage message from the arguments it contains but this can be overridden
+  with `Usage` call. If the custom text contains `%(PROG)` then it will be replaced by the program name.
+- `Description`. This text gives a brief description of what the program does and how it works.
+  In help messages, the description is displayed between the command-line usage string and the help messages for the various arguments.
+- `Epilog`. Some programs like to display additional description of the program after the description of the arguments.
+  So setting this text is available through `Epilog` call.
+
+In addition to program level customization of the help message, each argument can be customized independently:
+- `HelpText`. Argument can have its own help text that is printed in help message. This is available by calling `HelpText`.
+- `HideFromHelp`. Some arguments are not supposed to be printed in help message at all.
+  In this can`HideFromHelp` can be called to hide the argument.
+
+Here is an example of how this customization can be used:
+
+```d
+@(Command("MYPROG")
+ .Description("custom description")
+ .Epilog("custom epilog")
+)
+struct T
+{
+  @NamedArgument("s")  string s;
+  @(NamedArgument("hidden").HideFromHelp())  string hidden;
+
+  enum Fruit { apple, pear };
+  @(NamedArgument(["f","fruit"]).Required().HelpText("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
+
+  @(NamedArgument("i").AllowedValues!([1,4,16,8])) int i;
+
+  @(PositionalArgument(0).HelpText("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
+  @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
+
+  @TrailingArguments() string[] args;
+}
+
+parseCLIArgs!T(["-h"]);
+```
+
+This example will print the following help message:
+```
+usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] param0 {q,a} [-h]
+
+custom description
+
+Required arguments:
+  -f {apple,pear}, --fruit {apple,pear}
+                          This is a help text for fruit. Very very very very
+                          very very very very very very very very very very
+                          very very very very very long text
+  param0                  This is a help text for param0. Very very very very
+                          very very very very very very very very very very
+                          very very very very very long text
+  {q,a}
+
+Optional arguments:
+  -s S
+  -i {1,4,16,8}
+  -h, --help              Show this help message and exit
+
+custom epilog
 ```
 
 ## Supported types
@@ -708,6 +788,17 @@ Default is `true`.
 i.e. `-abc` is the same as `-a -b -c`.
 
 Default is `false`.
+
+### Adding help generation
+
+       Add a -h/--help option to the parser.
+       Defaults to true.
+
+`Config.addHelp` - when it is set to `true` then `-h` and `--help` arguments are added to the parser.
+In case if the command line has one of these arguments then the corresponding help text is printed and the parsing
+will be stopped. If `parseCLIKnownArgs` or `parseCLIArgs` is called with function parameter then this callback will not be called.
+
+Default is `true`.
 
 ### Error handling
 

@@ -236,16 +236,46 @@ if(!is(T == void))
         static assert(false, "Type is not supported: " ~ T.stringof);
 }
 
-private auto setDefaults(TYPE, alias defaultName)(ArgumentInfo info)
+
+private template EnumMembersAsStrings(E)
+{
+    enum EnumMembersAsStrings = {
+        import std.traits: EnumMembers;
+        alias members = EnumMembers!E;
+
+        typeof(__traits(identifier, members[0]))[] res;
+        static foreach (i, _; members)
+            res ~= __traits(identifier, members[i]);
+
+        return res;
+    }();
+}
+
+unittest
+{
+    enum E { abc, def, ghi }
+    assert(EnumMembersAsStrings!E == ["abc", "def", "ghi"]);
+}
+
+private auto setDefaults(TYPE, alias symbol)(ArgumentInfo info)
 {
     static if(!isBoolean!TYPE)
         info.allowBooleanNegation = false;
 
+    static if(is(TYPE == enum))
+        info.setAllowedValues!(EnumMembersAsStrings!TYPE);
+
     if(info.positional && info.names.length == 0)
-        info.names = [defaultName ];
+        info.names = [ symbol ];
 
     if(info.minValuesCount.isNull) info.minValuesCount = defaultValuesCount!TYPE.min;
     if(info.maxValuesCount.isNull) info.maxValuesCount = defaultValuesCount!TYPE.max;
+
+    if(info.metaValue.length == 0)
+    {
+        import std.uni : toUpper;
+        info.metaValue = info.positional ? symbol : symbol.toUpper;
+    }
 
     return info;
 }
@@ -261,6 +291,11 @@ unittest
     assert(res.names == [ "default-name" ]);
     assert(res.minValuesCount == defaultValuesCount!int.min);
     assert(res.maxValuesCount == defaultValuesCount!int.max);
+    assert(res.metaValue == "default-name");
+
+    info.metaValue = "myvalue";
+    res = info.setDefaults!(int, "default-name");
+    assert(res.metaValue == "myvalue");
 }
 
 unittest
@@ -273,6 +308,25 @@ unittest
     assert(res.names == []);
     assert(res.minValuesCount == defaultValuesCount!bool.min);
     assert(res.maxValuesCount == defaultValuesCount!bool.max);
+    assert(res.metaValue == "DEFAULT-NAME");
+
+    info.metaValue = "myvalue";
+    res = info.setDefaults!(bool, "default-name");
+    assert(res.metaValue == "myvalue");
+}
+
+unittest
+{
+    enum E { a=1, b=1, c }
+    static assert(EnumMembersAsStrings!E == ["a","b","c"]);
+
+    ArgumentInfo info;
+    auto res = info.setDefaults!(E, "default-name");
+    assert(res.metaValue == "{a,b,c}");
+
+    info.metaValue = "myvalue";
+    res = info.setDefaults!(E, "default-name");
+    assert(res.metaValue == "myvalue");
 }
 
 
@@ -353,45 +407,33 @@ private bool checkPositionalIndexes(T)()
     return true;
 }
 
-private struct Argument(RECEIVER)
+private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
+
+
+private ParseFunction!RECEIVER createParseFunction(RECEIVER, alias symbol, ArgumentInfo info, alias parseFunc)()
 {
-    ArgumentInfo info;
-
-    private bool function(in Config config, string argName, ref RECEIVER receiver, string[] rawValues) parse;
-}
-
-private auto createArgument(RECEIVER, alias symbol)()
-{
-    alias member = __traits(getMember, RECEIVER, symbol);
-
-    enum uda = getUDAs!(member, ArgumentUDA)[0];
-
-    enum info = uda.info.setDefaults!(typeof(member), symbol);
-
-    return Argument!RECEIVER(info,
-        function (in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
+    return (in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
+    {
+        try
         {
-            try
-            {
-                if(!info.checkValuesCount(config, argName, rawValues.length))
-                    return false;
-
-                auto param = RawParam(config, argName, rawValues);
-
-                auto target = &__traits(getMember, receiver, symbol);
-
-                static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                    return uda.parsingFunc.parse(target, param);
-                else
-                    return uda.parsingFunc.parse(*target, param);
-            }
-            catch(Exception e)
-            {
-                config.onError(argName, ": ", e.msg);
+            if(!info.checkValuesCount(config, argName, rawValues.length))
                 return false;
-            }
+
+            auto param = RawParam(config, argName, rawValues);
+
+            auto target = &__traits(getMember, receiver, symbol);
+
+            static if(is(typeof(target) == function) || is(typeof(target) == delegate))
+                return parseFunc(target, param);
+            else
+                return parseFunc(*target, param);
         }
-    );
+        catch(Exception e)
+        {
+            config.onError(argName, ": ", e.msg);
+            return false;
+        }
+    };
 }
 
 private struct Arguments(RECEIVER)
@@ -423,7 +465,8 @@ private struct Arguments(RECEIVER)
         }
     }
 
-    private Argument!RECEIVER[] arguments;
+    private ArgumentInfo[] arguments;
+    private ParseFunction!RECEIVER[] parseFunctions;
 
     // named arguments
     private ulong[string] argsNamed;
@@ -438,7 +481,7 @@ private struct Arguments(RECEIVER)
     @property auto requiredArguments() const { return argsRequired; }
 
 
-    this(bool caseSensitive)
+    this(alias addArgumentFunc = addArgument)(bool caseSensitive)
     {
         if(caseSensitive)
             convertCase = s => s;
@@ -452,38 +495,73 @@ private struct Arguments(RECEIVER)
         alias symbols = getSymbolsByUDA!(RECEIVER, ArgumentUDA);
 
         arguments     .reserve(symbols.length);
+        parseFunctions.reserve(symbols.length);
         argsPositional.reserve(symbols.length);
 
         static foreach(sym; symbols)
-            addArgument!(createArgument!(RECEIVER, __traits(identifier, sym)));
+        {{
+            enum symbol = __traits(identifier, sym);
+            alias member = __traits(getMember, RECEIVER, symbol);
+
+            enum uda = getUDAs!(member, ArgumentUDA)[0];
+
+            enum info = uda.info.setDefaults!(typeof(member), symbol);
+
+            auto parse = createParseFunction!(RECEIVER, symbol, info, uda.parsingFunc.parse);
+            addArgument!info(
+                (in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
+                {
+                    try
+                    {
+                        if(!info.checkValuesCount(config, argName, rawValues.length))
+                            return false;
+
+                        auto param = RawParam(config, argName, rawValues);
+
+                        auto target = &__traits(getMember, receiver, symbol);
+
+                        static if(is(typeof(target) == function) || is(typeof(target) == delegate))
+                            return uda.parsingFunc.parse(target, param);
+                        else
+                            return uda.parsingFunc.parse(*target, param);
+                    }
+                    catch(Exception e)
+                    {
+                        config.onError(argName, ": ", e.msg);
+                        return false;
+                    }
+                }
+            );
+        }}
     }
 
-    private void addArgument(Argument!RECEIVER arg)()
+    private void addArgument(ArgumentInfo info)(ParseFunction!RECEIVER parse)
     {
-        static if(arg.info.positional)
+        static if(info.positional)
         {
-            if(argsPositional.length <= arg.info.position.get)
-                argsPositional.length = arg.info.position.get + 1;
+            if(argsPositional.length <= info.position.get)
+                argsPositional.length = info.position.get + 1;
 
-            argsPositional[arg.info.position.get] = arguments.length;
+            argsPositional[info.position.get] = arguments.length;
         }
         else
-            static foreach (name; arg.info.names)
+            static foreach (name; info.names)
                 argsNamed[convertCase(name)] = arguments.length;
 
-        static if(arg.info.required)
+        static if(info.required)
             argsRequired[arguments.length] = true;
 
-        arguments ~= arg;
+        arguments ~= info;
+        parseFunctions ~= parse;
     }
 
     private auto findArgumentImpl(const ulong* pIndex) const
     {
         import std.typecons : Tuple;
 
-        alias Result = Tuple!(ulong, "index", typeof(&arguments[0]), "arg");
+        alias Result = Tuple!(ulong, "index", typeof(&arguments[0]), "arg", ParseFunction!RECEIVER, "parse");
 
-        return pIndex ? Result(*pIndex, &arguments[*pIndex]) : Result(ulong.max, null);
+        return pIndex ? Result(*pIndex, &arguments[*pIndex], parseFunctions[*pIndex]) : Result(ulong.max, null, null);
     }
 
     auto findPositionalArgument(ulong position) const
@@ -495,7 +573,6 @@ private struct Arguments(RECEIVER)
     {
         return findArgumentImpl(convertCase(name) in argsNamed);
     }
-
 }
 
 unittest
@@ -603,56 +680,51 @@ private auto consumeValuesFromCLI(ref string[] args, in ArgumentInfo argumentInf
 }
 
 
-struct ParseCLIResult(T)
-{
-    Arguments!T arguments;
+private enum helpArgument = {
+    ArgumentInfo arg;
+    arg.names = ["h","help"];
+    arg.helpText = "Show this help message and exit";
+    arg.minValuesCount = 0;
+    arg.maxValuesCount = 0;
+    arg.allowBooleanNegation = false;
+    arg.parsingTerminateCode = 0;
+    return arg;
+}();
 
-    int resultCode = 1;  // 0 if parsing succeeded
+struct ParseCLIResult
+{
+    int  resultCode;
+
+    private bool done;
 
     bool opCast(type)() if (is(type == bool))
     {
-        return resultCode == 0;
+        return done;
     }
 
-
-    private this(in Config config)
-    {
-        arguments = Arguments!T(config.caseSensitive);
-    }
-
-    private auto setSuccess()
-    {
-        resultCode = 0;
-        return this;
-    }
-
-    private auto setResultCode(int code)
-    {
-        resultCode = code;
-        return this;
-    }
+    private static enum failure = ParseCLIResult(1);
+    private static enum success = ParseCLIResult(0, true);
 }
 
-ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
-                                      string[] args,
-                                      out string[] unrecognizedArgs,
-                                      in Config config = Config.init)
+private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
+                                            string[] args,
+                                            out string[] unrecognizedArgs,
+                                            const ref CommandArguments!T command,
+                                            in Config config)
 {
     import std.range: empty, front, popFront, join;
     import std.typecons : tuple;
 
     checkArgumentName!T(config.namedArgChar);
 
-    auto result = ParseCLIResult!T(config);
-
-    auto requiredArgs = result.arguments.requiredArguments.dup;
+    auto requiredArgs = command.arguments.requiredArguments.dup;
 
     alias parseNamedArg = (arg, res) {
         args.popFront();
 
-        auto values = arg.value.isNull ? consumeValuesFromCLI(args, res.arg.info, config) : [ arg.value.get ];
+        auto values = arg.value.isNull ? consumeValuesFromCLI(args, *res.arg, config) : [ arg.value.get ];
 
-        if(!res.arg.parse(config, arg.origName, receiver, values))
+        if(!res.parse(config, arg.origName, receiver, values))
             return false;
 
         requiredArgs.remove(res.index);
@@ -667,8 +739,8 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
         if(config.endOfArgs.length > 0 && args.front == config.endOfArgs)
         {
             // End of arguments
-            static if(is(typeof(result.arguments.setTrailingArgs)))
-                result.arguments.setTrailingArgs(receiver, args[1..$]);
+            static if(is(typeof(command.arguments.setTrailingArgs)))
+                command.arguments.setTrailingArgs(receiver, args[1..$]);
             else
                 unrecognizedArgs ~= args[1..$];
             break;
@@ -680,14 +752,14 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
         {
             case ArgumentType.positional:
             {
-                auto res = result.arguments.findPositionalArgument(positionalArgIdx);
+                auto res = command.arguments.findPositionalArgument(positionalArgIdx);
                 if(res.arg is null)
                     goto case ArgumentType.unknown;
 
-                auto values = consumeValuesFromCLI(args, res.arg.info, config);
+                auto values = consumeValuesFromCLI(args, *res.arg, config);
 
-                if(!res.arg.parse(config, res.arg.info.names[0], receiver, values))
-                    return result;
+                if(!res.parse(config, res.arg.names[0], receiver, values))
+                    return ParseCLIResult.failure;
 
                 positionalArgIdx++;
 
@@ -701,14 +773,17 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
                 if(arg.name.length == 0)
                 {
                     config.onError("Empty argument name: ", args.front);
-                    return result;
+                    return ParseCLIResult.failure;
                 }
 
-                auto res = result.arguments.findNamedArgument(arg.name);
+                auto res = command.arguments.findNamedArgument(arg.name);
                 if(res.arg !is null)
                 {
                     if(!parseNamedArg(arg, res))
-                        return result;
+                        return ParseCLIResult.failure;
+
+                    if(!res.arg.parsingTerminateCode.isNull)
+                        return ParseCLIResult(res.arg.parsingTerminateCode.get);
 
                     break;
                 }
@@ -717,13 +792,13 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
 
                 if(arg.name.startsWith("no-"))
                 {
-                    res = result.arguments.findNamedArgument(arg.name[3..$]);
-                    if(res.arg !is null && res.arg.info.allowBooleanNegation)
+                    res = command.arguments.findNamedArgument(arg.name[3..$]);
+                    if(res.arg !is null && res.arg.allowBooleanNegation)
                     {
                         args.popFront();
 
-                        if(!res.arg.parse(config, arg.origName, receiver, ["false"]))
-                            return result;
+                        if(!res.parse(config, arg.origName, receiver, ["false"]))
+                            return ParseCLIResult.failure;
 
                         requiredArgs.remove(res.index);
 
@@ -739,14 +814,17 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
                 if(arg.name.length == 0)
                 {
                     config.onError("Empty argument name: ", args.front);
-                    return result;
+                    return ParseCLIResult.failure;
                 }
 
-                auto res = result.arguments.findNamedArgument(arg.name);
+                auto res = command.arguments.findNamedArgument(arg.name);
                 if(res.arg !is null)
                 {
                     if(!parseNamedArg(arg, res))
-                        return result;
+                        return ParseCLIResult.failure;
+
+                    if(!res.arg.parsingTerminateCode.isNull)
+                        return ParseCLIResult(res.arg.parsingTerminateCode.get);
 
                     break;
                 }
@@ -757,14 +835,17 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
                 if(!config.bundling)
                 {
                     auto name = [arg.name[0]];
-                    res = result.arguments.findNamedArgument(name);
-                    if(res.arg is null || res.arg.info.minValuesCount != 1)
+                    res = command.arguments.findNamedArgument(name);
+                    if(res.arg is null || res.arg.minValuesCount != 1)
                         goto case ArgumentType.unknown;
 
-                    if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
-                        return result;
+                    if(!res.parse(config, "-"~name, receiver, [arg.name[1..$]]))
+                        return ParseCLIResult.failure;
 
                     requiredArgs.remove(res.index);
+
+                    if(!res.arg.parsingTerminateCode.isNull)
+                        return ParseCLIResult(res.arg.parsingTerminateCode.get);
 
                     args.popFront();
                     break;
@@ -774,23 +855,23 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
                     while(arg.name.length > 0)
                     {
                         auto name = [arg.name[0]];
-                        res = result.arguments.findNamedArgument(name);
+                        res = command.arguments.findNamedArgument(name);
                         if(res.arg is null)
                             goto case ArgumentType.unknown;
 
-                        if(res.arg.info.minValuesCount == 0)
+                        if(res.arg.minValuesCount == 0)
                         {
-                            if(!res.arg.parse(config, "-"~name, receiver, []))
-                                return result;
+                            if(!res.parse(config, "-"~name, receiver, []))
+                                return ParseCLIResult.failure;
 
                             requiredArgs.remove(res.index);
 
                             arg.name = arg.name[1..$];
                         }
-                        else if(res.arg.info.minValuesCount == 1)
+                        else if(res.arg.minValuesCount == 1)
                         {
-                            if(!res.arg.parse(config, "-"~name, receiver, [arg.name[1..$]]))
-                                return result;
+                            if(!res.parse(config, "-"~name, receiver, [arg.name[1..$]]))
+                                return ParseCLIResult.failure;
 
                             requiredArgs.remove(res.index);
 
@@ -799,9 +880,12 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
                         else
                         {
                             // trigger an error
-                            res.arg.info.checkValuesCount(config, name, 1);
-                            return result;
+                            res.arg.checkValuesCount(config, name, 1);
+                            return ParseCLIResult.failure;
                         }
+
+                        if(!res.arg.parsingTerminateCode.isNull)
+                            return ParseCLIResult(res.arg.parsingTerminateCode.get);
                     }
 
                     if(arg.name.length == 0)
@@ -824,14 +908,23 @@ ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver,
     {
         import std.algorithm : map;
         config.onError("The following arguments are required: ",
-            requiredArgs.keys.map!(idx => result.arguments.arguments[idx].info.names[0]).join(", "));
-        return result;
+            requiredArgs.keys.map!(idx => command.arguments.arguments[idx].names[0]).join(", "));
+        return ParseCLIResult.failure;
     }
 
-    return result.setSuccess();
+    return ParseCLIResult.success;
 }
 
-ParseCLIResult!T parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)
+ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
+                                    string[] args,
+                                    out string[] unrecognizedArgs,
+                                    in Config config = Config.init)
+{
+    auto command = CommandArguments!T(config);
+    return parseCLIKnownArgs(receiver, args, unrecognizedArgs, command, config);
+}
+
+auto parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)
 {
     string[] unrecognizedArgs;
 
@@ -858,7 +951,7 @@ if(__traits(compiles, { func(T.init, args); }))
 
     auto res = parseCLIKnownArgs(value, args, config);
     if(!res)
-        return int.max;
+        return res.resultCode;
 
     static if(__traits(compiles, { int a = cast(int) func(value, args); }))
         return cast(int) func(value, args);
@@ -870,7 +963,7 @@ if(__traits(compiles, { func(T.init, args); }))
 }
 
 
-ParseCLIResult!T parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)
+auto parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)
 {
     string[] unrecognizedArgs;
 
@@ -879,7 +972,7 @@ ParseCLIResult!T parseCLIArgs(T)(ref T receiver, string[] args, in Config config
     if(res && unrecognizedArgs.length > 0)
     {
         config.onError("Unrecognized arguments: ", unrecognizedArgs);
-        return res.setResultCode(1);
+        return ParseCLIResult.failure;
     }
 
     return res;
@@ -901,7 +994,7 @@ if(__traits(compiles, { func(T.init); }))
 
     auto res = parseCLIArgs(value, args, config);
     if(!res)
-        return int.max;
+        return res.resultCode;
 
     static if(__traits(compiles, { int a = cast(int) func(value); }))
         return cast(int) func(value);
@@ -953,19 +1046,12 @@ unittest
         int no_c;
     }
 
-    enum p = Arguments!params(true);
-    static assert(p.findNamedArgument("a").arg is null);
-    static assert(p.findNamedArgument("b").arg !is null);
-    static assert(p.findNamedArgument("boo").arg !is null);
-    static assert(p.findPositionalArgument(0).arg !is null);
-    static assert(p.findPositionalArgument(1).arg is null);
-
-    params args;
-    p.findPositionalArgument(0).arg.parse(Config.init, "", args, ["123"]);
-    p.findNamedArgument("b").arg.parse(Config.init, "", args, ["456"]);
-    p.findNamedArgument("boo").arg.parse(Config.init, "", args, ["789"]);
-    assert(args.a == 123);
-    assert(args.b == 789);
+    enum p = CommandArguments!params(Config.init);
+    static assert(p.arguments.findNamedArgument("a").arg is null);
+    static assert(p.arguments.findNamedArgument("b").arg !is null);
+    static assert(p.arguments.findNamedArgument("boo").arg !is null);
+    static assert(p.arguments.findPositionalArgument(0).arg !is null);
+    static assert(p.arguments.findPositionalArgument(1).arg is null);
 }
 
 unittest
@@ -2069,6 +2155,18 @@ private struct ArgumentInfo
     string[] names;
 
     string helpText;
+    string metaValue;
+
+    private void setAllowedValues(alias names)()
+    {
+        if(metaValue.length == 0)
+        {
+            import std.conv: to;
+            import std.array: join;
+            import std.format: format;
+            metaValue = "{%s}".format(names.to!(string[]).join(','));
+        }
+    }
 
     bool hideFromHelp = false;      // if true then this argument is not printed on help page
 
@@ -2110,6 +2208,8 @@ private struct ArgumentInfo
     }
 
     private bool allowBooleanNegation = true;
+
+    Nullable!int parsingTerminateCode;
 }
 
 
@@ -2134,6 +2234,12 @@ private struct ArgumentUDA(alias ValueParseFunctions)
     auto ref HideFromHelp(bool hide = true)
     {
         info.hideFromHelp = hide;
+        return this;
+    }
+
+    auto ref MetaValue(string value)
+    {
+        info.metaValue = value;
         return this;
     }
 
@@ -2271,7 +2377,9 @@ auto AllowedValues(alias values, ARG)(ARG arg)
 
     enum valuesAA = assocArray(values, cycle([false]));
 
-    return arg.Validation!((KeyType!(typeof(valuesAA)) value) => value in valuesAA);
+    auto desc = arg.Validation!((KeyType!(typeof(valuesAA)) value) => value in valuesAA);
+    desc.info.setAllowedValues!values;
+    return desc;
 }
 
 
@@ -2476,4 +2584,468 @@ unittest
 
     static assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
     assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
+}
+
+
+private string getProgramName()
+{
+    import core.runtime: Runtime;
+    import std.path: baseName;
+    return Runtime.args[0].baseName;
+}
+
+unittest
+{
+    assert(getProgramName().length > 0);
+}
+
+
+private struct CommandInfo
+{
+    private string name;
+    private string usage;
+    private string description;
+    private string epilog;
+
+    auto ref Usage(string text)
+    {
+        usage = text;
+        return this;
+    }
+
+    auto ref Description(string text)
+    {
+        description = text;
+        return this;
+    }
+
+    auto ref Epilog(string text)
+    {
+        epilog = text;
+        return this;
+    }
+}
+
+auto Command(string name = "")
+{
+    return CommandInfo(name.length == 0 ? getProgramName() : name);
+}
+
+unittest
+{
+    assert(Command().name == getProgramName());
+    assert(Command("MYPROG").name == "MYPROG");
+}
+
+
+private struct CommandArguments(RECEIVER)
+{
+    static assert(getUDAs!(RECEIVER, CommandInfo).length <= 1);
+
+    static if(getUDAs!(RECEIVER, CommandInfo).length == 0)
+        CommandInfo info;
+    else
+        CommandInfo info = getUDAs!(RECEIVER, CommandInfo)[0];
+
+    Arguments!RECEIVER arguments;
+
+
+    private this(in Config config)
+    {
+        arguments = Arguments!RECEIVER(config.caseSensitive);
+
+        if(config.addHelp)
+        {
+            arguments.addArgument!helpArgument(delegate (in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
+            {
+                import std.stdio: stdout;
+
+                printHelp(stdout.lockingTextWriter(), this, config);
+
+                return true;
+            });
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Help-printing functions
+////////////////////////////////////////////////////////////////////////////////////////////////////
+private void printValue(Output)(auto ref Output output, in ArgumentInfo info)
+{
+    if(info.maxValuesCount.get == 0)
+        return;
+
+    if(info.minValuesCount.get == 0)
+        output.put('[');
+
+    output.put(info.metaValue);
+    if(info.maxValuesCount.get > 1)
+        output.put(" ...");
+
+    if(info.minValuesCount.get == 0)
+        output.put(']');
+}
+
+unittest
+{
+    auto test(int min, int max)
+    {
+        ArgumentInfo info;
+        info.metaValue = "v";
+        info.minValuesCount = min;
+        info.maxValuesCount = max;
+
+        import std.array: appender;
+        auto a = appender!string;
+        a.printValue(info);
+        return a[];
+    }
+
+    assert(test(0,0) == "");
+    assert(test(0,1) == "[v]");
+    assert(test(0,5) == "[v ...]");
+    assert(test(1,1) == "v");
+    assert(test(1,5) == "v ...");
+    assert(test(3,3) == "v ...");
+    assert(test(3,5) == "v ...");
+}
+
+
+private void printArgumentName(Output)(auto ref Output output, string name, in Config config)
+{
+    output.put(config.namedArgChar);
+    if(name.length > 1)
+        output.put(config.namedArgChar); // long name
+    output.put(name);
+}
+
+unittest
+{
+    auto test(string name)
+    {
+        import std.array: appender;
+        auto a = appender!string;
+        a.printArgumentName(name, Config.init);
+        return a[];
+    }
+
+    assert(test("f") == "-f");
+    assert(test("foo") == "--foo");
+}
+
+
+private void printInvocation(Output)(auto ref Output output, in ArgumentInfo info, in string[] names, in Config config)
+{
+    if(info.positional)
+        output.printValue(info);
+    else
+    {
+        import std.algorithm: each;
+
+        names.each!((i, name)
+        {
+            if(i > 0)
+                output.put(", ");
+
+            output.printArgumentName(name, config);
+
+            if(info.maxValuesCount.get > 0)
+            {
+                output.put(' ');
+                output.printValue(info);
+            }
+        });
+    }
+}
+
+unittest
+{
+    auto test(bool positional)
+    {
+        ArgumentInfo info;
+        info.metaValue = "v";
+        if(positional)
+            info.position = 0;
+
+        import std.array: appender;
+        auto a = appender!string;
+        a.printInvocation(info.setDefaults!(int, "foo"), ["f","foo"], Config.init);
+        return a[];
+    }
+
+    assert(test(false) == "-f v, --foo v");
+    assert(test(true) == "v");
+}
+
+
+private void printUsage(Output)(auto ref Output output, in ArgumentInfo info, in Config config)
+{
+    if(!info.required)
+        output.put('[');
+
+    output.printInvocation(info, [info.names[0]], config);
+
+    if(!info.required)
+        output.put(']');
+}
+
+unittest
+{
+    auto test(bool required, bool positional)
+    {
+        ArgumentInfo info;
+        info.names ~= "foo";
+        info.metaValue = "v";
+        info.required = required;
+        if(positional)
+            info.position = 0;
+
+        import std.array: appender;
+        auto a = appender!string;
+        a.printUsage(info.setDefaults!(int, "foo"), Config.init);
+        return a[];
+    }
+
+    assert(test(false, false) == "[--foo v]");
+    assert(test(false, true) == "[v]");
+    assert(test(true, false) == "--foo v");
+    assert(test(true, true) == "v");
+}
+
+
+private void substituteProg(Output)(auto ref Output output, string text, string prog)
+{
+    import std.array: replaceInto;
+    output.replaceInto(text, "%(PROG)", prog);
+}
+
+unittest
+{
+    import std.array: appender;
+    auto a = appender!string;
+    a.substituteProg("this is some text where %(PROG) is substituted but PROG and prog are not", "-myprog-");
+    assert(a[] == "this is some text where -myprog- is substituted but PROG and prog are not");
+}
+
+
+private string spaces(ulong num)
+{
+    import std.range: repeat;
+    import std.array: array;
+    return ' '.repeat(num).array;
+}
+
+unittest
+{
+    assert(spaces(0) == "");
+    assert(spaces(1) == " ");
+    assert(spaces(5) == "     ");
+}
+
+private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
+{
+    import std.algorithm: filter, each;
+
+    output.put("usage: ");
+
+    if(cmd.info.usage.length > 0)
+        substituteProg(output, cmd.info.usage, cmd.info.name);
+    else
+    {
+        output.put(cmd.info.name);
+
+        cmd.arguments.arguments
+            .filter!(_ => !_.hideFromHelp)
+            .each!((_)
+            {
+                output.put(' ');
+                output.printUsage(_, config);
+            });
+
+        output.put('\n');
+    }
+}
+
+void printUsage(T, Output)(auto ref Output output, in Config config)
+{
+    printUsage(output, CommandArguments!T(config), config);
+}
+
+unittest
+{
+    @(Command("MYPROG").Usage("custom usage of %(PROG)"))
+    struct T
+    {
+        @NamedArgument("s")  string s;
+    }
+
+    auto test(string usage)
+    {
+        import std.array: appender;
+
+        auto a = appender!string;
+        a.printUsage!T(Config.init);
+        return a[];
+    }
+
+    enum expected = "usage: custom usage of MYPROG";
+    static assert(test("custom usage of %(PROG)") == expected);
+    assert(test("custom usage of %(PROG)") == expected);
+}
+
+
+private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
+{
+    import std.algorithm: filter, each, map, maxElement, min;
+    import std.array: appender;
+
+    printUsage(output, cmd, config);
+    output.put('\n');
+
+    if(cmd.info.description.length > 0)
+    {
+        output.put(cmd.info.description);
+        output.put("\n\n");
+    }
+
+    // pre-compute the output
+    auto args =
+    cmd.arguments.arguments
+        .filter!(_ => !_.hideFromHelp)
+        .map!((_)
+        {
+            import std.typecons : tuple;
+
+            auto invocation = appender!string;
+            invocation.printInvocation(_, _.names, config);
+
+            return tuple!("required","invocation","help")(cast(bool) _.required, invocation[], _.helpText);
+        });
+
+    immutable maxInvocationWidth = args.maxElement!(_ => _.invocation.length).invocation.length;
+    immutable helpPosition = min(maxInvocationWidth + 4, 24);
+
+    void printArguments(Output, ARGS)(auto ref Output output, ARGS args)
+    {
+        import std.string: wrap, leftJustify;
+
+        immutable ident = spaces(helpPosition + 2);
+
+        foreach(ref arg; args)
+        {
+            if (arg.invocation.length <= helpPosition - 4) // 2=indent, 2=two spaces between invocation and help text
+            {
+                auto invocation = appender!string;
+                invocation ~= "  ";
+                invocation ~= arg.invocation.leftJustify(helpPosition);
+                output.put(arg.help.wrap(80-2, invocation[], ident));
+            }
+            else
+            {
+                // long action name; start on the next line
+                output.put("  ");
+                output.put(arg.invocation);
+                output.put("\n");
+                output.put(arg.help.wrap(80-2, ident, ident));
+            }
+        }
+    }
+
+    //positionals, optionals and user-defined groups
+    auto required = args.filter!(_ => _.required);
+    if(!required.empty)
+    {
+        output.put("Required arguments:\n");
+        printArguments(output, required);
+        output.put('\n');
+    }
+
+    auto optional = args.filter!(_ => !_.required);
+    if(!optional.empty)
+    {
+        output.put("Optional arguments:\n");
+        printArguments(output, optional);
+        output.put('\n');
+    }
+
+    if(cmd.info.epilog.length > 0)
+    {
+        output.put(cmd.info.epilog);
+        output.put('\n');
+    }
+}
+
+void printHelp(T, Output)(auto ref Output output, in Config config)
+{
+    printHelp(output, CommandArguments!T(config), config);
+}
+
+unittest
+{
+    @(Command("MYPROG")
+     .Description("custom description")
+     .Epilog("custom epilog")
+    )
+    struct T
+    {
+        @NamedArgument("s")  string s;
+        @(NamedArgument("hidden").HideFromHelp())  string hidden;
+
+        enum Fruit { apple, pear };
+        @(NamedArgument(["f","fruit"]).Required().HelpText("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
+
+        @(NamedArgument("i").AllowedValues!([1,4,16,8])) int i;
+
+        @(PositionalArgument(0).HelpText("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
+        @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
+
+        @TrailingArguments() string[] args;
+    }
+
+    auto test(alias func)()
+    {
+        import std.array: appender;
+
+        auto a = appender!string;
+        func!T(a, Config.init);
+        return a[];
+    }
+    static assert(test!printUsage.length > 0);  // ensure that it works at compile time
+    static assert(test!printHelp .length > 0);  // ensure that it works at compile time
+
+    assert(test!printUsage == "usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] param0 {q,a} [-h]\n");
+    assert(test!printHelp  == "usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] param0 {q,a} [-h]\n\n"~
+        "custom description\n\n"~
+        "Required arguments:\n"~
+        "  -f {apple,pear}, --fruit {apple,pear}\n"~
+        "                          This is a help text for fruit. Very very very very\n"~
+        "                          very very very very very very very very very very\n"~
+        "                          very very very very very long text\n"~
+        "  param0                  This is a help text for param0. Very very very very\n"~
+        "                          very very very very very very very very very very\n"~
+        "                          very very very very very long text\n"~
+        "  {q,a}                   \n\n"~
+        "Optional arguments:\n"~
+        "  -s S                    \n"~
+        "  -i {1,4,16,8}           \n"~
+        "  -h, --help              Show this help message and exit\n\n"~
+        "custom epilog\n");
+}
+
+unittest
+{
+    @Command("MYPROG")
+    struct T
+    {
+        @(NamedArgument("s").HideFromHelp())  string s;
+    }
+
+    assert(parseCLIArgs!T(["-h","-s","asd"]).isNull());
+    assert(parseCLIArgs!T(["-h"], (T t) { assert(false); }) == 0);
+
+    auto args = ["-h","-s","asd"];
+    assert(parseCLIKnownArgs!T(args).isNull());
+    assert(args.length == 3);
+    assert(parseCLIKnownArgs!T(["-h"], (T t, string[] args) { assert(false); }) == 0);
 }
