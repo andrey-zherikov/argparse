@@ -265,7 +265,7 @@ private auto setDefaults(TYPE, alias symbol)(ArgumentInfo info)
     static if(is(TYPE == enum))
         info.setAllowedValues!(EnumMembersAsStrings!TYPE);
 
-    if(info.positional && info.names.length == 0)
+    if(info.names.length == 0)
         info.names = [ symbol ];
 
     if(info.minValuesCount.isNull) info.minValuesCount = defaultValuesCount!TYPE.min;
@@ -303,15 +303,15 @@ unittest
     ArgumentInfo info;
     info.allowBooleanNegation = true;
 
-    auto res = info.setDefaults!(bool, "default-name");
+    auto res = info.setDefaults!(bool, "default_name");
     assert(res.allowBooleanNegation);
-    assert(res.names == []);
+    assert(res.names == ["default_name"]);
     assert(res.minValuesCount == defaultValuesCount!bool.min);
     assert(res.maxValuesCount == defaultValuesCount!bool.max);
-    assert(res.metaValue == "DEFAULT-NAME");
+    assert(res.metaValue == "DEFAULT_NAME");
 
     info.metaValue = "myvalue";
-    res = info.setDefaults!(bool, "default-name");
+    res = info.setDefaults!(bool, "default_name");
     assert(res.metaValue == "myvalue");
 }
 
@@ -416,37 +416,8 @@ private bool checkPositionalIndexes(T)()
 
 private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
 
-
-private ParseFunction!RECEIVER createParseFunction(RECEIVER, alias symbol, ArgumentInfo info, alias parseFunc)()
-{
-    return (in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
-    {
-        try
-        {
-            if(!info.checkValuesCount(config, argName, rawValues.length))
-                return false;
-
-            auto param = RawParam(config, argName, rawValues);
-
-            auto target = &__traits(getMember, receiver, symbol);
-
-            static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                return parseFunc(target, param);
-            else
-                return parseFunc(*target, param);
-        }
-        catch(Exception e)
-        {
-            config.onError(argName, ": ", e.msg);
-            return false;
-        }
-    };
-}
-
 private struct Arguments(RECEIVER)
 {
-    static assert(getSymbolsByUDA!(RECEIVER, ArgumentUDA).length > 0,
-                  "Type "~RECEIVER.stringof~" has no members with '*Argument' UDA");
     static assert(getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA).length <= 1,
                   "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
 
@@ -488,7 +459,7 @@ private struct Arguments(RECEIVER)
     @property auto requiredArguments() const { return argsRequired; }
 
 
-    this(alias addArgumentFunc = addArgument)(bool caseSensitive)
+    this(bool caseSensitive)
     {
         if(caseSensitive)
             convertCase = s => s;
@@ -498,52 +469,12 @@ private struct Arguments(RECEIVER)
                 import std.uni : toUpper;
                 return str.toUpper;
             };
-
-        alias symbols = getSymbolsByUDA!(RECEIVER, ArgumentUDA);
-
-        arguments     .reserve(symbols.length);
-        parseFunctions.reserve(symbols.length);
-        argsPositional.reserve(symbols.length);
-
-        static foreach(sym; symbols)
-        {{
-            enum symbol = __traits(identifier, sym);
-            alias member = __traits(getMember, RECEIVER, symbol);
-
-            enum uda = getUDAs!(member, ArgumentUDA)[0];
-
-            enum info = uda.info.setDefaults!(typeof(member), symbol);
-
-            auto parse = createParseFunction!(RECEIVER, symbol, info, uda.parsingFunc.parse);
-            addArgument!info(
-                (in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
-                {
-                    try
-                    {
-                        if(!info.checkValuesCount(config, argName, rawValues.length))
-                            return false;
-
-                        auto param = RawParam(config, argName, rawValues);
-
-                        auto target = &__traits(getMember, receiver, symbol);
-
-                        static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                            return uda.parsingFunc.parse(target, param);
-                        else
-                            return uda.parsingFunc.parse(*target, param);
-                    }
-                    catch(Exception e)
-                    {
-                        config.onError(argName, ": ", e.msg);
-                        return false;
-                    }
-                }
-            );
-        }}
     }
 
     private void addArgument(ArgumentInfo info)(ParseFunction!RECEIVER parse)
     {
+        static assert(info.names.length > 0);
+
         static if(info.positional)
         {
             if(argsPositional.length <= info.position.get)
@@ -582,6 +513,62 @@ private struct Arguments(RECEIVER)
     }
 }
 
+private void addArgument(alias symbol, RECEIVER)(ref Arguments!RECEIVER args)
+{
+    alias member = __traits(getMember, RECEIVER, symbol);
+
+    static if(getUDAs!(member, ArgumentUDA).length > 0)
+        enum uda = getUDAs!(member, ArgumentUDA)[0];
+    else
+        enum uda = NamedArgument();
+
+    enum info = uda.info.setDefaults!(typeof(member), symbol);
+
+    args.addArgument!info(
+    (in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
+    {
+        try
+        {
+            if(!info.checkValuesCount(config, argName, rawValues.length))
+                return false;
+
+            auto param = RawParam(config, argName, rawValues);
+
+            auto target = &__traits(getMember, receiver, symbol);
+
+            static if(is(typeof(target) == function) || is(typeof(target) == delegate))
+                return uda.parsingFunc.parse(target, param);
+            else
+                return uda.parsingFunc.parse(*target, param);
+        }
+        catch(Exception e)
+        {
+            config.onError(argName, ": ", e.msg);
+            return false;
+        }
+    }
+    );
+}
+
+private auto createArguments(RECEIVER)(bool caseSensitive)
+{
+    auto args = Arguments!RECEIVER(caseSensitive);
+
+    static if(getSymbolsByUDA!(RECEIVER, ArgumentUDA).length > 0)
+    {
+        static foreach(sym; getSymbolsByUDA!(RECEIVER, ArgumentUDA))
+            addArgument!(__traits(identifier, sym))(args);
+    }
+    else
+    {
+        static foreach(sym; __traits(allMembers, RECEIVER))
+            static if(!is(__traits(getMember,RECEIVER,sym))) // skip types
+                addArgument!(sym)(args);
+    }
+
+    return args;
+}
+
 unittest
 {
     struct T
@@ -599,24 +586,28 @@ unittest
         @(NamedArgument("f"))
         int f;
     }
-    static assert(Arguments!T(true).requiredArguments.keys == [2,4]);
+    static assert(createArguments!T(true).requiredArguments.keys == [2,4]);
+    static assert(createArguments!T(true).argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    static assert(createArguments!T(true).argsPositional == []);
+
+    struct T0
+    {
+        int a,b,c,d,e,f;
+    }
+    static assert(createArguments!T0(true).arguments.length == 6);
+    static assert(createArguments!T0(true).argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    static assert(createArguments!T0(true).argsPositional == []);
 }
 
 unittest
 {
-    struct T0
-    {
-        int a;
-    }
-    static assert(!__traits(compiles, { Arguments!T0(true); }));
-
     struct T1
     {
         @(NamedArgument("1"))
         @(NamedArgument("2"))
         int a;
     }
-    static assert(!__traits(compiles, { Arguments!T1(true); }));
+    static assert(!__traits(compiles, { createArguments!T1(true); }));
 
     struct T2
     {
@@ -625,21 +616,21 @@ unittest
         @(NamedArgument("1"))
         int b;
     }
-    static assert(!__traits(compiles, { Arguments!T1(true); }));
+    static assert(!__traits(compiles, { createArguments!T1(true); }));
 
     struct T3
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(0)) int b;
     }
-    static assert(!__traits(compiles, { Arguments!T3(true); }));
+    static assert(!__traits(compiles, { createArguments!T3(true); }));
 
     struct T4
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(2)) int b;
     }
-    static assert(!__traits(compiles, { Arguments!T4(true); }));
+    static assert(!__traits(compiles, { createArguments!T4(true); }));
 }
 
 private void checkArgumentName(T)(char namedArgChar)
@@ -1270,6 +1261,36 @@ unittest
     assert(["-b","false"].parseCLIArgs!T.get == T(false));
     assert(["-b=true"]   .parseCLIArgs!T.get == T(true));
     assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
+}
+
+struct Main
+{
+    mixin template parseCLIKnownArgs(TYPE, alias newMain, Config config = Config.init)
+    {
+        int main(string[] argv)
+        {
+            return parseCLIKnownArgs!TYPE(argv[1..$], (TYPE values, string[] args) => newMain(values, args), config);
+        }
+    }
+
+    mixin template parseCLIArgs(TYPE, alias newMain, Config config = Config.init)
+    {
+        int main(string[] argv)
+        {
+            return parseCLIArgs!TYPE(argv[1..$], (TYPE values) => newMain(values), config);
+        }
+    }
+}
+
+unittest
+{
+    struct T
+    {
+        int a;
+    }
+
+    static assert(__traits(compiles, { mixin Main.parseCLIArgs!(T, (params) => 0); }));
+    static assert(__traits(compiles, { mixin Main.parseCLIKnownArgs!(T, (params, args) => 0); }));
 }
 
 
@@ -2418,7 +2439,7 @@ auto PositionalArgument(uint pos, string name)
     return arg;
 }
 
-auto NamedArgument(string[] name)
+auto NamedArgument(string[] name = null)
 {
     return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo(name)).Optional();
 }
@@ -2594,7 +2615,8 @@ unittest
 }
 
 
-private string getProgramName()
+//private
+string getProgramName()
 {
     import core.runtime: Runtime;
     import std.path: baseName;
@@ -2635,12 +2657,11 @@ private struct CommandInfo
 
 auto Command(string name = "")
 {
-    return CommandInfo(name.length == 0 ? getProgramName() : name);
+    return CommandInfo(name);
 }
 
 unittest
 {
-    assert(Command().name == getProgramName());
     assert(Command("MYPROG").name == "MYPROG");
 }
 
@@ -2659,7 +2680,7 @@ private struct CommandArguments(RECEIVER)
 
     private this(in Config config)
     {
-        arguments = Arguments!RECEIVER(config.caseSensitive);
+        arguments = createArguments!RECEIVER(config.caseSensitive);
 
         if(config.addHelp)
         {
@@ -2860,7 +2881,7 @@ private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T
         substituteProg(output, cmd.info.usage, cmd.info.name);
     else
     {
-        output.put(cmd.info.name);
+        output.put(cmd.info.name.length > 0 ? cmd.info.name : getProgramName());
 
         cmd.arguments.arguments
             .filter!(_ => !_.hideFromHelp)
