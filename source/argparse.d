@@ -330,15 +330,6 @@ unittest
 }
 
 
-private bool checkMemberWithMultiArgs(T)()
-{
-    static foreach (sym; getSymbolsByUDA!(T, ArgumentUDA))
-        static assert(getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA).length == 1,
-                      "Member "~T.stringof~"."~sym.stringof~" has multiple '*Argument' UDAs");
-
-    return true;
-}
-
 private auto checkDuplicates(alias sortedRange, string errorMsg)() {
     static if(sortedRange.length >= 2)
     {
@@ -421,8 +412,7 @@ private struct Arguments(RECEIVER)
     static assert(getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA).length <= 1,
                   "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
 
-    private enum _validate = checkMemberWithMultiArgs!RECEIVER &&
-                             checkArgumentNames!RECEIVER &&
+    private enum _validate = checkArgumentNames!RECEIVER &&
                              checkPositionalIndexes!RECEIVER;
 
     immutable string function(string str) convertCase;
@@ -517,6 +507,9 @@ private void addArgument(alias symbol, RECEIVER)(ref Arguments!RECEIVER args)
 {
     alias member = __traits(getMember, RECEIVER, symbol);
 
+    static assert(getUDAs!(member, ArgumentUDA).length <= 1,
+        "Member "~RECEIVER.stringof~"."~symbol~" has multiple '*Argument' UDAs");
+
     static if(getUDAs!(member, ArgumentUDA).length > 0)
         enum uda = getUDAs!(member, ArgumentUDA)[0];
     else
@@ -586,17 +579,19 @@ unittest
         @(NamedArgument("f"))
         int f;
     }
-    static assert(createArguments!T(true).requiredArguments.keys == [2,4]);
-    static assert(createArguments!T(true).argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
-    static assert(createArguments!T(true).argsPositional == []);
+    static assert(createArguments!T(true).arguments.length == 6);
+    assert(createArguments!T(true).requiredArguments.keys == [4,2]);
+    assert(createArguments!T(true).argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    assert(createArguments!T(true).argsPositional == []);
 
     struct T0
     {
         int a,b,c,d,e,f;
     }
     static assert(createArguments!T0(true).arguments.length == 6);
-    static assert(createArguments!T0(true).argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
-    static assert(createArguments!T0(true).argsPositional == []);
+    assert(createArguments!T0(true).requiredArguments.length == 0);
+    assert(createArguments!T0(true).argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    assert(createArguments!T0(true).argsPositional == []);
 }
 
 unittest
