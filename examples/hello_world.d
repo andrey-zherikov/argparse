@@ -4,78 +4,108 @@ unittest
 {
     import argparse;
 
-    static struct Params
+    // If struct has no UDA then all members are named arguments
+    static struct Basic
+    {
+        // Basic data types are supported:
+            // --name argument
+            string name;
+
+            // --number argument
+            int number;
+
+            // --boolean argument
+            bool boolean;
+
+        // Argument can have default value if it's not specified in command line
+            // --unused argument
+            string unused = "some default value";
+
+
+        // Enums are also supported
+            enum Enum { unset, foo, boo }
+            // --choice argument
+            Enum choice;
+
+        // Use array to store multiple values
+            // --array argument
+            int[] array;
+
+        // Callback with no args (flag)
+            // --callback argument
+            void callback() {}
+
+        // Callback with single value
+            // --callback1 argument
+            void callback1(string value) { assert(value == "cb-value"); }
+
+        // Callback with zero or more values
+            // --callback2 argument
+            void callback2(string[] value) { assert(value == ["cb-v1","cb-v2"]); }
+    }
+
+version(with_main)
+{
+    // This mixin defines standard main function that parses command line and calls the provided function:
+    mixin Main.parseCLIArgs!(Basic, (Basic args)
+    {
+        // do whatever you need
+        return 0;
+    });
+}
+
+    // Parser can even work at compile time
+    enum values = ([
+        "--boolean",
+        "--number","100",
+        "--name","Jake",
+        "--array","1","2","3",
+        "--choice","foo",
+        "--callback",
+        "--callback1","cb-value",
+        "--callback2","cb-v1","cb-v2",
+    ].parseCLIArgs!Basic).get;
+
+    static assert(values.name     == "Jake");
+    static assert(values.unused   == Basic.init.unused);
+    static assert(values.number   == 100);
+    static assert(values.boolean  == true);
+    static assert(values.choice   == Basic.Enum.foo);
+    static assert(values.array    == [1,2,3]);
+}
+
+//unittest
+//{
+    import argparse;
+
+    static struct Extended
     {
         // Positional arguments are required by default
         @PositionalArgument(0)
         string name;
 
-        // Named argments are optional by default
-        @NamedArgument("unused")
-        string unused = "some default value";
+        // Named arguments can be attributed in bulk
+        @NamedArgument()
+        {
+            string unused = "some default value";
+            int number;
+            bool boolean;
+        }
 
-        // Numeric types are converted automatically
-        @NamedArgument("num")
-        int number;
+        // Named argument can have custom or multiple names
+            @NamedArgument("apple")
+            int apple;
 
-        // Boolean flags are supported
-        @NamedArgument("flag")
-        bool boolean;
-
-        // Enums are also supported
-        enum Enum { unset, foo, boo }
-        @NamedArgument("enum")
-        Enum enumValue;
-
-        // Use array to store multiple values
-        @NamedArgument("array")
-        int[] array;
-
-        // Callback with no args (flag)
-        @NamedArgument("cb")
-        void callback() {}
-
-        // Callback with single value
-        @NamedArgument("cb1")
-        void callback1(string value) { assert(value == "cb-value"); }
-
-        // Callback with zero or more values
-        @NamedArgument("cb2")
-        void callback2(string[] value) { assert(value == ["cb-v1","cb-v2"]); }
-    }
-
-    // Define your main function that takes an object with parsed CLI arguments
-    int myMain(Params args)
-    {
-        // do whatever you need
-        return 0;
+            @NamedArgument(["b","banana","ban"])
+            int banana;
     }
 
 version(with_main)
 {
-    // Main function should call the parser and drop argv[0]
-    int main(string[] argv)
+    mixin Main.parseCLIArgs!(Extended, (args)
     {
-        return parseCLIArgs!Params(argv[1..$], &myMain);
-    }
+        // do whatever you need
+        return 0;
+    });
 }
-
-    // Can even work at compile time
-    enum params = ([
-        "--flag",
-        "--num","100",
-        "Jake",
-        "--array","1","2","3",
-        "--enum","foo",
-        "--cb",
-        "--cb1","cb-value",
-        "--cb2","cb-v1","cb-v2",
-        ].parseCLIArgs!Params).get;
-
-    static assert(params.name      == "Jake");
-    static assert(params.unused    == Params.init.unused);
-    static assert(params.number    == 100);
-    static assert(params.boolean   == true);
-    static assert(params.enumValue == Params.Enum.foo);
-    static assert(params.array     == [1,2,3]);
-}
+//}

@@ -10,85 +10,152 @@ Please refer to [releases](https://github.com/andrey-zherikov/argparse/releases)
 
 ## Getting started
 
-Here is "Hello World" example showing the usage of this utility:
+Here is the simple example showing the usage of `argparse` utility. It uses the basic approach when all members are
+considered arguments with the same name as the name of member:
 
-[//]: # (README_CONTENT_BEGIN file=examples/hello_world.d)
+
 ```d
 import argparse;
 
-struct Params
+static struct Basic
+{
+  // Basic data types are supported:
+    // --name argument
+    string name;
+  
+    // --number argument
+    int number;
+  
+    // --boolean argument
+    bool boolean;
+
+  // Argument can have default value if it's not specified in command line
+    // --unused argument
+    string unused = "some default value";
+
+
+  // Enums are also supported
+    enum Enum { unset, foo, boo }
+    // --choice argument
+    Enum choice;
+
+  // Use array to store multiple values
+    // --array argument
+    int[] array;
+
+  // Callback with no args (flag)
+    // --callback argument
+    void callback() {}
+
+  // Callback with single value
+    // --callback1 argument
+    void callback1(string value) { assert(value == "cb-value"); }
+
+  // Callback with zero or more values
+    // --callback2 argument
+    void callback2(string[] value) { assert(value == ["cb-v1","cb-v2"]); }
+}
+
+// This mixin defines standard main function that parses command line and calls the provided function:
+mixin Main.parseCLIArgs!(Basic, (Basic args)
+{
+    // do whatever you need
+    return 0;
+});
+```
+
+If you run the program above with `-h` argument then you'll see the following output:
+
+```
+usage: hello_world [--name NAME] [--number NUMBER] [--boolean [BOOLEAN]] [--unused UNUSED] [--choice {unset,foo,boo}] [--array ARRAY ...] [--callback] [--callback1 CALLBACK1] [--callback2 [CALLBACK2 ...]] [-h]
+
+Optional arguments:
+  --name NAME
+  --number NUMBER
+  --boolean [BOOLEAN]
+  --unused UNUSED
+  --choice {unset,foo,boo}
+
+  --array ARRAY ...
+  --callback
+  --callback1 CALLBACK1
+
+  --callback2 [CALLBACK2 ...]
+
+  -h, --help              Show this help message and exit
+```
+
+Parser can even work at compile time, so you can do something like this:
+
+```d
+enum values = ([
+  "--boolean",
+  "--number","100",
+  "--name","Jake",
+  "--array","1","2","3",
+  "--choice","foo",
+  "--callback",
+  "--callback1","cb-value",
+  "--callback2","cb-v1","cb-v2",
+].parseCLIArgs!Basic).get;
+
+static assert(values.name     == "Jake");
+static assert(values.unused   == Basic.init.unused);
+static assert(values.number   == 100);
+static assert(values.boolean  == true);
+static assert(values.choice   == Basic.Enum.foo);
+static assert(values.array    == [1,2,3]);
+```
+
+For more sophisticated CLI usage, `argparse` provides few UDAs:
+
+```d
+static struct Extended
 {
     // Positional arguments are required by default
     @PositionalArgument(0)
     string name;
 
-    // Named argments are optional by default
-    @NamedArgument("unused")
-    string unused = "some default value";
+    // Named arguments can be attributed in bulk
+    @NamedArgument()
+    {
+        string unused = "some default value";
+        int number;
+        bool boolean;
+    }
 
-    // Numeric types are converted automatically
-    @NamedArgument("num")
-    int number;
-
-    // Boolean flags are supported
-    @NamedArgument("flag")
-    bool boolean;
-
-    // Enums are also supported
-    enum Enum { unset, foo, boo };
-    @NamedArgument("enum")
-    Enum enumValue;
-
-    // Use array to store multiple values
-    @NamedArgument("array")
-    int[] array;
-
-    // Callback with no args (flag)
-    @NamedArgument("cb")
-    void callback() {}
-
-    // Callback with single value
-    @NamedArgument("cb1")
-    void callback1(string value) { assert(value == "cb-value"); }
-
-    // Callback with zero or more values
-    @NamedArgument("cb2")
-    void callback2(string[] value) { assert(value == ["cb-v1","cb-v2"]); }
+    // Named argument can have custom or multiple names
+        @NamedArgument("apple")
+        int apple;
+    
+        @NamedArgument(["b","banana","ban"])
+        int banana;
 }
 
-// Define your main function that takes an object with parsed CLI arguments
-int myMain(Params args)
+mixin Main.parseCLIArgs!(Extended, (args)
 {
-  // do whatever you need
-  return 0;
-}
-
-// Main function should call the parser and drop argv[0]
-int main(string[] argv)
-{
-  return parseCLIArgs!Params(argv[1..$], &myMain);
-}
-
-// Can even work at compile time
-enum params = ([
-    "--flag",
-    "--num","100",
-    "Jake",
-    "--array","1","2","3",
-    "--enum","foo",
-    "--cb",
-    "--cb1","cb-value",
-    "--cb2","cb-v1","cb-v2",
-    ].parseCLIArgs!Params).get;
-
-static assert(params.name      == "Jake");
-static assert(params.unused    == Params.init.unused);
-static assert(params.number    == 100);
-static assert(params.boolean   == true);
-static assert(params.enumValue == Params.Enum.foo);
-static assert(params.array     == [1,2,3]);
+    // do whatever you need
+    return 0;
+});
 ```
-[//]: # (README_CONTENT_END)
+
+If you run it with `-h` argument then you'll see the following:
+
+```
+usage: hello_world name [--unused UNUSED] [--number NUMBER] [--boolean [BOOLEAN]] [--apple APPLE] [-b BANANA] [-h]
+
+Required arguments:
+  name
+
+Optional arguments:
+  --unused UNUSED
+  --number NUMBER
+  --boolean [BOOLEAN]
+  --apple APPLE
+  -b BANANA, --banana BANANA, --ban BANANA
+
+  -h, --help              Show this help message and exit
+```
 
 ## Features
 
@@ -107,7 +174,7 @@ static assert(params.array     == [1,2,3]);
 - User-defined validation of argument value:
     - On raw (`string`) data (i.e. before parsing).
     - On parsed data (i.e. after parsing).
-- Passing of known arguments only (returning not recognized ones).
+- Parsing of known arguments only (returning not recognized ones).
 - Options terminator (e.g. parsing up to `--` leaving any argument specified after it).
 - Support different types of destination data member:
     - Scalar (e.g. `int`, `float`, `bool`).
