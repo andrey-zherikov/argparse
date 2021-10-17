@@ -340,6 +340,15 @@ assert(parseCLIKnownArgs!T(args).get == T("A"));
 assert(args == ["-c", "C"]);
 ```
 
+#### Wrappers for main function
+
+`argparse` offers two mixins for convenience that one can use to wrap custom main function that accepts parameter object
+instead of raw command line in the form of `string[]`:
+- `Main.parseCLIKnownArgs(TYPE, alias newMain, Config config = Config.init)`
+- `Main.parseCLIArgs(TYPE, alias newMain, Config config = Config.init)`
+
+They define standard `main` function that calls
+corresponding parsing function for arguments in `TYPE` type providing `newMain` callback that is called upon successful parsing.
 
 ### Positional arguments
 
