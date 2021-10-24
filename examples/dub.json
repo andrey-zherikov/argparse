@@ -1,0 +1,15 @@
+{
+	"license": "BSL-1.0",
+	"name": "all",
+	"targetType":"none",
+	"dependencies":{
+		"all:argparse":"*",
+		"all:getting_started_basic":"*",
+		"all:getting_started_extended":"*"
+	},
+	"subPackages": [
+		"..",
+		"getting_started_basic",
+		"getting_started_extended"
+	]
+}

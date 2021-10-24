@@ -6,11 +6,11 @@ __dummy.html
 docs/
 /argparse
 argparse.iml
-argparse.so
-argparse.dylib
-argparse.dll
-argparse.a
-argparse.lib
+*argparse.so
+*argparse.dylib
+*argparse.dll
+*argparse.a
+*argparse.lib
 argparse-test-*
 *.exe
 *.o
