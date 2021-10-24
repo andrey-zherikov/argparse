@@ -1,0 +1,8 @@
+{
+	"license": "BSL-1.0",
+	"name": "getting_started_basic",
+	"targetType":"executable",
+	"sourcePaths":["."],
+	"targetPath": "..",
+	"dependencies":{ "all:argparse":"*" }
+}
