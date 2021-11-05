@@ -417,22 +417,6 @@ private struct Arguments(RECEIVER)
 
     immutable string function(string str) convertCase;
 
-
-    static if(getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA).length == 1)
-    {
-        private void setTrailingArgs(ref RECEIVER receiver, string[] rawValues) const
-        {
-            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA)[0]);
-            auto target = &__traits(getMember, receiver, symbol);
-
-            static if(__traits(compiles, { *target = rawValues; }))
-                *target = rawValues;
-            else
-                static assert(false, "Type '"~typeof(*target).stringof~"' of `"~
-                                     RECEIVER.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
-        }
-    }
-
     private ArgumentInfo[] arguments;
     private ParseFunction!RECEIVER[] parseFunctions;
 
@@ -503,6 +487,21 @@ private struct Arguments(RECEIVER)
     auto findNamedArgument(string name) const
     {
         return findArgumentImpl(convertCase(name) in argsNamed);
+    }
+
+    static if(getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA).length == 1)
+    {
+        private void setTrailingArgs(ref RECEIVER receiver, string[] rawValues) const
+        {
+            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA)[0]);
+            auto target = &__traits(getMember, receiver, symbol);
+
+            static if(__traits(compiles, { *target = rawValues; }))
+                *target = rawValues;
+            else
+                static assert(false, "Type '"~typeof(*target).stringof~"' of `"~
+                    RECEIVER.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
+        }
     }
 }
 
