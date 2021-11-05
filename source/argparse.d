@@ -474,7 +474,10 @@ private struct Arguments(RECEIVER)
         }
         else
             static foreach (name; info.names)
+            {
+                assert(!(name in argsNamed), "Duplicated argument name: "~name);
                 argsNamed[convertCase(name)] = arguments.length;
+            }
 
         static if(info.required)
             argsRequired[arguments.length] = true;
