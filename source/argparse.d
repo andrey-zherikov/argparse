@@ -2396,9 +2396,9 @@ unittest
 auto AllowedValues(alias values, ARG)(ARG arg)
 {
     import std.array : assocArray;
-    import std.range : cycle;
+    import std.range : repeat;
 
-    enum valuesAA = assocArray(values, cycle([false]));
+    enum valuesAA = assocArray(values, false.repeat);
 
     auto desc = arg.Validation!((KeyType!(typeof(valuesAA)) value) => value in valuesAA);
     desc.info.setAllowedValues!values;
