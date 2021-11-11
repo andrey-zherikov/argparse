@@ -117,7 +117,7 @@ static struct Extended
     string name;
 
     // Named arguments can be attributed in bulk
-    @NamedArgument()
+    @NamedArgument
     {
         string unused = "some default value";
         int number;
@@ -125,7 +125,7 @@ static struct Extended
     }
 
     // Named argument can have custom or multiple names
-        @NamedArgument("apple")
+        @NamedArgument("apple","appl")
         int apple;
     
         @NamedArgument(["b","banana","ban"])
@@ -235,8 +235,8 @@ There is a top-level function `parseCLIArgs` that parses the command line. It ha
 ```d
 struct T
 {
-    @NamedArgument("a") string a;
-    @NamedArgument("b") string b;
+    @NamedArgument string a;
+    @NamedArgument string b;
 }
 
 enum result1 = parseCLIArgs!T([ "-a", "A", "-b", "B"]);
@@ -331,7 +331,7 @@ It has the following signatures:
 ```d
 struct T
 {
-    @NamedArgument("a") string a;
+    @NamedArgument string a;
 }
 
 auto args = [ "-a", "A", "-c", "C" ];
@@ -381,11 +381,14 @@ They can be declared using `NamedArgument` UDA:
 ```d
 struct Params
 {
-    @NamedArgument("greeting")
+    @NamedArgument
     string greeting;
 
     @NamedArgument(["name", "first-name", "n"])
     string name;
+
+    @NamedArgument("family", "last-name")
+    string family;
 }
 ```
 
@@ -393,9 +396,9 @@ Parameters of `NamedArgument` UDA:
 
 |#|Name|Type|Optional/<br/>Required|Description|
 |---|---|---|---|---|
-|1|`name`|`string` or `string[]`|required|Name(s) of this argument that can show up in command line.|
+|1|`name`|`string` or `string[]`|optional|Name(s) of this argument that can show up in command line.|
 
-Named arguments might have multiple names, so they should be specified as an array of strings
+Named arguments might have multiple names, so they should be specified either as an array of strings or as a list of parameters
 in `NamedArgument` UDA. Argument names can be either single-letter (called as short options)
 or multi-letter (called as long options). Both cases are fully supported with one caveat:
 if a single-letter argument is used with a double-dash (e.g. `--n`) in command line then it
@@ -415,8 +418,8 @@ simply add a data member of type `string[]` with `TrailingArguments()` UDA:
 ```d
 struct T
 {
-    @NamedArgument("a")  string a;
-    @NamedArgument("b")  string b;
+    @NamedArgument  string a;
+    @NamedArgument  string b;
 
     @TrailingArguments() string[] args;
 }
@@ -437,7 +440,7 @@ struct T
     @(PositionalArgument(0, "a").Optional())
     string a = "not set";
 
-    @(NamedArgument("b").Required())
+    @(NamedArgument.Required())
     int b;
 }
 
@@ -469,13 +472,13 @@ Here is an example of how this customization can be used:
 )
 struct T
 {
-  @NamedArgument("s")  string s;
-  @(NamedArgument("hidden").HideFromHelp())  string hidden;
+  @NamedArgument  string s;
+  @(NamedArgument.HideFromHelp())  string hidden;
 
   enum Fruit { apple, pear };
-  @(NamedArgument(["f","fruit"]).Required().HelpText("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
+  @(NamedArgument("f","fruit").Required().HelpText("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
 
-  @(NamedArgument("i").AllowedValues!([1,4,16,8])) int i;
+  @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
 
   @(PositionalArgument(0).HelpText("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
   @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
@@ -519,7 +522,7 @@ Boolean types usually represent command line flags. `argparse` supports multiple
 ```d
 struct T
 {
-    @NamedArgument("b") bool b;
+    @NamedArgument bool b;
 }
 
 static assert(["-b"]        .parseCLIArgs!T.get == T(true));
@@ -536,9 +539,9 @@ Numeric arguments are converted using `std.conv.to`:
 ```d
 struct T
 {
-    @NamedArgument("i")  int i;
-    @NamedArgument("u")  uint u;
-    @NamedArgument("d")  double d;
+    @NamedArgument  int i;
+    @NamedArgument  uint u;
+    @NamedArgument  double d;
 }
 
 static assert(["-i","-5","-u","8","-d","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
@@ -551,7 +554,7 @@ static assert(["-i","-5","-u","8","-d","12.345"].parseCLIArgs!T.get == T(-5,8,12
 ```d
 struct T
 {
-    @NamedArgument("a")  string a;
+    @NamedArgument  string a;
 }
 
 static assert(["-a","foo"].parseCLIArgs!T.get == T("foo"));
@@ -567,7 +570,7 @@ struct T
 {
     enum Fruit { apple, pear };
 
-    @(NamedArgument("a")) Fruit a;
+    @NamedArgument Fruit a;
 }
 
 static assert(["-a","apple"].parseCLIArgs!T.get == T(T.Fruit.apple));
@@ -581,7 +584,7 @@ Counter argument is the parameter that tracks the number of times the argument o
 ```d
 struct T
 {
-    @(NamedArgument("a").Counter()) int a;
+    @(NamedArgument.Counter()) int a;
 }
 
 static assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
@@ -596,8 +599,8 @@ grouped in a way as they appear in command line and then each group is appended 
 ```d
 struct T
 {
-    @(NamedArgument("a")) int[]   a;
-    @(NamedArgument("b")) int[][] b;
+    @NamedArgument int[]   a;
+    @NamedArgument int[][] b;
 }
 
 static assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
@@ -609,7 +612,7 @@ Alternatively you can set `Config.arraySep` to allow multiple elements in one pa
 ```d
 struct T
 {
-    @(NamedArgument("a")) int[] a;
+    @NamedArgument int[] a;
 }
 
 Config cfg;
@@ -626,7 +629,7 @@ the next entry in command line, or right within the option separated with an "="
 ```d
 struct T
 {
-    @(NamedArgument("a")) int[string] a;
+    @NamedArgument int[string] a;
 }
 
 static assert(["-a=foo=3","-a","boo=7"].parseCLIArgs!T.get.a == ["foo":3,"boo":7]);
@@ -637,7 +640,7 @@ Alternatively you can set `Config.arraySep` to allow multiple elements in one pa
 ```d
 struct T
 {
-    @(NamedArgument("a")) int[string] a;
+    @NamedArgument int[string] a;
 }
 
 Config cfg;
@@ -779,8 +782,8 @@ is provided in command line. The difference between them can be seen in this exa
 ```d
     struct T
     {
-        @(NamedArgument("a").AllowNoValue  !10) int a;
-        @(NamedArgument("b").RequireNoValue!20) int b;
+        @(NamedArgument.AllowNoValue  !10) int a;
+        @(NamedArgument.RequireNoValue!20) int b;
     }
 
     static assert(["-a"].parseCLIArgs!T.get.a == 10);       // use value from UDA
@@ -796,7 +799,7 @@ All the above modifiers can be combined in any way:
 ```d
     struct T
     {
-        @(NamedArgument("a")
+        @(NamedArgument
          .PreValidation!((string s) { return s.length > 1 && s[0] == '!'; })
          .Parse        !((string s) { return s[1]; })
          .Validation   !((char v) { return v >= '0' && v <= '9'; })
@@ -828,7 +831,7 @@ Default is `char.init`.
 ```d
 struct T
 {
-    @(NamedArgument("a")) string[] a;
+    @NamedArgument string[] a;
 }
 
 assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T.get == T(["1,2,3","4","5"]));

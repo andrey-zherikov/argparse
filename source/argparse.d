@@ -571,17 +571,16 @@ private auto createArguments(RECEIVER)(bool caseSensitive)
 {
     auto args = Arguments!RECEIVER(caseSensitive);
 
-    static if(getSymbolsByUDA!(RECEIVER, ArgumentUDA).length > 0)
-    {
-        static foreach(sym; getSymbolsByUDA!(RECEIVER, ArgumentUDA))
-            addArgument!(__traits(identifier, sym))(args);
-    }
-    else
-    {
-        static foreach(sym; __traits(allMembers, RECEIVER))
-            static if(!is(__traits(getMember,RECEIVER,sym))) // skip types
+    enum filterByUDA = getSymbolsByUDA!(RECEIVER, ArgumentUDA).length > 0 || getSymbolsByUDA!(RECEIVER, NamedArgument).length > 0;
+
+    static foreach(sym; __traits(allMembers, RECEIVER))
+    {{
+        alias mem = __traits(getMember,RECEIVER,sym);
+
+        static if(!is(mem)) // skip types
+            static if(!filterByUDA || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
                 addArgument!(sym)(args);
-    }
+    }}
 
     return args;
 }
@@ -590,17 +589,17 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a"))
+        @(NamedArgument)
         int a;
-        @(NamedArgument("b").Optional())
+        @(NamedArgument.Optional())
         int b;
-        @(NamedArgument("c").Required())
+        @(NamedArgument.Required())
         int c;
-        @(NamedArgument("d"))
+        @(NamedArgument)
         int d;
-        @(NamedArgument("e").Required())
+        @(NamedArgument.Required())
         int e;
-        @(NamedArgument("f"))
+        @(NamedArgument)
         int f;
     }
     static assert(createArguments!T(true).arguments.length == 6);
@@ -2466,7 +2465,7 @@ auto PositionalArgument(uint pos, string name)
     return arg;
 }
 
-auto NamedArgument(string[] name = null)
+auto NamedArgument(string[] name...)
 {
     return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo(name)).Optional();
 }
@@ -2503,13 +2502,15 @@ unittest
 {
     struct T
     {
-        @NamedArgument("i")  int i;
-        @NamedArgument("u")  uint u;
-        @NamedArgument("d")  double d;
+        @NamedArgument int i;
+        @NamedArgument(["u","u1"])  uint u;
+        @NamedArgument("d","d1")  double d;
     }
 
     static assert(["-i","-5","-u","8","-d","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
+    static assert(["-i","-5","-u1","8","-d1","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
     assert(["-i","-5","-u","8","-d","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
+    assert(["-i","-5","-u1","8","-d1","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
 }
 
 unittest

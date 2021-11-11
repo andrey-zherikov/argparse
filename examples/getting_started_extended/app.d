@@ -6,8 +6,8 @@ static struct Extended
 	@PositionalArgument(0)
 	string name;
 
-	// Named arguments can be attributed in bulk
-	@NamedArgument()
+	// Named arguments can be attributed in bulk (parentheses can be omitted)
+	@NamedArgument
 	{
 		string unused = "some default value";
 		int number;
@@ -15,7 +15,7 @@ static struct Extended
 	}
 
 	// Named argument can have custom or multiple names
-	@NamedArgument("apple")
+	@NamedArgument("apple","appl")
 	int apple;
 
 	@NamedArgument(["b","banana","ban"])
