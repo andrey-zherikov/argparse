@@ -405,6 +405,13 @@ private bool checkPositionalIndexes(T)()
     return true;
 }
 
+private struct Group
+{
+    string name;
+    string helpText;
+    ulong[] arguments;
+}
+
 private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
 
 private struct Arguments(RECEIVER)
@@ -414,6 +421,8 @@ private struct Arguments(RECEIVER)
 
     private enum _validate = checkArgumentNames!RECEIVER &&
                              checkPositionalIndexes!RECEIVER;
+
+
 
     immutable string function(string str) convertCase;
 
@@ -426,11 +435,18 @@ private struct Arguments(RECEIVER)
     // positional arguments
     private ulong[] argsPositional;
 
-    // required arguments
-    private bool[ulong] argsRequired;
 
+    Group[] groups;
+    enum requiredGroupIndex = 0;
+    enum optionalGroupIndex = 1;
 
-    @property auto requiredArguments() const { return argsRequired; }
+    @property ref Group requiredGroup() { return groups[requiredGroupIndex]; }
+    @property ref const(Group) requiredGroup() const { return groups[requiredGroupIndex]; }
+    @property ref Group optionalGroup() { return groups[optionalGroupIndex]; }
+    @property ref const(Group) optionalGroup() const { return groups[optionalGroupIndex]; }
+
+    @property auto requiredArguments() const { return requiredGroup.arguments; }
+    @property auto positionalArguments() const { return argsPositional; }
 
 
     this(bool caseSensitive)
@@ -443,28 +459,34 @@ private struct Arguments(RECEIVER)
                 import std.uni : toUpper;
                 return str.toUpper;
             };
+
+        groups = [ Group("Required arguments"), Group("Optional arguments")];
     }
 
     private void addArgument(ArgumentInfo info)(ParseFunction!RECEIVER parse)
     {
         static assert(info.names.length > 0);
 
+        immutable index = arguments.length;
+
         static if(info.positional)
         {
             if(argsPositional.length <= info.position.get)
                 argsPositional.length = info.position.get + 1;
 
-            argsPositional[info.position.get] = arguments.length;
+            argsPositional[info.position.get] = index;
         }
         else
             static foreach (name; info.names)
             {
                 assert(!(name in argsNamed), "Duplicated argument name: "~name);
-                argsNamed[convertCase(name)] = arguments.length;
+                argsNamed[convertCase(name)] = index;
             }
 
         static if(info.required)
-            argsRequired[arguments.length] = true;
+            requiredGroup.arguments ~= index;
+        else
+            optionalGroup.arguments ~= index;
 
         arguments ~= info;
         parseFunctions ~= parse;
@@ -474,9 +496,9 @@ private struct Arguments(RECEIVER)
     {
         import std.typecons : Tuple;
 
-        alias Result = Tuple!(ulong, "index", typeof(&arguments[0]), "arg", ParseFunction!RECEIVER, "parse");
+        alias Result = Tuple!(const(ArgumentInfo)*, "arg", ParseFunction!RECEIVER, "parse");
 
-        return pIndex ? Result(*pIndex, &arguments[*pIndex], parseFunctions[*pIndex]) : Result(ulong.max, null, null);
+        return pIndex ? Result(&arguments[*pIndex], parseFunctions[*pIndex]) : Result(null, null);
     }
 
     auto findPositionalArgument(ulong position) const
@@ -582,18 +604,25 @@ unittest
         int f;
     }
     static assert(createArguments!T(true).arguments.length == 6);
-    assert(createArguments!T(true).requiredArguments.keys == [4,2]);
-    assert(createArguments!T(true).argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
-    assert(createArguments!T(true).argsPositional == []);
 
-    struct T0
+    auto a = createArguments!T(true);
+    assert(a.requiredArguments == [2,4]);
+    assert(a.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    assert(a.argsPositional == []);
+}
+
+unittest
+{
+    struct T
     {
         int a,b,c,d,e,f;
     }
-    static assert(createArguments!T0(true).arguments.length == 6);
-    assert(createArguments!T0(true).requiredArguments.length == 0);
-    assert(createArguments!T0(true).argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
-    assert(createArguments!T0(true).argsPositional == []);
+    static assert(createArguments!T(true).arguments.length == 6);
+
+    auto a = createArguments!T(true);
+    assert(a.requiredArguments.length == 0);
+    assert(a.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    assert(a.argsPositional == []);
 }
 
 unittest
@@ -707,12 +736,14 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                                             const ref CommandArguments!T command,
                                             in Config config)
 {
-    import std.range: empty, front, popFront, join;
+    import std.algorithm: map;
+    import std.array: assocArray;
+    import std.range: repeat, empty, front, popFront, join;
     import std.typecons : tuple;
 
     checkArgumentName!T(config.namedArgChar);
 
-    auto requiredArgs = command.arguments.requiredArguments.dup;
+    auto requiredArgs = command.arguments.requiredGroup.arguments.map!(_ => &command.arguments.arguments[_]).assocArray(true.repeat);
 
     alias parseNamedArg = (arg, res) {
         args.popFront();
@@ -722,7 +753,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
         if(!res.parse(config, arg.origName, receiver, values))
             return false;
 
-        requiredArgs.remove(res.index);
+        requiredArgs.remove(res.arg);
 
         return true;
     };
@@ -758,7 +789,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
 
                 positionalArgIdx++;
 
-                requiredArgs.remove(res.index);
+                requiredArgs.remove(res.arg);
 
                 break;
             }
@@ -795,7 +826,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                         if(!res.parse(config, arg.origName, receiver, ["false"]))
                             return ParseCLIResult.failure;
 
-                        requiredArgs.remove(res.index);
+                        requiredArgs.remove(res.arg);
 
                         break;
                     }
@@ -837,7 +868,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                     if(!res.parse(config, "-"~name, receiver, [arg.name[1..$]]))
                         return ParseCLIResult.failure;
 
-                    requiredArgs.remove(res.index);
+                    requiredArgs.remove(res.arg);
 
                     if(!res.arg.parsingTerminateCode.isNull)
                         return ParseCLIResult(res.arg.parsingTerminateCode.get);
@@ -859,7 +890,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                             if(!res.parse(config, "-"~name, receiver, []))
                                 return ParseCLIResult.failure;
 
-                            requiredArgs.remove(res.index);
+                            requiredArgs.remove(res.arg);
 
                             arg.name = arg.name[1..$];
                         }
@@ -868,7 +899,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                             if(!res.parse(config, "-"~name, receiver, [arg.name[1..$]]))
                                 return ParseCLIResult.failure;
 
-                            requiredArgs.remove(res.index);
+                            requiredArgs.remove(res.arg);
 
                             arg.name = [];
                         }
@@ -902,8 +933,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
     if(requiredArgs.length > 0)
     {
         import std.algorithm : map;
-        config.onError("The following arguments are required: ",
-            requiredArgs.keys.map!(idx => command.arguments.arguments[idx].names[0]).join(", "));
+        config.onError("The following arguments are required: ", requiredArgs.byKey().map!(arg => arg.names[0]).join(", "));
         return ParseCLIResult.failure;
     }
 
@@ -2870,23 +2900,28 @@ unittest
 
 private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
 {
-    import std.algorithm: filter, each;
-
     output.put("usage: ");
 
     if(cmd.info.usage.length > 0)
         substituteProg(output, cmd.info.usage, cmd.info.name);
     else
     {
-        output.put(cmd.info.name.length > 0 ? cmd.info.name : getProgramName());
+        import std.algorithm: filter, each, map;
 
-        cmd.arguments.arguments
-            .filter!(_ => !_.hideFromHelp)
-            .each!((_)
+        alias print = (r) => r
+            .filter!((ref _) => !_.hideFromHelp)
+            .each!((ref _)
             {
                 output.put(' ');
                 output.printUsage(_, config);
             });
+
+        output.put(cmd.info.name.length > 0 ? cmd.info.name : getProgramName());
+
+        // named args
+        print(cmd.arguments.arguments.filter!((ref _) => !_.positional));
+        // positional args
+        print(cmd.arguments.positionalArguments.map!(ref (_) => cmd.arguments.arguments[_]));
 
         output.put('\n');
     }
@@ -2920,10 +2955,51 @@ unittest
 }
 
 
+private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARGS args, int helpPosition)
+{
+    import std.string: wrap, leftJustify;
+
+    if(group.arguments.length == 0)
+        return;
+
+    output.put(group.name);
+    output.put(":\n");
+
+    immutable ident = spaces(helpPosition + 2);
+
+    foreach(idx; group.arguments)
+    {
+        auto arg = &args[idx];
+
+        if(arg.invocation.length == 0)
+            continue;
+        else if(arg.invocation.length <= helpPosition - 4) // 2=indent, 2=two spaces between invocation and help text
+        {
+            import std.array: appender;
+
+            auto invocation = appender!string;
+            invocation ~= "  ";
+            invocation ~= arg.invocation.leftJustify(helpPosition);
+            output.put(arg.help.wrap(80-2, invocation[], ident));
+        }
+        else
+        {
+            // long action name; start on the next line
+            output.put("  ");
+            output.put(arg.invocation);
+            output.put("\n");
+            output.put(arg.help.wrap(80-2, ident, ident));
+        }
+    }
+
+    output.put('\n');
+}
+
+
 private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
 {
-    import std.algorithm: filter, each, map, maxElement, min;
-    import std.array: appender;
+    import std.algorithm: map, maxElement, min;
+    import std.array: appender, array;
 
     printUsage(output, cmd, config);
     output.put('\n');
@@ -2936,63 +3012,26 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
 
     // pre-compute the output
     auto args =
-    cmd.arguments.arguments
-        .filter!(_ => !_.hideFromHelp)
-        .map!((_)
+        cmd.arguments.arguments
+        .map!((ref _)
         {
             import std.typecons : tuple;
+
+            if(_.hideFromHelp)
+                return tuple!("invocation","help")("", "");
 
             auto invocation = appender!string;
             invocation.printInvocation(_, _.names, config);
 
-            return tuple!("required","invocation","help")(cast(bool) _.required, invocation[], _.helpText);
-        });
+            return tuple!("invocation","help")(invocation[], _.helpText);
+        }).array;
 
-    immutable maxInvocationWidth = args.maxElement!(_ => _.invocation.length).invocation.length;
+    immutable maxInvocationWidth = args.map!(_ => _.invocation.length).maxElement;
     immutable helpPosition = min(maxInvocationWidth + 4, 24);
 
-    void printArguments(Output, ARGS)(auto ref Output output, ARGS args)
-    {
-        import std.string: wrap, leftJustify;
-
-        immutable ident = spaces(helpPosition + 2);
-
-        foreach(ref arg; args)
-        {
-            if (arg.invocation.length <= helpPosition - 4) // 2=indent, 2=two spaces between invocation and help text
-            {
-                auto invocation = appender!string;
-                invocation ~= "  ";
-                invocation ~= arg.invocation.leftJustify(helpPosition);
-                output.put(arg.help.wrap(80-2, invocation[], ident));
-            }
-            else
-            {
-                // long action name; start on the next line
-                output.put("  ");
-                output.put(arg.invocation);
-                output.put("\n");
-                output.put(arg.help.wrap(80-2, ident, ident));
-            }
-        }
-    }
-
     //positionals, optionals and user-defined groups
-    auto required = args.filter!(_ => _.required);
-    if(!required.empty)
-    {
-        output.put("Required arguments:\n");
-        printArguments(output, required);
-        output.put('\n');
-    }
-
-    auto optional = args.filter!(_ => !_.required);
-    if(!optional.empty)
-    {
-        output.put("Optional arguments:\n");
-        printArguments(output, optional);
-        output.put('\n');
-    }
+    output.printHelp(cmd.arguments.requiredGroup, args, helpPosition);
+    output.printHelp(cmd.arguments.optionalGroup, args, helpPosition);
 
     if(cmd.info.epilog.length > 0)
     {
@@ -3039,8 +3078,8 @@ unittest
     static assert(test!printUsage.length > 0);  // ensure that it works at compile time
     static assert(test!printHelp .length > 0);  // ensure that it works at compile time
 
-    assert(test!printUsage == "usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] param0 {q,a} [-h]\n");
-    assert(test!printHelp  == "usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] param0 {q,a} [-h]\n\n"~
+    assert(test!printUsage == "usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n");
+    assert(test!printHelp  == "usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
         "custom description\n\n"~
         "Required arguments:\n"~
         "  -f {apple,pear}, --fruit {apple,pear}\n"~
