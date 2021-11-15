@@ -459,9 +459,9 @@ If this parameter is not provided then `Runtime.args[0]` is used. Additional par
   So setting this text is available through `Epilog` call.
 
 In addition to program level customization of the help message, each argument can be customized independently:
-- `HelpText`. Argument can have its own help text that is printed in help message. This is available by calling `HelpText`.
+- `Description`. Argument can have its own help text that is printed in help message. This is available by calling `Description`.
 - `HideFromHelp`. Some arguments are not supposed to be printed in help message at all.
-  In this can`HideFromHelp` can be called to hide the argument.
+  In this case `HideFromHelp` can be called to hide the argument.
 
 Here is an example of how this customization can be used:
 
@@ -476,11 +476,11 @@ struct T
   @(NamedArgument.HideFromHelp())  string hidden;
 
   enum Fruit { apple, pear };
-  @(NamedArgument("f","fruit").Required().HelpText("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
+  @(NamedArgument("f","fruit").Required().Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
 
   @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
 
-  @(PositionalArgument(0).HelpText("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
+  @(PositionalArgument(0).Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
   @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
 
   @TrailingArguments() string[] args;

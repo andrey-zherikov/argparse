@@ -408,7 +408,7 @@ private bool checkPositionalIndexes(T)()
 private struct Group
 {
     string name;
-    string helpText;
+    string description;
     ulong[] arguments;
 }
 
@@ -706,7 +706,7 @@ private auto consumeValuesFromCLI(ref string[] args, in ArgumentInfo argumentInf
 private enum helpArgument = {
     ArgumentInfo arg;
     arg.names = ["h","help"];
-    arg.helpText = "Show this help message and exit";
+    arg.description = "Show this help message and exit";
     arg.minValuesCount = 0;
     arg.maxValuesCount = 0;
     arg.allowBooleanNegation = false;
@@ -1053,7 +1053,7 @@ unittest
         int no_a;
 
         @(PositionalArgument(0, "a")
-        .HelpText("Argument 'a'")
+        .Description("Argument 'a'")
         .Validation!((int a) { return a > 3;})
         .PreValidation!((string s) { return s.length > 0;})
         .Validation!((int a) { return a > 0;})
@@ -1062,7 +1062,7 @@ unittest
 
         int no_b;
 
-        @(NamedArgument(["b", "boo"]).HelpText("Flag boo")
+        @(NamedArgument(["b", "boo"]).Description("Flag boo")
         .AllowNoValue!55
         )
         int b;
@@ -2208,7 +2208,7 @@ private struct ArgumentInfo
 {
     string[] names;
 
-    string helpText;
+    string description;
     string metaValue;
 
     private void setAllowedValues(alias names)()
@@ -2279,9 +2279,9 @@ private struct ArgumentUDA(alias ValueParseFunctions)
 
 
 
-    auto ref HelpText(string text)
+    auto ref Description(string text)
     {
-        info.helpText = text;
+        info.description = text;
         return this;
     }
 
@@ -3024,7 +3024,7 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
             auto invocation = appender!string;
             invocation.printInvocation(_, _.names, config);
 
-            return tuple!("invocation","help")(invocation[], _.helpText);
+            return tuple!("invocation","help")(invocation[], _.description);
         }).array;
 
     immutable maxInvocationWidth = args.map!(_ => _.invocation.length).maxElement;
@@ -3058,11 +3058,11 @@ unittest
         @(NamedArgument("hidden").HideFromHelp())  string hidden;
 
         enum Fruit { apple, pear };
-        @(NamedArgument(["f","fruit"]).Required().HelpText("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
+        @(NamedArgument(["f","fruit"]).Required().Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
 
         @(NamedArgument("i").AllowedValues!([1,4,16,8])) int i;
 
-        @(PositionalArgument(0).HelpText("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
+        @(PositionalArgument(0).Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
         @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
 
         @TrailingArguments() string[] args;
