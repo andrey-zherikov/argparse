@@ -491,7 +491,7 @@ parseCLIArgs!T(["-h"]);
 
 This example will print the following help message:
 ```
-usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] param0 {q,a} [-h]
+usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}
 
 custom description
 
