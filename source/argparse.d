@@ -416,7 +416,7 @@ private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string a
 
 private struct Arguments(RECEIVER)
 {
-    static assert(getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA).length <= 1,
+    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1,
                   "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
 
     private enum _validate = checkArgumentNames!RECEIVER &&
@@ -511,11 +511,11 @@ private struct Arguments(RECEIVER)
         return findArgumentImpl(convertCase(name) in argsNamed);
     }
 
-    static if(getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA).length == 1)
+    static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
     {
         private void setTrailingArgs(ref RECEIVER receiver, string[] rawValues) const
         {
-            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA)[0]);
+            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArguments)[0]);
             auto target = &__traits(getMember, receiver, symbol);
 
             static if(__traits(compiles, { *target = rawValues; }))
@@ -2475,14 +2475,8 @@ auto NamedArgument(string name)
     return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo([name])).Optional();
 }
 
-private struct TrailingArgumentUDA
-{
-}
+struct TrailingArguments {}
 
-auto TrailingArguments()
-{
-    return TrailingArgumentUDA();
-}
 
 unittest
 {
@@ -2491,7 +2485,7 @@ unittest
         @NamedArgument("a")  string a;
         @NamedArgument("b")  string b;
 
-        @TrailingArguments() string[] args;
+        @TrailingArguments string[] args;
     }
 
     static assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
@@ -3065,7 +3059,7 @@ unittest
         @(PositionalArgument(0).Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
         @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
 
-        @TrailingArguments() string[] args;
+        @TrailingArguments string[] args;
     }
 
     auto test(alias func)()

@@ -413,7 +413,7 @@ Note that any other character can be used instead of `=` - see [Config](#Config)
 
 A lone double-dash terminates argument parsing by default. It is used to separate program arguments
 from other parameters (e.g., arguments to be passed to another program). To store trailing arguments
-simply add a data member of type `string[]` with `TrailingArguments()` UDA:
+simply add a data member of type `string[]` with `TrailingArguments` UDA:
 
 ```d
 struct T
@@ -421,7 +421,7 @@ struct T
     @NamedArgument  string a;
     @NamedArgument  string b;
 
-    @TrailingArguments() string[] args;
+    @TrailingArguments string[] args;
 }
 
 static assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
@@ -483,7 +483,7 @@ struct T
   @(PositionalArgument(0).Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
   @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
 
-  @TrailingArguments() string[] args;
+  @TrailingArguments string[] args;
 }
 
 parseCLIArgs!T(["-h"]);
