@@ -2348,24 +2348,21 @@ private struct ArgumentUDA(alias ValueParseFunctions)
         return this;
     }
 
-    auto ref NumberOfValues(ulong num)()
-    if(num > 0)
+    auto ref NumberOfValues(ulong num)
     {
         info.minValuesCount = num;
         info.maxValuesCount = num;
         return this;
     }
 
-    auto ref NumberOfValues(ulong min, ulong max)()
-    if(0 < min && min <= max)
+    auto ref NumberOfValues(ulong min, ulong max)
     {
         info.minValuesCount = min;
         info.maxValuesCount = max;
         return this;
     }
 
-    auto ref MinNumberOfValues(ulong min)()
-    if(0 < min)
+    auto ref MinNumberOfValues(ulong min)
     {
         assert(min <= info.maxValuesCount.get(ulong.max));
 
@@ -2373,8 +2370,7 @@ private struct ArgumentUDA(alias ValueParseFunctions)
         return this;
     }
 
-    auto ref MaxNumberOfValues(ulong max)()
-    if(0 < max)
+    auto ref MaxNumberOfValues(ulong max)
     {
         assert(max >= info.minValuesCount.get(0));
 
@@ -2383,6 +2379,20 @@ private struct ArgumentUDA(alias ValueParseFunctions)
     }
 
     // ReverseSwitch
+}
+
+unittest
+{
+    struct T
+    {
+        @(NamedArgument.NumberOfValues(1,3))
+        int[] a;
+        @(NamedArgument.NumberOfValues(2))
+        int[] b;
+    }
+
+    assert(["-a","1","2","3","-b","4","5"].parseCLIArgs!T.get == T([1,2,3],[4,5]));
+    assert(["-a","1","-b","4","5"].parseCLIArgs!T.get == T([1],[4,5]));
 }
 
 private enum bool isArgumentUDA(T) = (is(typeof(T.info) == ArgumentInfo) && is(T.parsingFunc));

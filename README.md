@@ -632,6 +632,30 @@ cfg.arraySep = ',';
 assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T(cfg).get == T([1,2,3,4,5]));
 ```
 
+#### Specifying number of values
+
+In case the argument is bound to static array then the maximum number of values is set to the size of the array.
+For dynamic array, the number of values is not limited. The minimum number of values is `1` in all cases.
+This behavior can be customized by calling the following functions:
+- `NumberOfValues(ulong min, ulong max)` - sets both minimum and maximum number of values.
+- `NumberOfValues(ulong num)` - sets both minimum and maximum number of values to the same value.
+- `MinNumberOfValues(ulong min)` - sets minimum number of values.
+- `MaxNumberOfValues(ulong max)` - sets maximum number of values.
+
+```d
+struct T
+{
+  @(NamedArgument.NumberOfValues(1,3))
+  int[] a;
+  @(NamedArgument.NumberOfValues(2))
+  int[] b;
+}
+
+assert(["-a","1","2","3","-b","4","5"].parseCLIArgs!T.get == T([1,2,3],[4,5]));
+assert(["-a","1","-b","4","5"].parseCLIArgs!T.get == T([1],[4,5]));
+```
+
+
 ### Associative array
 
 If an argument is bound to an associative array, a string of the form "name=value" is expected as
