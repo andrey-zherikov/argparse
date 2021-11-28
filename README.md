@@ -458,6 +458,30 @@ struct T
 static assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
 ```
 
+### Limit the allowed values
+
+In some cases an argument can receive one of the limited set of values so `AllowedValues` can be used here:
+
+```d
+struct T
+{
+    @(NamedArgument.AllowedValues!(["apple","pear","banana"]))
+    string fruit;
+}
+
+static assert(["--fruit", "apple"].parseCLIArgs!T.get == T("apple"));
+static assert(["--fruit", "kiwi"].parseCLIArgs!T.isNull);              // "kiwi" is not allowed
+```
+
+For the value that is not in the allowed list, this error will be printed:
+```
+Error: Invalid value 'kiwi' for argument '--fruit'.
+Valid argument values are: apple,pear,banana
+```
+
+Note that if the type of destination variable is `enum` then the allowed values are automatically limited to those listed in the `enum`.
+
+
 ### Help generation
 
 To customize generated help text one can use `Command` UDA that receives optional parameter of a program name.
