@@ -1084,8 +1084,8 @@ unittest
 
     struct T
     {
-        @NamedArgument("a") string a;
-        @NamedArgument("b") string b;
+        string a;
+        string b;
     }
 
     auto test(string[] args)
@@ -1110,7 +1110,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument("a") string a;
+        string a;
     }
 
     {
@@ -1149,7 +1149,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument("a") string a;
+        string a;
     }
 
     int my_main(T command)
@@ -1166,7 +1166,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument("a") string a;
+        string a;
     }
 
     auto args = [ "-a", "A", "-c", "C" ];
@@ -1180,8 +1180,8 @@ unittest
 
     struct T
     {
-        @NamedArgument("x")                      string x;
-        @NamedArgument("foo")                    string foo;
+        @NamedArgument                           string x;
+        @NamedArgument                           string foo;
         @(PositionalArgument(0, "a").Optional()) string a;
         @(PositionalArgument(1, "b").Optional()) string[] b;
     }
@@ -1206,7 +1206,7 @@ unittest
 
     struct T2
     {
-        @NamedArgument("foo") bool foo = true;
+        bool foo = true;
     }
     static assert(["--no-foo"].parseCLIArgs!T2.get == T2(false));
     assert(["--no-foo"].parseCLIArgs!T2.get == T2(false));
@@ -1231,8 +1231,8 @@ unittest
 {
     struct T
     {
-        @NamedArgument("x")   string x;
-        @NamedArgument("foo") string foo;
+        string x;
+        string foo;
     }
 
     auto test(T)(string[] args)
@@ -1261,8 +1261,8 @@ unittest
 
     struct T
     {
-        @NamedArgument("a") bool a;
-        @NamedArgument("b") bool b;
+        bool a;
+        bool b;
     }
     static assert(test!T(["-a","-b"]) == T(true, true));
     static assert(test!T(["-ab"]) == T(true, true));
@@ -1274,7 +1274,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument("b") bool b;
+        bool b;
     }
 
     static assert(["-b"]        .parseCLIArgs!T.get == T(true));
@@ -2482,8 +2482,8 @@ unittest
 {
     struct T
     {
-        @NamedArgument("a")  string a;
-        @NamedArgument("b")  string b;
+        string a;
+        string b;
 
         @TrailingArguments string[] args;
     }
@@ -2932,7 +2932,7 @@ unittest
     @(Command("MYPROG").Usage("custom usage of %(PROG)"))
     struct T
     {
-        @NamedArgument("s")  string s;
+        string s;
     }
 
     auto test(string usage)
@@ -3048,13 +3048,13 @@ unittest
     )
     struct T
     {
-        @NamedArgument("s")  string s;
-        @(NamedArgument("hidden").HideFromHelp())  string hidden;
+        @NamedArgument  string s;
+        @(NamedArgument.HideFromHelp())  string hidden;
 
         enum Fruit { apple, pear };
         @(NamedArgument(["f","fruit"]).Required().Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
 
-        @(NamedArgument("i").AllowedValues!([1,4,16,8])) int i;
+        @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
 
         @(PositionalArgument(0).Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
         @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
