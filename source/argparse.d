@@ -2383,6 +2383,32 @@ private struct ArgumentUDA(alias ValueParseFunctions)
 
 unittest
 {
+    auto arg = NamedArgument.Description("desc").Placeholder("text");
+    assert(arg.info.description == "desc");
+    assert(arg.info.placeholder == "text");
+    assert(!arg.info.hideFromHelp);
+    assert(!arg.info.required);
+    assert(arg.info.minValuesCount.isNull);
+    assert(arg.info.maxValuesCount.isNull);
+
+    arg = arg.HideFromHelp().Required().NumberOfValues(10);
+    assert(arg.info.hideFromHelp);
+    assert(arg.info.required);
+    assert(arg.info.minValuesCount.get == 10);
+    assert(arg.info.maxValuesCount.get == 10);
+
+    arg = arg.Optional().NumberOfValues(20,30);
+    assert(!arg.info.required);
+    assert(arg.info.minValuesCount.get == 20);
+    assert(arg.info.maxValuesCount.get == 30);
+
+    arg = arg.MinNumberOfValues(2).MaxNumberOfValues(3);
+    assert(arg.info.minValuesCount.get == 2);
+    assert(arg.info.maxValuesCount.get == 3);
+}
+
+unittest
+{
     struct T
     {
         @(NamedArgument.NumberOfValues(1,3))
