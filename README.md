@@ -513,6 +513,8 @@ Here is an example of how this customization can be used:
 struct T
 {
   @NamedArgument  string s;
+  @(NamedArgument.Placeholder("VALUE"))  string p;
+
   @(NamedArgument.HideFromHelp())  string hidden;
 
   enum Fruit { apple, pear };
@@ -531,7 +533,7 @@ parseCLIArgs!T(["-h"]);
 
 This example will print the following help message:
 ```
-usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}
+usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}
 
 custom description
 
@@ -547,6 +549,7 @@ Required arguments:
 
 Optional arguments:
   -s S
+  -p VALUE
   -i {1,4,16,8}
   -h, --help              Show this help message and exit
 

@@ -3148,6 +3148,8 @@ unittest
     struct T
     {
         @NamedArgument  string s;
+        @(NamedArgument.Placeholder("VALUE"))  string p;
+
         @(NamedArgument.HideFromHelp())  string hidden;
 
         enum Fruit { apple, pear };
@@ -3172,8 +3174,8 @@ unittest
     static assert(test!printUsage.length > 0);  // ensure that it works at compile time
     static assert(test!printHelp .length > 0);  // ensure that it works at compile time
 
-    assert(test!printUsage == "usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n");
-    assert(test!printHelp  == "usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
+    assert(test!printUsage == "usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n");
+    assert(test!printHelp  == "usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
         "custom description\n\n"~
         "Required arguments:\n"~
         "  -f {apple,pear}, --fruit {apple,pear}\n"~
@@ -3186,6 +3188,7 @@ unittest
         "  {q,a}                   \n\n"~
         "Optional arguments:\n"~
         "  -s S                    \n"~
+        "  -p VALUE                \n"~
         "  -i {1,4,16,8}           \n"~
         "  -h, --help              Show this help message and exit\n\n"~
         "custom epilog\n");
