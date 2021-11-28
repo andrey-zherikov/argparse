@@ -1453,6 +1453,34 @@ unittest
 }
 
 
+private struct Validators
+{
+    static auto ValueInList(alias values, TYPE)(in Param!TYPE param)
+    {
+        import std.array : assocArray, join;
+        import std.range : repeat, front;
+        import std.conv: to;
+
+        enum valuesAA = assocArray(values, false.repeat);
+        enum allowedValues = values.to!(string[]).join(',');
+
+        static if(is(typeof(values.front) == TYPE))
+            auto paramValues = [param.value];
+        else
+            auto paramValues = param.value;
+
+        foreach(value; paramValues)
+            if(!(value in valuesAA))
+            {
+                param.config.onError("Invalid value '", value, "' for argument '", param.name, "'.\nValid argument values are: ", allowedValues);
+                return false;
+            }
+
+        return true;
+    }
+}
+
+
 // values => bool
 // bool validate(T value)
 // bool validate(T[i] value)
@@ -1979,7 +2007,18 @@ if(!is(T == void))
     import std.traits;
     import std.conv: to;
 
-    static if(isSomeString!T || isNumeric!T || is(T == enum))
+    static if(is(T == enum))
+    {
+        alias DefaultValueParseFunctions = ValueParseFunctions!(
+        void,   // pre process
+        Validators.ValueInList!(EnumMembersAsStrings!T, typeof(RawParam.value)),   // pre validate
+        void,   // parse
+        void,   // validate
+        void,   // action
+        void    // no-value action
+        );
+    }
+    else static if(isSomeString!T || isNumeric!T)
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
         void,   // pre process
@@ -2444,10 +2483,34 @@ unittest
         @(NamedArgument("a").AllowedValues!([1,3,5])) int a;
     }
 
-    static assert(["-a","2"].parseCLIArgs!T.isNull);
     static assert(["-a","3"].parseCLIArgs!T.get == T(3));
     assert(["-a","2"].parseCLIArgs!T.isNull);
     assert(["-a","3"].parseCLIArgs!T.get == T(3));
+}
+
+unittest
+{
+    struct T
+    {
+        @(NamedArgument.AllowedValues!(["apple","pear","banana"]))
+        string fruit;
+    }
+
+    static assert(["--fruit", "apple"].parseCLIArgs!T.get == T("apple"));
+    assert(["--fruit", "kiwi"].parseCLIArgs!T.isNull);
+}
+
+unittest
+{
+    enum Fruit { apple, pear, banana }
+    struct T
+    {
+        @NamedArgument
+        Fruit fruit;
+    }
+
+    static assert(["--fruit", "apple"].parseCLIArgs!T.get == T(Fruit.apple));
+    assert(["--fruit", "kiwi"].parseCLIArgs!T.isNull);
 }
 
 
