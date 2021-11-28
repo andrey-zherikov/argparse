@@ -1512,7 +1512,7 @@ private struct ValidateFunc(alias F, T, string funcName="Validation")
             return true;
         }
         else
-            static assert(false, funcName~" function is not supported");
+            static assert(false, funcName~" function is not supported for type "~T.stringof~": "~typeof(F).stringof);
     }
 }
 
