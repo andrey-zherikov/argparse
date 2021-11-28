@@ -271,10 +271,10 @@ private auto setDefaults(TYPE, alias symbol)(ArgumentInfo info)
     if(info.minValuesCount.isNull) info.minValuesCount = defaultValuesCount!TYPE.min;
     if(info.maxValuesCount.isNull) info.maxValuesCount = defaultValuesCount!TYPE.max;
 
-    if(info.metaValue.length == 0)
+    if(info.placeholder.length == 0)
     {
         import std.uni : toUpper;
-        info.metaValue = info.positional ? symbol : symbol.toUpper;
+        info.placeholder = info.positional ? symbol : symbol.toUpper;
     }
 
     return info;
@@ -291,11 +291,11 @@ unittest
     assert(res.names == [ "default-name" ]);
     assert(res.minValuesCount == defaultValuesCount!int.min);
     assert(res.maxValuesCount == defaultValuesCount!int.max);
-    assert(res.metaValue == "default-name");
+    assert(res.placeholder == "default-name");
 
-    info.metaValue = "myvalue";
+    info.placeholder = "myvalue";
     res = info.setDefaults!(int, "default-name");
-    assert(res.metaValue == "myvalue");
+    assert(res.placeholder == "myvalue");
 }
 
 unittest
@@ -308,11 +308,11 @@ unittest
     assert(res.names == ["default_name"]);
     assert(res.minValuesCount == defaultValuesCount!bool.min);
     assert(res.maxValuesCount == defaultValuesCount!bool.max);
-    assert(res.metaValue == "DEFAULT_NAME");
+    assert(res.placeholder == "DEFAULT_NAME");
 
-    info.metaValue = "myvalue";
+    info.placeholder = "myvalue";
     res = info.setDefaults!(bool, "default_name");
-    assert(res.metaValue == "myvalue");
+    assert(res.placeholder == "myvalue");
 }
 
 unittest
@@ -322,11 +322,11 @@ unittest
 
     ArgumentInfo info;
     auto res = info.setDefaults!(E, "default-name");
-    assert(res.metaValue == "{a,b,c}");
+    assert(res.placeholder == "{a,b,c}");
 
-    info.metaValue = "myvalue";
+    info.placeholder = "myvalue";
     res = info.setDefaults!(E, "default-name");
-    assert(res.metaValue == "myvalue");
+    assert(res.placeholder == "myvalue");
 }
 
 
@@ -2209,16 +2209,16 @@ private struct ArgumentInfo
     string[] names;
 
     string description;
-    string metaValue;
+    string placeholder;
 
     private void setAllowedValues(alias names)()
     {
-        if(metaValue.length == 0)
+        if(placeholder.length == 0)
         {
             import std.conv: to;
             import std.array: join;
             import std.format: format;
-            metaValue = "{%s}".format(names.to!(string[]).join(','));
+            placeholder = "{%s}".format(names.to!(string[]).join(','));
         }
     }
 
@@ -2291,9 +2291,9 @@ private struct ArgumentUDA(alias ValueParseFunctions)
         return this;
     }
 
-    auto ref MetaValue(string value)
+    auto ref Placeholder(string value)
     {
-        info.metaValue = value;
+        info.placeholder = value;
         return this;
     }
 
@@ -2431,7 +2431,7 @@ auto AllowedValues(alias values, ARG)(ARG arg)
 
     enum valuesAA = assocArray(values, false.repeat);
 
-    auto desc = arg.Validation!((KeyType!(typeof(valuesAA)) value) => value in valuesAA);
+    auto desc = arg.Validation!(Validators.ValueInList!(values, KeyType!(typeof(valuesAA))));
     desc.info.setAllowedValues!values;
     return desc;
 }
@@ -2729,7 +2729,7 @@ private void printValue(Output)(auto ref Output output, in ArgumentInfo info)
     if(info.minValuesCount.get == 0)
         output.put('[');
 
-    output.put(info.metaValue);
+    output.put(info.placeholder);
     if(info.maxValuesCount.get > 1)
         output.put(" ...");
 
@@ -2742,7 +2742,7 @@ unittest
     auto test(int min, int max)
     {
         ArgumentInfo info;
-        info.metaValue = "v";
+        info.placeholder = "v";
         info.minValuesCount = min;
         info.maxValuesCount = max;
 
@@ -2814,7 +2814,7 @@ unittest
     auto test(bool positional)
     {
         ArgumentInfo info;
-        info.metaValue = "v";
+        info.placeholder = "v";
         if(positional)
             info.position = 0;
 
@@ -2846,7 +2846,7 @@ unittest
     {
         ArgumentInfo info;
         info.names ~= "foo";
-        info.metaValue = "v";
+        info.placeholder = "v";
         info.required = required;
         if(positional)
             info.position = 0;
