@@ -482,21 +482,26 @@ Valid argument values are: apple,pear,banana
 Note that if the type of destination variable is `enum` then the allowed values are automatically limited to those listed in the `enum`.
 
 
-### Help generation
+## Help generation
+
+### Command
 
 To customize generated help text one can use `Command` UDA that receives optional parameter of a program name.
 If this parameter is not provided then `Runtime.args[0]` is used. Additional parameters are also available for customization:
-- `Usage`. By default, the parser calculates the usage message from the arguments it contains but this can be overridden
+- `Usage` - allows custom usage text. By default, the parser calculates the usage message from the arguments it contains but this can be overridden
   with `Usage` call. If the custom text contains `%(PROG)` then it will be replaced by the program name.
-- `Description`. This text gives a brief description of what the program does and how it works.
-  In help messages, the description is displayed between the command-line usage string and the help messages for the various arguments.
-- `Epilog`. Some programs like to display additional description of the program after the description of the arguments.
-  So setting this text is available through `Epilog` call.
+- `Description` - used to provide a brief description of what the program does and how it works.
+  In help messages, the description is displayed between the usage string and the list of the arguments.
+- `Epilog` - custom text that is printed after the list of the arguments.
 
-In addition to program level customization of the help message, each argument can be customized independently:
-- `Description`. Argument can have its own help text that is printed in help message. This is available by calling `Description`.
-- `HideFromHelp`. Some arguments are not supposed to be printed in help message at all.
-  In this case `HideFromHelp` can be called to hide the argument.
+### Argument
+
+There are some customizations supported on argument level for both `PositionalArgument` and `NamedArgument` UDAs:
+- `Description` - provides brief description of the argument. This text is printed next to the argument in the argument list section of a help message.
+- `HideFromHelp` - can be used to indicate that the argument shouldn't be printed in help message.
+- `Placeholder` - provides custom text that it used to indicate the value of the argument in help message.
+
+### Example
 
 Here is an example of how this customization can be used:
 
@@ -822,8 +827,7 @@ It accepts a function with one of the following signatures:
 - `void action(ref T receiver, Param!ParseType param)`
 
 Parameters:
-- `receiver` is a receiver (destination field that has `@*Argument` UDA) which is supposed to be changed based on a
- `value`/`param`.
+- `receiver` is a receiver (destination field) which is supposed to be changed based on a `value`/`param`.
 - `value`/`param` has a value returned from `Parse` step.
 
 ### Arguments with no values
@@ -845,10 +849,10 @@ is provided in command line. The difference between them can be seen in this exa
         @(NamedArgument.RequireNoValue!20) int b;
     }
 
-    static assert(["-a"].parseCLIArgs!T.get.a == 10);       // use value from UDA
-    static assert(["-b"].parseCLIArgs!T.get.b == 20);       // use vlue from UDA
-    static assert(["-a", "30"].parseCLIArgs!T.get.a == 30); // providing value is allowed
-    assert(["-b", "30"].parseCLIArgs!T.isNull);             // providing value is not allowed
+    assert(["-a"].parseCLIArgs!T.get.a == 10);       // use value from UDA
+    assert(["-b"].parseCLIArgs!T.get.b == 20);       // use value from UDA
+    assert(["-a", "30"].parseCLIArgs!T.get.a == 30); // providing value is allowed
+    assert(["-b", "30"].parseCLIArgs!T.isNull);      // providing value is not allowed
 ```
 
 ### Usage example
