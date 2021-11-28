@@ -271,10 +271,10 @@ private auto setDefaults(TYPE, alias symbol)(ArgumentInfo info)
     if(info.minValuesCount.isNull) info.minValuesCount = defaultValuesCount!TYPE.min;
     if(info.maxValuesCount.isNull) info.maxValuesCount = defaultValuesCount!TYPE.max;
 
-    if(info.metaValue.length == 0)
+    if(info.placeholder.length == 0)
     {
         import std.uni : toUpper;
-        info.metaValue = info.positional ? symbol : symbol.toUpper;
+        info.placeholder = info.positional ? symbol : symbol.toUpper;
     }
 
     return info;
@@ -291,11 +291,11 @@ unittest
     assert(res.names == [ "default-name" ]);
     assert(res.minValuesCount == defaultValuesCount!int.min);
     assert(res.maxValuesCount == defaultValuesCount!int.max);
-    assert(res.metaValue == "default-name");
+    assert(res.placeholder == "default-name");
 
-    info.metaValue = "myvalue";
+    info.placeholder = "myvalue";
     res = info.setDefaults!(int, "default-name");
-    assert(res.metaValue == "myvalue");
+    assert(res.placeholder == "myvalue");
 }
 
 unittest
@@ -308,11 +308,11 @@ unittest
     assert(res.names == ["default_name"]);
     assert(res.minValuesCount == defaultValuesCount!bool.min);
     assert(res.maxValuesCount == defaultValuesCount!bool.max);
-    assert(res.metaValue == "DEFAULT_NAME");
+    assert(res.placeholder == "DEFAULT_NAME");
 
-    info.metaValue = "myvalue";
+    info.placeholder = "myvalue";
     res = info.setDefaults!(bool, "default_name");
-    assert(res.metaValue == "myvalue");
+    assert(res.placeholder == "myvalue");
 }
 
 unittest
@@ -322,11 +322,11 @@ unittest
 
     ArgumentInfo info;
     auto res = info.setDefaults!(E, "default-name");
-    assert(res.metaValue == "{a,b,c}");
+    assert(res.placeholder == "{a,b,c}");
 
-    info.metaValue = "myvalue";
+    info.placeholder = "myvalue";
     res = info.setDefaults!(E, "default-name");
-    assert(res.metaValue == "myvalue");
+    assert(res.placeholder == "myvalue");
 }
 
 
@@ -408,7 +408,7 @@ private bool checkPositionalIndexes(T)()
 private struct Group
 {
     string name;
-    string helpText;
+    string description;
     ulong[] arguments;
 }
 
@@ -416,7 +416,7 @@ private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string a
 
 private struct Arguments(RECEIVER)
 {
-    static assert(getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA).length <= 1,
+    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1,
                   "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
 
     private enum _validate = checkArgumentNames!RECEIVER &&
@@ -511,11 +511,11 @@ private struct Arguments(RECEIVER)
         return findArgumentImpl(convertCase(name) in argsNamed);
     }
 
-    static if(getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA).length == 1)
+    static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
     {
         private void setTrailingArgs(ref RECEIVER receiver, string[] rawValues) const
         {
-            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArgumentUDA)[0]);
+            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArguments)[0]);
             auto target = &__traits(getMember, receiver, symbol);
 
             static if(__traits(compiles, { *target = rawValues; }))
@@ -706,7 +706,7 @@ private auto consumeValuesFromCLI(ref string[] args, in ArgumentInfo argumentInf
 private enum helpArgument = {
     ArgumentInfo arg;
     arg.names = ["h","help"];
-    arg.helpText = "Show this help message and exit";
+    arg.description = "Show this help message and exit";
     arg.minValuesCount = 0;
     arg.maxValuesCount = 0;
     arg.allowBooleanNegation = false;
@@ -1053,7 +1053,7 @@ unittest
         int no_a;
 
         @(PositionalArgument(0, "a")
-        .HelpText("Argument 'a'")
+        .Description("Argument 'a'")
         .Validation!((int a) { return a > 3;})
         .PreValidation!((string s) { return s.length > 0;})
         .Validation!((int a) { return a > 0;})
@@ -1062,7 +1062,7 @@ unittest
 
         int no_b;
 
-        @(NamedArgument(["b", "boo"]).HelpText("Flag boo")
+        @(NamedArgument(["b", "boo"]).Description("Flag boo")
         .AllowNoValue!55
         )
         int b;
@@ -1084,8 +1084,8 @@ unittest
 
     struct T
     {
-        @NamedArgument("a") string a;
-        @NamedArgument("b") string b;
+        string a;
+        string b;
     }
 
     auto test(string[] args)
@@ -1110,7 +1110,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument("a") string a;
+        string a;
     }
 
     {
@@ -1149,7 +1149,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument("a") string a;
+        string a;
     }
 
     int my_main(T command)
@@ -1166,7 +1166,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument("a") string a;
+        string a;
     }
 
     auto args = [ "-a", "A", "-c", "C" ];
@@ -1180,8 +1180,8 @@ unittest
 
     struct T
     {
-        @NamedArgument("x")                      string x;
-        @NamedArgument("foo")                    string foo;
+        @NamedArgument                           string x;
+        @NamedArgument                           string foo;
         @(PositionalArgument(0, "a").Optional()) string a;
         @(PositionalArgument(1, "b").Optional()) string[] b;
     }
@@ -1206,7 +1206,7 @@ unittest
 
     struct T2
     {
-        @NamedArgument("foo") bool foo = true;
+        bool foo = true;
     }
     static assert(["--no-foo"].parseCLIArgs!T2.get == T2(false));
     assert(["--no-foo"].parseCLIArgs!T2.get == T2(false));
@@ -1231,8 +1231,8 @@ unittest
 {
     struct T
     {
-        @NamedArgument("x")   string x;
-        @NamedArgument("foo") string foo;
+        string x;
+        string foo;
     }
 
     auto test(T)(string[] args)
@@ -1261,8 +1261,8 @@ unittest
 
     struct T
     {
-        @NamedArgument("a") bool a;
-        @NamedArgument("b") bool b;
+        bool a;
+        bool b;
     }
     static assert(test!T(["-a","-b"]) == T(true, true));
     static assert(test!T(["-ab"]) == T(true, true));
@@ -1274,7 +1274,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument("b") bool b;
+        bool b;
     }
 
     static assert(["-b"]        .parseCLIArgs!T.get == T(true));
@@ -1453,6 +1453,34 @@ unittest
 }
 
 
+private struct Validators
+{
+    static auto ValueInList(alias values, TYPE)(in Param!TYPE param)
+    {
+        import std.array : assocArray, join;
+        import std.range : repeat, front;
+        import std.conv: to;
+
+        enum valuesAA = assocArray(values, false.repeat);
+        enum allowedValues = values.to!(string[]).join(',');
+
+        static if(is(typeof(values.front) == TYPE))
+            auto paramValues = [param.value];
+        else
+            auto paramValues = param.value;
+
+        foreach(value; paramValues)
+            if(!(value in valuesAA))
+            {
+                param.config.onError("Invalid value '", value, "' for argument '", param.name, "'.\nValid argument values are: ", allowedValues);
+                return false;
+            }
+
+        return true;
+    }
+}
+
+
 // values => bool
 // bool validate(T value)
 // bool validate(T[i] value)
@@ -1484,7 +1512,7 @@ private struct ValidateFunc(alias F, T, string funcName="Validation")
             return true;
         }
         else
-            static assert(false, funcName~" function is not supported");
+            static assert(false, funcName~" function is not supported for type "~T.stringof~": "~typeof(F).stringof);
     }
 }
 
@@ -1979,7 +2007,18 @@ if(!is(T == void))
     import std.traits;
     import std.conv: to;
 
-    static if(isSomeString!T || isNumeric!T || is(T == enum))
+    static if(is(T == enum))
+    {
+        alias DefaultValueParseFunctions = ValueParseFunctions!(
+        void,   // pre process
+        Validators.ValueInList!(EnumMembersAsStrings!T, typeof(RawParam.value)),   // pre validate
+        void,   // parse
+        void,   // validate
+        void,   // action
+        void    // no-value action
+        );
+    }
+    else static if(isSomeString!T || isNumeric!T)
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
         void,   // pre process
@@ -2208,17 +2247,17 @@ private struct ArgumentInfo
 {
     string[] names;
 
-    string helpText;
-    string metaValue;
+    string description;
+    string placeholder;
 
     private void setAllowedValues(alias names)()
     {
-        if(metaValue.length == 0)
+        if(placeholder.length == 0)
         {
             import std.conv: to;
             import std.array: join;
             import std.format: format;
-            metaValue = "{%s}".format(names.to!(string[]).join(','));
+            placeholder = "{%s}".format(names.to!(string[]).join(','));
         }
     }
 
@@ -2279,9 +2318,9 @@ private struct ArgumentUDA(alias ValueParseFunctions)
 
 
 
-    auto ref HelpText(string text)
+    auto ref Description(string text)
     {
-        info.helpText = text;
+        info.description = text;
         return this;
     }
 
@@ -2291,9 +2330,9 @@ private struct ArgumentUDA(alias ValueParseFunctions)
         return this;
     }
 
-    auto ref MetaValue(string value)
+    auto ref Placeholder(string value)
     {
-        info.metaValue = value;
+        info.placeholder = value;
         return this;
     }
 
@@ -2309,24 +2348,21 @@ private struct ArgumentUDA(alias ValueParseFunctions)
         return this;
     }
 
-    auto ref NumberOfValues(ulong num)()
-    if(num > 0)
+    auto ref NumberOfValues(ulong num)
     {
         info.minValuesCount = num;
         info.maxValuesCount = num;
         return this;
     }
 
-    auto ref NumberOfValues(ulong min, ulong max)()
-    if(0 < min && min <= max)
+    auto ref NumberOfValues(ulong min, ulong max)
     {
         info.minValuesCount = min;
         info.maxValuesCount = max;
         return this;
     }
 
-    auto ref MinNumberOfValues(ulong min)()
-    if(0 < min)
+    auto ref MinNumberOfValues(ulong min)
     {
         assert(min <= info.maxValuesCount.get(ulong.max));
 
@@ -2334,8 +2370,7 @@ private struct ArgumentUDA(alias ValueParseFunctions)
         return this;
     }
 
-    auto ref MaxNumberOfValues(ulong max)()
-    if(0 < max)
+    auto ref MaxNumberOfValues(ulong max)
     {
         assert(max >= info.minValuesCount.get(0));
 
@@ -2344,6 +2379,46 @@ private struct ArgumentUDA(alias ValueParseFunctions)
     }
 
     // ReverseSwitch
+}
+
+unittest
+{
+    auto arg = NamedArgument.Description("desc").Placeholder("text");
+    assert(arg.info.description == "desc");
+    assert(arg.info.placeholder == "text");
+    assert(!arg.info.hideFromHelp);
+    assert(!arg.info.required);
+    assert(arg.info.minValuesCount.isNull);
+    assert(arg.info.maxValuesCount.isNull);
+
+    arg = arg.HideFromHelp().Required().NumberOfValues(10);
+    assert(arg.info.hideFromHelp);
+    assert(arg.info.required);
+    assert(arg.info.minValuesCount.get == 10);
+    assert(arg.info.maxValuesCount.get == 10);
+
+    arg = arg.Optional().NumberOfValues(20,30);
+    assert(!arg.info.required);
+    assert(arg.info.minValuesCount.get == 20);
+    assert(arg.info.maxValuesCount.get == 30);
+
+    arg = arg.MinNumberOfValues(2).MaxNumberOfValues(3);
+    assert(arg.info.minValuesCount.get == 2);
+    assert(arg.info.maxValuesCount.get == 3);
+}
+
+unittest
+{
+    struct T
+    {
+        @(NamedArgument.NumberOfValues(1,3))
+        int[] a;
+        @(NamedArgument.NumberOfValues(2))
+        int[] b;
+    }
+
+    assert(["-a","1","2","3","-b","4","5"].parseCLIArgs!T.get == T([1,2,3],[4,5]));
+    assert(["-a","1","-b","4","5"].parseCLIArgs!T.get == T([1],[4,5]));
 }
 
 private enum bool isArgumentUDA(T) = (is(typeof(T.info) == ArgumentInfo) && is(T.parsingFunc));
@@ -2431,7 +2506,7 @@ auto AllowedValues(alias values, ARG)(ARG arg)
 
     enum valuesAA = assocArray(values, false.repeat);
 
-    auto desc = arg.Validation!((KeyType!(typeof(valuesAA)) value) => value in valuesAA);
+    auto desc = arg.Validation!(Validators.ValueInList!(values, KeyType!(typeof(valuesAA))));
     desc.info.setAllowedValues!values;
     return desc;
 }
@@ -2444,10 +2519,34 @@ unittest
         @(NamedArgument("a").AllowedValues!([1,3,5])) int a;
     }
 
-    static assert(["-a","2"].parseCLIArgs!T.isNull);
     static assert(["-a","3"].parseCLIArgs!T.get == T(3));
     assert(["-a","2"].parseCLIArgs!T.isNull);
     assert(["-a","3"].parseCLIArgs!T.get == T(3));
+}
+
+unittest
+{
+    struct T
+    {
+        @(NamedArgument.AllowedValues!(["apple","pear","banana"]))
+        string fruit;
+    }
+
+    static assert(["--fruit", "apple"].parseCLIArgs!T.get == T("apple"));
+    assert(["--fruit", "kiwi"].parseCLIArgs!T.isNull);
+}
+
+unittest
+{
+    enum Fruit { apple, pear, banana }
+    struct T
+    {
+        @NamedArgument
+        Fruit fruit;
+    }
+
+    static assert(["--fruit", "apple"].parseCLIArgs!T.get == T(Fruit.apple));
+    assert(["--fruit", "kiwi"].parseCLIArgs!T.isNull);
 }
 
 
@@ -2475,23 +2574,17 @@ auto NamedArgument(string name)
     return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo([name])).Optional();
 }
 
-private struct TrailingArgumentUDA
-{
-}
+struct TrailingArguments {}
 
-auto TrailingArguments()
-{
-    return TrailingArgumentUDA();
-}
 
 unittest
 {
     struct T
     {
-        @NamedArgument("a")  string a;
-        @NamedArgument("b")  string b;
+        string a;
+        string b;
 
-        @TrailingArguments() string[] args;
+        @TrailingArguments string[] args;
     }
 
     static assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
@@ -2735,7 +2828,7 @@ private void printValue(Output)(auto ref Output output, in ArgumentInfo info)
     if(info.minValuesCount.get == 0)
         output.put('[');
 
-    output.put(info.metaValue);
+    output.put(info.placeholder);
     if(info.maxValuesCount.get > 1)
         output.put(" ...");
 
@@ -2748,7 +2841,7 @@ unittest
     auto test(int min, int max)
     {
         ArgumentInfo info;
-        info.metaValue = "v";
+        info.placeholder = "v";
         info.minValuesCount = min;
         info.maxValuesCount = max;
 
@@ -2820,7 +2913,7 @@ unittest
     auto test(bool positional)
     {
         ArgumentInfo info;
-        info.metaValue = "v";
+        info.placeholder = "v";
         if(positional)
             info.position = 0;
 
@@ -2852,7 +2945,7 @@ unittest
     {
         ArgumentInfo info;
         info.names ~= "foo";
-        info.metaValue = "v";
+        info.placeholder = "v";
         info.required = required;
         if(positional)
             info.position = 0;
@@ -2938,7 +3031,7 @@ unittest
     @(Command("MYPROG").Usage("custom usage of %(PROG)"))
     struct T
     {
-        @NamedArgument("s")  string s;
+        string s;
     }
 
     auto test(string usage)
@@ -3024,7 +3117,7 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
             auto invocation = appender!string;
             invocation.printInvocation(_, _.names, config);
 
-            return tuple!("invocation","help")(invocation[], _.helpText);
+            return tuple!("invocation","help")(invocation[], _.description);
         }).array;
 
     immutable maxInvocationWidth = args.map!(_ => _.invocation.length).maxElement;
@@ -3054,18 +3147,18 @@ unittest
     )
     struct T
     {
-        @NamedArgument("s")  string s;
-        @(NamedArgument("hidden").HideFromHelp())  string hidden;
+        @NamedArgument  string s;
+        @(NamedArgument.HideFromHelp())  string hidden;
 
         enum Fruit { apple, pear };
-        @(NamedArgument(["f","fruit"]).Required().HelpText("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
+        @(NamedArgument(["f","fruit"]).Required().Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
 
-        @(NamedArgument("i").AllowedValues!([1,4,16,8])) int i;
+        @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
 
-        @(PositionalArgument(0).HelpText("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
+        @(PositionalArgument(0).Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
         @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
 
-        @TrailingArguments() string[] args;
+        @TrailingArguments string[] args;
     }
 
     auto test(alias func)()

@@ -57,10 +57,15 @@ static struct Basic
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:
-mixin Main.parseCLIArgs!(Basic, (Basic args)
+mixin Main.parseCLIArgs!(Basic, (args)
 {
-    // do whatever you need
-    return 0;
+  // 'args' has 'Baisc' type
+  static assert(is(typeof(args) == Basic));
+
+  // do whatever you need
+  import std.stdio: writeln;
+  args.writeln;
+  return 0;
 });
 ```
 
@@ -132,10 +137,16 @@ static struct Extended
         int banana;
 }
 
+// This mixin defines standard main function that parses command line and calls the provided function:
 mixin Main.parseCLIArgs!(Extended, (args)
 {
-    // do whatever you need
-    return 0;
+	// 'args' has 'Extended' type
+	static assert(is(typeof(args) == Extended));
+
+	// do whatever you need
+	import std.stdio: writeln;
+	args.writeln;
+	return 0;
 });
 ```
 
@@ -413,7 +424,7 @@ Note that any other character can be used instead of `=` - see [Config](#Config)
 
 A lone double-dash terminates argument parsing by default. It is used to separate program arguments
 from other parameters (e.g., arguments to be passed to another program). To store trailing arguments
-simply add a data member of type `string[]` with `TrailingArguments()` UDA:
+simply add a data member of type `string[]` with `TrailingArguments` UDA:
 
 ```d
 struct T
@@ -421,7 +432,7 @@ struct T
     @NamedArgument  string a;
     @NamedArgument  string b;
 
-    @TrailingArguments() string[] args;
+    @TrailingArguments string[] args;
 }
 
 static assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
@@ -447,21 +458,50 @@ struct T
 static assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
 ```
 
-### Help generation
+### Limit the allowed values
+
+In some cases an argument can receive one of the limited set of values so `AllowedValues` can be used here:
+
+```d
+struct T
+{
+    @(NamedArgument.AllowedValues!(["apple","pear","banana"]))
+    string fruit;
+}
+
+static assert(["--fruit", "apple"].parseCLIArgs!T.get == T("apple"));
+static assert(["--fruit", "kiwi"].parseCLIArgs!T.isNull);              // "kiwi" is not allowed
+```
+
+For the value that is not in the allowed list, this error will be printed:
+```
+Error: Invalid value 'kiwi' for argument '--fruit'.
+Valid argument values are: apple,pear,banana
+```
+
+Note that if the type of destination variable is `enum` then the allowed values are automatically limited to those listed in the `enum`.
+
+
+## Help generation
+
+### Command
 
 To customize generated help text one can use `Command` UDA that receives optional parameter of a program name.
 If this parameter is not provided then `Runtime.args[0]` is used. Additional parameters are also available for customization:
-- `Usage`. By default, the parser calculates the usage message from the arguments it contains but this can be overridden
+- `Usage` - allows custom usage text. By default, the parser calculates the usage message from the arguments it contains but this can be overridden
   with `Usage` call. If the custom text contains `%(PROG)` then it will be replaced by the program name.
-- `Description`. This text gives a brief description of what the program does and how it works.
-  In help messages, the description is displayed between the command-line usage string and the help messages for the various arguments.
-- `Epilog`. Some programs like to display additional description of the program after the description of the arguments.
-  So setting this text is available through `Epilog` call.
+- `Description` - used to provide a brief description of what the program does and how it works.
+  In help messages, the description is displayed between the usage string and the list of the arguments.
+- `Epilog` - custom text that is printed after the list of the arguments.
 
-In addition to program level customization of the help message, each argument can be customized independently:
-- `HelpText`. Argument can have its own help text that is printed in help message. This is available by calling `HelpText`.
-- `HideFromHelp`. Some arguments are not supposed to be printed in help message at all.
-  In this can`HideFromHelp` can be called to hide the argument.
+### Argument
+
+There are some customizations supported on argument level for both `PositionalArgument` and `NamedArgument` UDAs:
+- `Description` - provides brief description of the argument. This text is printed next to the argument in the argument list section of a help message.
+- `HideFromHelp` - can be used to indicate that the argument shouldn't be printed in help message.
+- `Placeholder` - provides custom text that it used to indicate the value of the argument in help message.
+
+### Example
 
 Here is an example of how this customization can be used:
 
@@ -476,14 +516,14 @@ struct T
   @(NamedArgument.HideFromHelp())  string hidden;
 
   enum Fruit { apple, pear };
-  @(NamedArgument("f","fruit").Required().HelpText("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
+  @(NamedArgument("f","fruit").Required().Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
 
   @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
 
-  @(PositionalArgument(0).HelpText("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
+  @(PositionalArgument(0).Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
   @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
 
-  @TrailingArguments() string[] args;
+  @TrailingArguments string[] args;
 }
 
 parseCLIArgs!T(["-h"]);
@@ -491,7 +531,7 @@ parseCLIArgs!T(["-h"]);
 
 This example will print the following help message:
 ```
-usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] param0 {q,a} [-h]
+usage: MYPROG [-s S] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}
 
 custom description
 
@@ -620,6 +660,30 @@ cfg.arraySep = ',';
 
 assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T(cfg).get == T([1,2,3,4,5]));
 ```
+
+#### Specifying number of values
+
+In case the argument is bound to static array then the maximum number of values is set to the size of the array.
+For dynamic array, the number of values is not limited. The minimum number of values is `1` in all cases.
+This behavior can be customized by calling the following functions:
+- `NumberOfValues(ulong min, ulong max)` - sets both minimum and maximum number of values.
+- `NumberOfValues(ulong num)` - sets both minimum and maximum number of values to the same value.
+- `MinNumberOfValues(ulong min)` - sets minimum number of values.
+- `MaxNumberOfValues(ulong max)` - sets maximum number of values.
+
+```d
+struct T
+{
+  @(NamedArgument.NumberOfValues(1,3))
+  int[] a;
+  @(NamedArgument.NumberOfValues(2))
+  int[] b;
+}
+
+assert(["-a","1","2","3","-b","4","5"].parseCLIArgs!T.get == T([1,2,3],[4,5]));
+assert(["-a","1","-b","4","5"].parseCLIArgs!T.get == T([1],[4,5]));
+```
+
 
 ### Associative array
 
@@ -763,8 +827,7 @@ It accepts a function with one of the following signatures:
 - `void action(ref T receiver, Param!ParseType param)`
 
 Parameters:
-- `receiver` is a receiver (destination field that has `@*Argument` UDA) which is supposed to be changed based on a
- `value`/`param`.
+- `receiver` is a receiver (destination field) which is supposed to be changed based on a `value`/`param`.
 - `value`/`param` has a value returned from `Parse` step.
 
 ### Arguments with no values
@@ -786,10 +849,10 @@ is provided in command line. The difference between them can be seen in this exa
         @(NamedArgument.RequireNoValue!20) int b;
     }
 
-    static assert(["-a"].parseCLIArgs!T.get.a == 10);       // use value from UDA
-    static assert(["-b"].parseCLIArgs!T.get.b == 20);       // use vlue from UDA
-    static assert(["-a", "30"].parseCLIArgs!T.get.a == 30); // providing value is allowed
-    assert(["-b", "30"].parseCLIArgs!T.isNull);             // providing value is not allowed
+    assert(["-a"].parseCLIArgs!T.get.a == 10);       // use value from UDA
+    assert(["-b"].parseCLIArgs!T.get.b == 20);       // use value from UDA
+    assert(["-a", "30"].parseCLIArgs!T.get.a == 30); // providing value is allowed
+    assert(["-b", "30"].parseCLIArgs!T.isNull);      // providing value is not allowed
 ```
 
 ### Usage example

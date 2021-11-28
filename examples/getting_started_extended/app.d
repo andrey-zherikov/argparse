@@ -22,8 +22,14 @@ static struct Extended
 	int banana;
 }
 
+// This mixin defines standard main function that parses command line and calls the provided function:
 mixin Main.parseCLIArgs!(Extended, (args)
 {
+	// 'args' has 'Extended' type
+	static assert(is(typeof(args) == Extended));
+
 	// do whatever you need
+	import std.stdio: writeln;
+	args.writeln;
 	return 0;
 });
