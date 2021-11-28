@@ -57,10 +57,15 @@ static struct Basic
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:
-mixin Main.parseCLIArgs!(Basic, (Basic args)
+mixin Main.parseCLIArgs!(Basic, (args)
 {
-    // do whatever you need
-    return 0;
+  // 'args' has 'Baisc' type
+  static assert(is(typeof(args) == Basic));
+
+  // do whatever you need
+  import std.stdio: writeln;
+  args.writeln;
+  return 0;
 });
 ```
 
@@ -132,10 +137,16 @@ static struct Extended
         int banana;
 }
 
+// This mixin defines standard main function that parses command line and calls the provided function:
 mixin Main.parseCLIArgs!(Extended, (args)
 {
-    // do whatever you need
-    return 0;
+	// 'args' has 'Extended' type
+	static assert(is(typeof(args) == Extended));
+
+	// do whatever you need
+	import std.stdio: writeln;
+	args.writeln;
+	return 0;
 });
 ```
 
