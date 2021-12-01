@@ -5,67 +5,97 @@
 
 `argparse` is a self-contained flexible utility to parse command line arguments that can work at compile-time.
 
-**NOTICE: The API is not finalized yet so there might be backward incompatible changes until 1.0 version.
-Please refer to [releases](https://github.com/andrey-zherikov/argparse/releases) for breaking changes.**  
+**NOTICE: The API is not finalized yet so there might be backward incompatible changes until 1.0 version. Please refer
+to [releases](https://github.com/andrey-zherikov/argparse/releases) for breaking changes.**
+
+## Features
+
+- Positional arguments:
+    - Automatic type conversion of the value.
+    - Required by default, can be marked as optional.
+- Named arguments:
+    - Multiple names are supported including short (`-v`) and long (`--verbose`) ones.
+    - Case-sensitive/-insensitive parsing.
+    - Bundling of short names (`-vvv` is same as `-v -v -v`).
+    - Equals sign is accepted (`-v=debug`, `--verbose=debug`).
+    - Automatic type conversion of the value.
+    - Optional by default, can be marked as required.
+- Support different types of destination data member:
+    - Scalar (e.g. `int`, `float`, `bool`).
+    - String arguments.
+    - Enum arguments.
+    - Array arguments.
+    - Hash (associative array) arguments.
+    - Callbacks.
+- Parsing of known arguments only (returning not recognized ones).
+- Options terminator (e.g. parsing up to `--` leaving any argument specified after it).
+- Arguments groups.
+- Fully customizable parsing:
+    - Raw (`string`) data validation (i.e. before parsing).
+    - Custom conversion of argument value (`string` -> any `destination type`).
+    - Validation of parsed data (i.e. after conversion to `destination type`).
+    - Custom action on parsed data (doing something different from storing the parsed value in a member of destination
+      object).
+- Built-in reporting of error happened during argument parsing.
+- Built-in help generation
 
 ## Getting started
 
 Here is the simple example showing the usage of `argparse` utility. It uses the basic approach when all members are
 considered arguments with the same name as the name of member:
 
-
 ```d
 import argparse;
 
 static struct Basic
 {
-  // Basic data types are supported:
-    // --name argument
-    string name;
-  
-    // --number argument
-    int number;
-  
-    // --boolean argument
-    bool boolean;
+    // Basic data types are supported:
+        // --name argument
+        string name;
+    
+        // --number argument
+        int number;
+    
+        // --boolean argument
+        bool boolean;
 
-  // Argument can have default value if it's not specified in command line
-    // --unused argument
-    string unused = "some default value";
+    // Argument can have default value if it's not specified in command line
+        // --unused argument
+        string unused = "some default value";
 
 
-  // Enums are also supported
-    enum Enum { unset, foo, boo }
-    // --choice argument
-    Enum choice;
+    // Enums are also supported
+        enum Enum { unset, foo, boo }
+        // --choice argument
+        Enum choice;
 
-  // Use array to store multiple values
-    // --array argument
-    int[] array;
+    // Use array to store multiple values
+        // --array argument
+        int[] array;
 
-  // Callback with no args (flag)
-    // --callback argument
-    void callback() {}
+    // Callback with no args (flag)
+        // --callback argument
+        void callback() {}
 
-  // Callback with single value
-    // --callback1 argument
-    void callback1(string value) { assert(value == "cb-value"); }
+    // Callback with single value
+        // --callback1 argument
+        void callback1(string value) { assert(value == "cb-value"); }
 
-  // Callback with zero or more values
-    // --callback2 argument
-    void callback2(string[] value) { assert(value == ["cb-v1","cb-v2"]); }
+    // Callback with zero or more values
+        // --callback2 argument
+        void callback2(string[] value) { assert(value == ["cb-v1","cb-v2"]); }
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:
 mixin Main.parseCLIArgs!(Basic, (args)
 {
-  // 'args' has 'Baisc' type
-  static assert(is(typeof(args) == Basic));
-
-  // do whatever you need
-  import std.stdio: writeln;
-  args.writeln;
-  return 0;
+    // 'args' has 'Baisc' type
+    static assert(is(typeof(args) == Basic));
+  
+    // do whatever you need
+    import std.stdio: writeln;
+    args.writeln;
+    return 0;
 });
 ```
 
@@ -138,15 +168,19 @@ static struct Extended
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:
-mixin Main.parseCLIArgs!(Extended, (args)
+mixin Main.parseCLIKnownArgs!(Extended, (args, unparsed)
 {
-	// 'args' has 'Extended' type
-	static assert(is(typeof(args) == Extended));
-
-	// do whatever you need
-	import std.stdio: writeln;
-	args.writeln;
-	return 0;
+    // 'args' has 'Extended' type
+    static assert(is(typeof(args) == Extended));
+    
+    // unparsed arguments has 'string[]' type
+    static assert(is(typeof(unparsed) == string[]));
+    
+    // do whatever you need
+    import std.stdio: writeln;
+    args.writeln;
+    writeln("Unparsed args: ", unparsed);
+    return 0;
 });
 ```
 
@@ -168,78 +202,228 @@ Optional arguments:
   -h, --help              Show this help message and exit
 ```
 
-## Features
+## Argument declaration
 
-- Positional arguments:
-    - Automatic type conversion of the value.
-    - Required by default, can be marked as optional.
-- Named arguments:
-    - Short and long names (`-v`, `--verbose`).
-    - Multiple names are supported.
-    - Case sensitive/insensitive parsing.
-    - Bundling of short names (`-vvv` is same as `-v -v -v`).
-    - Equals sign accepted (`-v=debug`, `--verbose=debug`).
-    - Automatic type conversion of the value.
-    - Optional by default, can be marked as required.
-- User-defined conversion of argument value (`string` -> `destination type`).
-- User-defined validation of argument value:
-    - On raw (`string`) data (i.e. before parsing).
-    - On parsed data (i.e. after parsing).
-- Parsing of known arguments only (returning not recognized ones).
-- Options terminator (e.g. parsing up to `--` leaving any argument specified after it).
-- Support different types of destination data member:
-    - Scalar (e.g. `int`, `float`, `bool`).
-    - String arguments.
-    - Enum arguments.
-    - Array arguments.
-    - Hash (associative array) arguments.
-    - Callbacks.
-- Built-in reporting of error happened during argument parsing.
-- Built-in help generation
+### Positional arguments
 
-## Usage
+Positional arguments are expected to be at a specific position within the command line. This argument can be declared
+using `PositionalArgument` UDA:
 
-### Calling the parser
+```d
+struct Params
+{
+    @PositionalArgument(0)
+    string firstName;
+
+    @PositionalArgument(0, "lastName")
+    string arg;
+}
+```
+
+Parameters of `PositionalArgument` UDA:
+
+|#|Name|Type|Optional/<br/>Required|Description|
+|---|---|---|---|---|
+|1|`position`|`uint`|required|Zero-based unsigned position of the argument.|
+|2|`name`|`string`|optional|Name of this argument that is shown in help text.<br/>If not provided then the name of data member is used.|
+
+### Named arguments
+
+As an opposite to positional there can be named arguments (they are also called as flags or options). They can be
+declared using `NamedArgument` UDA:
+
+```d
+struct Params
+{
+    @NamedArgument
+    string greeting;
+
+    @NamedArgument(["name", "first-name", "n"])
+    string name;
+
+    @NamedArgument("family", "last-name")
+    string family;
+}
+```
+
+Parameters of `NamedArgument` UDA:
+
+|#|Name|Type|Optional/<br/>Required|Description|
+|---|---|---|---|---|
+|1|`name`|`string` or `string[]`|optional|Name(s) of this argument that can show up in command line.|
+
+Named arguments might have multiple names, so they should be specified either as an array of strings or as a list of
+parameters in `NamedArgument` UDA. Argument names can be either single-letter (called as short options)
+or multi-letter (called as long options). Both cases are fully supported with one caveat:
+if a single-letter argument is used with a double-dash (e.g. `--n`) in command line then it behaves the same as a
+multi-letter option. When an argument is used with a single dash then it is treated as a single-letter argument.
+
+The following usages of the argument in the command line are equivalent:
+`--name John`, `--name=John`, `--n John`, `--n=John`, `-nJohn`, `-n John`. Note that any other character can be used
+instead of `=` - see [Parser customization](#parser-customization) for details.
+
+### Trailing arguments
+
+A lone double-dash terminates argument parsing by default. It is used to separate program arguments from other
+parameters (e.g., arguments to be passed to another program). To store trailing arguments simply add a data member of
+type `string[]` with `TrailingArguments` UDA:
+
+```d
+struct T
+{
+    @NamedArgument  string a;
+    @NamedArgument  string b;
+
+    @TrailingArguments string[] args;
+}
+
+static assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
+```
+
+Note that any other character sequence can be used instead of `--` - see [Parser customization](#parser-customization) for details.
+
+### Optional and required arguments
+
+Arguments can be marked as required or optional by adding `Required()` or `.Optional()` to UDA. If required argument is
+not present parser will error out. Positional agruments are required by default.
+
+```d
+struct T
+{
+    @(PositionalArgument(0, "a").Optional())
+    string a = "not set";
+
+    @(NamedArgument.Required())
+    int b;
+}
+
+static assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
+```
+
+### Limit the allowed values
+
+In some cases an argument can receive one of the limited set of values so `AllowedValues` can be used here:
+
+```d
+struct T
+{
+    @(NamedArgument.AllowedValues!(["apple","pear","banana"]))
+    string fruit;
+}
+
+static assert(["--fruit", "apple"].parseCLIArgs!T.get == T("apple"));
+static assert(["--fruit", "kiwi"].parseCLIArgs!T.isNull);              // "kiwi" is not allowed
+```
+
+For the value that is not in the allowed list, this error will be printed:
+
+```
+Error: Invalid value 'kiwi' for argument '--fruit'.
+Valid argument values are: apple,pear,banana
+```
+
+Note that if the type of destination variable is `enum` then the allowed values are automatically limited to those
+listed in the `enum`.
+
+## How to call the parser
+
+### Wrappers for main function
+
+The recommended and most convenient way to use `argparse` is through the `Main` wrapper. It provides the standard
+`main` function that parses command line arguments and calls provided function with an object that contains parsed
+arguments.
+
+There are following mixins available:
+
+- `Main.parseCLIArgs(TYPE, alias newMain, Config config = Config.init)` - parses arguments and ensures that there are no
+  unknown arguments are provided.
+- `Main.parseCLIKnownArgs(TYPE, alias newMain, Config config = Config.init)` - parses known arguments only.
+
+**Usage examples:**
+
+```d
+struct T
+{
+    string a;
+    string b;
+}
+
+mixin Main.parseCLIArgs!(T, (args)
+{
+    // 'args' has 'T' type
+    static assert(is(typeof(args) == T));
+
+    // do whatever you need
+    import std.stdio: writeln;
+    args.writeln;
+    return 0;
+});
+```
+
+```d
+struct T
+{
+    string a;
+    string b;
+}
+
+mixin Main.parseCLIKnownArgs!(T, (args, unparsed)
+{
+    // 'args' has 'T' type
+    static assert(is(typeof(args) == T));
+
+    // unparsed arguments has 'string[]' type
+    static assert(is(typeof(unparsed) == string[]));
+
+    // do whatever you need
+    import std.stdio: writeln;
+    args.writeln;
+    writeln("Unparsed args: ", unparsed);
+    return 0;
+});
+```
+
+### Complete argument parsing
 
 There is a top-level function `parseCLIArgs` that parses the command line. It has the following signatures:
 
 - `ParseCLIResult parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)`
 
-    **Parameters:**
+  **Parameters:**
 
     - `receiver` - the object that's populated with parsed values.
     - `args` - raw command line arguments.
     - `config` - settings that are used for parsing.
 
-    **Return value:**
-    
-    An object that can be cast to `bool` to check whether the parsing was successful or not.  
+  **Return value:**
+
+  An object that can be cast to `bool` to check whether the parsing was successful or not.
 
 - `Nullable!T parseCLIArgs(T)(string[] args, in Config config = Config.init)`
 
-    **Parameters:**
+  **Parameters:**
 
     - `args` - raw command line arguments.
     - `config` - settings that are used for parsing.
 
-    **Return value:**
-    
-    If there is an error happened during the parsing then `null` is returned. Otherwise, an object of
-    type `T` filled with values from the command line.
+  **Return value:**
+
+  If there is an error happened during the parsing then `null` is returned. Otherwise, an object of type `T` filled with
+  values from the command line.
 
 - `int parseCLIArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)`
 
-    **Parameters:**
+  **Parameters:**
 
     - `args` - raw command line arguments.
     - `func` - function that's called with object of type `T` filled with data parsed from command line.
     - `config` - settings that are used for parsing.
     - `initialValue` - initial value for the object passed to `func`.
 
-    **Return value:**
-    
-    If there is an error happened during the parsing then `int.max` is returned. In other case if
-    `func` returns a value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
+  **Return value:**
+
+  If there is an error happened during the parsing then `int.max` is returned. In other case if
+  `func` returns a value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
 
 **Usage example:**
 
@@ -278,64 +462,63 @@ int main(string[] args)
 }
 ```
 
-#### Partial parsing
+### Partial argument parsing
 
 Sometimes a program may only parse a few of the command-line arguments, passing the remaining arguments on to another
-program. In these cases, `parseCLIKnownArgs` function can be used.
-It works much like `parseCLIArgs` except that it does not produce an error when extra arguments are present.
-It has the following signatures:
+program. In these cases, `parseCLIKnownArgs` function can be used. It works much like `parseCLIArgs` except that it does
+not produce an error when extra arguments are present. It has the following signatures:
 
 - `ParseCLIResult parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecognizedArgs, in Config config = Config.init)`
 
-    **Parameters:**
+  **Parameters:**
 
     - `receiver` - the object that's populated with parsed values.
     - `args` - raw command line arguments.
     - `unrecognizedArgs` - raw command line arguments that were not parsed.
     - `config` - settings that are used for parsing.
 
-    **Return value:**
-    
-    An object that can be cast to `bool` to check whether the parsing was successful or not.  
+  **Return value:**
+
+  An object that can be cast to `bool` to check whether the parsing was successful or not.
 
 - `ParseCLIResult parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)`
 
-    **Parameters:**
+  **Parameters:**
 
     - `receiver` - the object that's populated with parsed values.
     - `args` - raw command line arguments that are modified to have parsed arguments removed.
     - `config` - settings that are used for parsing.
 
-    **Return value:**
-    
-    An object that can be cast to `bool` to check whether the parsing was successful or not.  
+  **Return value:**
+
+  An object that can be cast to `bool` to check whether the parsing was successful or not.
 
 - `Nullable!T parseCLIKnownArgs(T)(ref string[] args, in Config config = Config.init)`
 
-    **Parameters:**
+  **Parameters:**
 
     - `args` - raw command line arguments that are modified to have parsed arguments removed.
     - `config` - settings that are used for parsing.
 
-    **Return value:**
-    
-    If there is an error happened during the parsing then `null` is returned. Otherwise, an object of
-    type `T` filled with values from the command line.
+  **Return value:**
+
+  If there is an error happened during the parsing then `null` is returned. Otherwise, an object of type `T` filled with
+  values from the command line.
 
 - `int parseCLIKnownArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)`
 
-    **Parameters:**
+  **Parameters:**
 
     - `args` - raw command line arguments.
-    - `func` - function that's called with object of type `T` filled with data parsed from command line
-        and the unrecognized arguments having the type of `string[]`.
+    - `func` - function that's called with object of type `T` filled with data parsed from command line and the
+      unrecognized arguments having the type of `string[]`.
     - `config` - settings that are used for parsing.
     - `initialValue` - initial value for the object passed to `func`.
 
-    **Return value:**
-    
-    If there is an error happened during the parsing then `int.max` is returned. In other case if
-    `func` returns a value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
+  **Return value:**
+
+  If there is an error happened during the parsing then `int.max` is returned. In other case if
+  `func` returns a value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
 
 **Usage example:**
 
@@ -351,153 +534,26 @@ assert(parseCLIKnownArgs!T(args).get == T("A"));
 assert(args == ["-c", "C"]);
 ```
 
-#### Wrappers for main function
-
-`argparse` offers two mixins for convenience that one can use to wrap custom main function that accepts parameter object
-instead of raw command line in the form of `string[]`:
-- `Main.parseCLIKnownArgs(TYPE, alias newMain, Config config = Config.init)`
-- `Main.parseCLIArgs(TYPE, alias newMain, Config config = Config.init)`
-
-They define standard `main` function that calls
-corresponding parsing function for arguments in `TYPE` type providing `newMain` callback that is called upon successful parsing.
-
-### Positional arguments
-
-Positional arguments are expected to be at a specific position within the command line. This argument can be declared
-using `PositionalArgument` UDA:
-
-```d
-struct Params
-{
-    @PositionalArgument(0)
-    string firstName;
-
-    @PositionalArgument(0, "lastName")
-    string arg;
-}
-```
-
-Parameters of `PositionalArgument` UDA:
-
-|#|Name|Type|Optional/<br/>Required|Description|
-|---|---|---|---|---|
-|1|`position`|`uint`|required|Zero-based unsigned position of the argument.|
-|2|`name`|`string`|optional|Name of this argument that is shown in help text.<br/>If not provided then the name of data member is used.|
-
-### Named arguments
-
-As an opposite to positional there can be named arguments (they are also called as flags or options).
-They can be declared using `NamedArgument` UDA:
-
-```d
-struct Params
-{
-    @NamedArgument
-    string greeting;
-
-    @NamedArgument(["name", "first-name", "n"])
-    string name;
-
-    @NamedArgument("family", "last-name")
-    string family;
-}
-```
-
-Parameters of `NamedArgument` UDA:
-
-|#|Name|Type|Optional/<br/>Required|Description|
-|---|---|---|---|---|
-|1|`name`|`string` or `string[]`|optional|Name(s) of this argument that can show up in command line.|
-
-Named arguments might have multiple names, so they should be specified either as an array of strings or as a list of parameters
-in `NamedArgument` UDA. Argument names can be either single-letter (called as short options)
-or multi-letter (called as long options). Both cases are fully supported with one caveat:
-if a single-letter argument is used with a double-dash (e.g. `--n`) in command line then it
-behaves the same as a multi-letter option. When an argument is used with a single dash then it is
-treated as a single-letter argument.
-
-The following usages of the argument in the command line are equivalent:
-`--name John`, `--name=John`, `--n John`, `--n=John`, `-nJohn`, `-n John`.
-Note that any other character can be used instead of `=` - see [Config](#Config) for details.
-
-### Trailing arguments
-
-A lone double-dash terminates argument parsing by default. It is used to separate program arguments
-from other parameters (e.g., arguments to be passed to another program). To store trailing arguments
-simply add a data member of type `string[]` with `TrailingArguments` UDA:
-
-```d
-struct T
-{
-    @NamedArgument  string a;
-    @NamedArgument  string b;
-
-    @TrailingArguments string[] args;
-}
-
-static assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
-```
-
-Note that any other character sequence can be used instead of `--` - see [Config](#Config) for details.
-
-### Optional and required arguments
-
-Arguments can be marked as required or optional by adding `Required()` or `.Optional()` to UDA.
-If required argument is not present parser will error out. Positional agruments are required by default.
-
-```d
-struct T
-{
-    @(PositionalArgument(0, "a").Optional())
-    string a = "not set";
-
-    @(NamedArgument.Required())
-    int b;
-}
-
-static assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
-```
-
-### Limit the allowed values
-
-In some cases an argument can receive one of the limited set of values so `AllowedValues` can be used here:
-
-```d
-struct T
-{
-    @(NamedArgument.AllowedValues!(["apple","pear","banana"]))
-    string fruit;
-}
-
-static assert(["--fruit", "apple"].parseCLIArgs!T.get == T("apple"));
-static assert(["--fruit", "kiwi"].parseCLIArgs!T.isNull);              // "kiwi" is not allowed
-```
-
-For the value that is not in the allowed list, this error will be printed:
-```
-Error: Invalid value 'kiwi' for argument '--fruit'.
-Valid argument values are: apple,pear,banana
-```
-
-Note that if the type of destination variable is `enum` then the allowed values are automatically limited to those listed in the `enum`.
-
-
 ## Help generation
 
 ### Command
 
-To customize generated help text one can use `Command` UDA that receives optional parameter of a program name.
-If this parameter is not provided then `Runtime.args[0]` is used. Additional parameters are also available for customization:
-- `Usage` - allows custom usage text. By default, the parser calculates the usage message from the arguments it contains but this can be overridden
-  with `Usage` call. If the custom text contains `%(PROG)` then it will be replaced by the program name.
-- `Description` - used to provide a brief description of what the program does and how it works.
-  In help messages, the description is displayed between the usage string and the list of the arguments.
+To customize generated help text one can use `Command` UDA that receives optional parameter of a program name. If this
+parameter is not provided then `Runtime.args[0]` is used. Additional parameters are also available for customization:
+
+- `Usage` - allows custom usage text. By default, the parser calculates the usage message from the arguments it contains
+  but this can be overridden with `Usage` call. If the custom text contains `%(PROG)` then it will be replaced by the
+  program name.
+- `Description` - used to provide a brief description of what the program does and how it works. In help messages, the
+  description is displayed between the usage string and the list of the arguments.
 - `Epilog` - custom text that is printed after the list of the arguments.
 
 ### Argument
 
 There are some customizations supported on argument level for both `PositionalArgument` and `NamedArgument` UDAs:
-- `Description` - provides brief description of the argument. This text is printed next to the argument in the argument list section of a help message.
+
+- `Description` - provides brief description of the argument. This text is printed next to the argument in the argument
+  list section of a help message.
 - `HideFromHelp` - can be used to indicate that the argument shouldn't be printed in help message.
 - `Placeholder` - provides custom text that it used to indicate the value of the argument in help message.
 
@@ -532,6 +588,7 @@ parseCLIArgs!T(["-h"]);
 ```
 
 This example will print the following help message:
+
 ```
 usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}
 
@@ -605,9 +662,9 @@ static assert(["-a","foo"].parseCLIArgs!T.get == T("foo"));
 
 ### Enum
 
-If an argument is bound to an enum, an enum symbol as a string is expected as a value, or right
-within the argument separated with an "=" sign:
-    
+If an argument is bound to an enum, an enum symbol as a string is expected as a value, or right within the argument
+separated with an "=" sign:
+
 ```d
 struct T
 {
@@ -635,9 +692,9 @@ static assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
 
 ### Array
 
-If an argument is bound to 1D array, a new element is appended to this array each time the argument
-is provided in command line. In case if an argument is bound to 2D array then new elements are
-grouped in a way as they appear in command line and then each group is appended to this array:
+If an argument is bound to 1D array, a new element is appended to this array each time the argument is provided in
+command line. In case if an argument is bound to 2D array then new elements are grouped in a way as they appear in
+command line and then each group is appended to this array:
 
 ```d
 struct T
@@ -666,9 +723,10 @@ assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T(cfg).get == T([1,2,3,4,5]));
 
 #### Specifying number of values
 
-In case the argument is bound to static array then the maximum number of values is set to the size of the array.
-For dynamic array, the number of values is not limited. The minimum number of values is `1` in all cases.
-This behavior can be customized by calling the following functions:
+In case the argument is bound to static array then the maximum number of values is set to the size of the array. For
+dynamic array, the number of values is not limited. The minimum number of values is `1` in all cases. This behavior can
+be customized by calling the following functions:
+
 - `NumberOfValues(ulong min, ulong max)` - sets both minimum and maximum number of values.
 - `NumberOfValues(ulong num)` - sets both minimum and maximum number of values to the same value.
 - `MinNumberOfValues(ulong min)` - sets minimum number of values.
@@ -687,11 +745,10 @@ assert(["-a","1","2","3","-b","4","5"].parseCLIArgs!T.get == T([1,2,3],[4,5]));
 assert(["-a","1","-b","4","5"].parseCLIArgs!T.get == T([1],[4,5]));
 ```
 
-
 ### Associative array
 
-If an argument is bound to an associative array, a string of the form "name=value" is expected as
-the next entry in command line, or right within the option separated with an "=" sign:
+If an argument is bound to an associative array, a string of the form "name=value" is expected as the next entry in
+command line, or right within the option separated with an "=" sign:
 
 ```d
 struct T
@@ -726,23 +783,23 @@ An argument can be bound to a function with one of the following signatures
 
 - `... function()`
 
-  In this case, the argument is treated as a flag and the function is called every time when
-  the argument is seen in command line.
+  In this case, the argument is treated as a flag and the function is called every time when the argument is seen in
+  command line.
 
 - `... function(string)`
 
-  In this case, the argument has exactly one value and the function is called every time when
-  the argument is seen in command line and the value specified in command line is provided into `string` parameter.
+  In this case, the argument has exactly one value and the function is called every time when the argument is seen in
+  command line and the value specified in command line is provided into `string` parameter.
 
 - `... function(string[])`
 
-  In this case, the argument has zero or more values and the function is called every time when
-  the argument is seen in command line and the set of values specified in command line is provided into `string[]` parameter.
+  In this case, the argument has zero or more values and the function is called every time when the argument is seen in
+  command line and the set of values specified in command line is provided into `string[]` parameter.
 
 - `... function(RawParam)`
 
-  In this case, the argument has one or more values and the function is called every time when
-  the argument is seen in command line and the set of values specified in command line is provided into parameter.
+  In this case, the argument has one or more values and the function is called every time when the argument is seen in
+  command line and the set of values specified in command line is provided into parameter.
 
 ```d
 static struct T
@@ -760,28 +817,32 @@ static assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
 Some time the functionality provided out of the box is not enough and it needs to be tuned.
 
 Parsing of a command line string values into some typed `receiver` member consists of multiple steps:
+
 - **Pre-validation** - argument values are validated as raw strings.
 - **Parsing** - raw argument values are converted to a different type (usually the type of the receiver).
 - **Validation** - converted value is validated.
-- **Action** - depending on a type of the `receiver`, it might be either assignment of converted value
-  to a `receiver`, appending value if `receiver` is an array or other operation.
+- **Action** - depending on a type of the `receiver`, it might be either assignment of converted value to a `receiver`,
+  appending value if `receiver` is an array or other operation.
 
 In case if argument does not expect any value then the only one step is involved:
+
 - **Action if no value** - similar to **Action** step above but without converted value.
 
 If any of the steps fails then the command line parsing fails as well.
 
-Each of the step above can be customized with UDA modifiers below. These modifiers take a function
-that might accept either argument value(s) or `Param` struct that has these fields (there is also
-an alias, `RawParam`, where the type of the `value` field is `string[]`):
+Each of the step above can be customized with UDA modifiers below. These modifiers take a function that might accept
+either argument value(s) or `Param` struct that has these fields (there is also an alias, `RawParam`, where the type of
+the `value` field is `string[]`):
+
 - `config`- Config object that is passed to parsing function.
 - `name` - Argument name that is specified in command line.
 - `value` - Array of argument values that are provided in command line.
 
 ### Pre-validation
 
-`PreValidation` modifier can be used to customize the validation of raw string values.
-It accepts a function with one of the following signatures:
+`PreValidation` modifier can be used to customize the validation of raw string values. It accepts a function with one of
+the following signatures:
+
 - `bool validate(string value)`
 - `bool validate(string[] value)`
 - `bool validate(RawParam param)`
@@ -790,8 +851,9 @@ The function should return `true` if validation passed and `false` otherwise.
 
 ### Parsing
 
-`Parse` modifier allows providing custom conversion from raw string to typed value.
-It accepts a function with one of the following signatures:
+`Parse` modifier allows providing custom conversion from raw string to typed value. It accepts a function with one of
+the following signatures:
+
 - `ParseType parse(string value)`
 - `ParseType parse(string[] value)`
 - `ParseType parse(RawParam param)`
@@ -799,37 +861,41 @@ It accepts a function with one of the following signatures:
 - `void parse(ref ParseType receiver, RawParam param)`
 
 Parameters:
+
 - `ParseType` is a type that the string value will be parsed to.
 - `value`/`param` values to be parsed.
 - `receiver` is an output variable for parsed value.
 
-Parse function is supposed to parse values from `value`/`param` parameter into `ParseType` type and
-optionally return boolean type indicating whether parsing was done successfully (`true`) or not (`false`).
+Parse function is supposed to parse values from `value`/`param` parameter into `ParseType` type and optionally return
+boolean type indicating whether parsing was done successfully (`true`) or not (`false`).
 
 ### Validation
 
-`Validation` modifier can be used to validate the parsed value.
-It accepts a function with one of the following signatures:
+`Validation` modifier can be used to validate the parsed value. It accepts a function with one of the following
+signatures:
+
 - `bool validate(ParseType value)`
 - `bool validate(ParseType[] value)`
 - `bool validate(Param!ParseType param)`
 
 Parameters:
+
 - `value`/`param` has a value returned from `Parse` step.
 
 The function should return `true` if validation passed and `false` otherwise.
 
 ### Action
 
-`Action` modifier allows providing a custom logic of how `receiver` should be changed when argument
-has a value in command line.
-It accepts a function with one of the following signatures:
+`Action` modifier allows providing a custom logic of how `receiver` should be changed when argument has a value in
+command line. It accepts a function with one of the following signatures:
+
 - `bool action(ref T receiver, ParseType value)`
 - `void action(ref T receiver, ParseType value)`
 - `bool action(ref T receiver, Param!ParseType param)`
 - `void action(ref T receiver, Param!ParseType param)`
 
 Parameters:
+
 - `receiver` is a receiver (destination field) which is supposed to be changed based on a `value`/`param`.
 - `value`/`param` has a value returned from `Parse` step.
 
@@ -840,10 +906,10 @@ Sometimes arguments are allowed to have no values in command line. Here are two 
 - Argument should get specific default value if there is no value provided in command line.
   `AllowNoValue` modifier should be used in this case.
 
-- Argument must not have any values in command line. In this case `RequireNoValue` modifier should be used. 
+- Argument must not have any values in command line. In this case `RequireNoValue` modifier should be used.
 
-Both `AllowNoValue` and `RequireNoValue` modifiers accept a value that should be used when no value
-is provided in command line. The difference between them can be seen in this example:  
+Both `AllowNoValue` and `RequireNoValue` modifiers accept a value that should be used when no value is provided in
+command line. The difference between them can be seen in this example:
 
 ```d
     struct T
@@ -877,9 +943,12 @@ All the above modifiers can be combined in any way:
     static assert(["-a","!4"].parseCLIArgs!T.get.a == 4);
 ```
 
-## Config
+## Parser customization
 
-### Assign character 
+`argparser` provides decent amount of settings to customize the parser. All customizations can be done by creating
+`Config` object with required settings (see below).
+
+### Assign character
 
 `Config.assignChar` - the assignment character used in arguments with value: `-a=5`, `-b=foo`.
 
@@ -887,10 +956,10 @@ Default is equal sign `=`.
 
 ### Array separator
 
-`Config.arraySep` - when set to `char.init`, value to array and associative array receivers are
-treated as an individual value. That is, only one argument is appended inserted per appearance of
-the argument. If `arraySep` is set to something else, then each value is first split by the
-separator, and the individual pieces are treated as values to the same argument.
+`Config.arraySep` - when set to `char.init`, value to array and associative array receivers are treated as an individual
+value. That is, only one argument is appended inserted per appearance of the argument. If `arraySep` is set to something
+else, then each value is first split by the separator, and the individual pieces are treated as values to the same
+argument.
 
 Default is `char.init`.
 
@@ -922,15 +991,15 @@ Default is double-dash `--`.
 
 ### Case sensitivity
 
-`Config.caseSensitive` - by default argument names are case-sensitive. You can change that behavior
-by setting thia member to `false`.
+`Config.caseSensitive` - by default argument names are case-sensitive. You can change that behavior by setting thia
+member to `false`.
 
 Default is `true`.
 
 ### Bundling of single-letter arguments
 
-`Config.bundling` - when it is set to `true`, single-letter arguments can be bundled together,
-i.e. `-abc` is the same as `-a -b -c`.
+`Config.bundling` - when it is set to `true`, single-letter arguments can be bundled together, i.e. `-abc` is the same
+as `-a -b -c`.
 
 Default is `false`.
 
@@ -939,17 +1008,16 @@ Default is `false`.
        Add a -h/--help option to the parser.
        Defaults to true.
 
-`Config.addHelp` - when it is set to `true` then `-h` and `--help` arguments are added to the parser.
-In case if the command line has one of these arguments then the corresponding help text is printed and the parsing
-will be stopped. If `parseCLIKnownArgs` or `parseCLIArgs` is called with function parameter then this callback will not be called.
+`Config.addHelp` - when it is set to `true` then `-h` and `--help` arguments are added to the parser. In case if the
+command line has one of these arguments then the corresponding help text is printed and the parsing will be stopped.
+If `parseCLIKnownArgs` or `parseCLIArgs` is called with function parameter then this callback will not be called.
 
 Default is `true`.
 
 ### Error handling
 
-`Config.errorHandler` - this is a handler function for all errors occurred during parsing the
-command line. It might be either a function or a delegate that takes `string` parameter which would
-be an error message.
+`Config.errorHandler` - this is a handler function for all errors occurred during parsing the command line. It might be
+either a function or a delegate that takes `string` parameter which would be an error message.
 
 The default behavior is to print error message to `stderr`.
 
