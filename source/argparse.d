@@ -467,7 +467,6 @@ private struct Arguments(RECEIVER)
     @property ref Group optionalGroup() { return groups[optionalGroupIndex]; }
     @property ref const(Group) optionalGroup() const { return groups[optionalGroupIndex]; }
 
-    @property auto requiredArguments() const { return requiredGroup.arguments; }
     @property auto positionalArguments() const { return argsPositional; }
 
 
@@ -652,7 +651,7 @@ unittest
     static assert(createArguments!T(true).arguments.length == 6);
 
     auto a = createArguments!T(true);
-    assert(a.requiredArguments == [2,4]);
+    assert(a.requiredGroup.arguments == [2,4]);
     assert(a.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.argsPositional == []);
 }
@@ -666,7 +665,7 @@ unittest
     static assert(createArguments!T(true).arguments.length == 6);
 
     auto a = createArguments!T(true);
-    assert(a.requiredArguments.length == 0);
+    assert(a.requiredGroup.arguments == []);
     assert(a.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.argsPositional == []);
 }
