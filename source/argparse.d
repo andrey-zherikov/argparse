@@ -409,7 +409,20 @@ private struct Group
 {
     string name;
     string description;
-    ulong[] arguments;
+
+    private ulong[] arguments;
+
+    auto ref Description(string text)
+    {
+        description = text;
+        return this;
+    }
+
+}
+
+auto ArgumentGroup(string name)
+{
+    return Group(name);
 }
 
 private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
@@ -440,6 +453,8 @@ private struct Arguments(RECEIVER)
     enum requiredGroupIndex = 0;
     enum optionalGroupIndex = 1;
 
+    ulong[string] groupsByName;
+
     @property ref Group requiredGroup() { return groups[requiredGroupIndex]; }
     @property ref const(Group) requiredGroup() const { return groups[requiredGroupIndex]; }
     @property ref Group optionalGroup() { return groups[optionalGroupIndex]; }
@@ -463,7 +478,28 @@ private struct Arguments(RECEIVER)
         groups = [ Group("Required arguments"), Group("Optional arguments")];
     }
 
+    private void addArgument(ArgumentInfo info, Group group)(ParseFunction!RECEIVER parse)
+    {
+        auto index = (group.name in groupsByName);
+        if(index !is null)
+            addArgument!info(parse, groups[*index]);
+        else
+        {
+            groupsByName[group.name] = groups.length;
+            groups ~= group;
+            addArgument!info(parse, groups[$-1]);
+        }
+    }
+
     private void addArgument(ArgumentInfo info)(ParseFunction!RECEIVER parse)
+    {
+        static if(info.required)
+            addArgument!info(parse, requiredGroup);
+        else
+            addArgument!info(parse, optionalGroup);
+    }
+
+    private void addArgument(ArgumentInfo info)(ParseFunction!RECEIVER parse, ref Group group)
     {
         static assert(info.names.length > 0);
 
@@ -477,19 +513,15 @@ private struct Arguments(RECEIVER)
             argsPositional[info.position.get] = index;
         }
         else
-            static foreach (name; info.names)
+            static foreach(name; info.names)
             {
                 assert(!(name in argsNamed), "Duplicated argument name: "~name);
                 argsNamed[convertCase(name)] = index;
             }
 
-        static if(info.required)
-            requiredGroup.arguments ~= index;
-        else
-            optionalGroup.arguments ~= index;
-
         arguments ~= info;
         parseFunctions ~= parse;
+        group.arguments ~= index;
     }
 
     private auto findArgumentImpl(const ulong* pIndex) const
@@ -527,22 +559,8 @@ private struct Arguments(RECEIVER)
     }
 }
 
-private void addArgument(alias symbol, RECEIVER)(ref Arguments!RECEIVER args)
-{
-    alias member = __traits(getMember, RECEIVER, symbol);
-
-    static assert(getUDAs!(member, ArgumentUDA).length <= 1,
-        "Member "~RECEIVER.stringof~"."~symbol~" has multiple '*Argument' UDAs");
-
-    static if(getUDAs!(member, ArgumentUDA).length > 0)
-        enum uda = getUDAs!(member, ArgumentUDA)[0];
-    else
-        enum uda = NamedArgument();
-
-    enum info = uda.info.setDefaults!(typeof(member), symbol);
-
-    args.addArgument!info(
-    (in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
+private alias ParsingFunction(alias symbol, alias uda, ArgumentInfo info, RECEIVER) =
+    delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
     {
         try
         {
@@ -563,8 +581,30 @@ private void addArgument(alias symbol, RECEIVER)(ref Arguments!RECEIVER args)
             config.onError(argName, ": ", e.msg);
             return false;
         }
-    }
-    );
+    };
+
+
+private void addArgument(alias symbol, RECEIVER)(ref Arguments!RECEIVER args)
+{
+    alias member = __traits(getMember, RECEIVER, symbol);
+
+    static assert(getUDAs!(member, ArgumentUDA).length <= 1,
+        "Member "~RECEIVER.stringof~"."~symbol~" has multiple '*Argument' UDAs");
+
+    static assert(getUDAs!(member, Group).length <= 1,
+        "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
+
+    static if(getUDAs!(member, ArgumentUDA).length > 0)
+        enum uda = getUDAs!(member, ArgumentUDA)[0];
+    else
+        enum uda = NamedArgument();
+
+    enum info = uda.info.setDefaults!(typeof(member), symbol);
+
+    static if(getUDAs!(member, Group).length > 0)
+        args.addArgument!(info, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
+    else
+        args.addArgument!info(ParsingFunction!(symbol, uda, info, RECEIVER));
 }
 
 private auto createArguments(RECEIVER)(bool caseSensitive)
@@ -3053,11 +3093,18 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
 {
     import std.string: wrap, leftJustify;
 
-    if(group.arguments.length == 0)
+    if(group.arguments.length == 0 || group.name.length == 0)
         return;
 
     output.put(group.name);
     output.put(":\n");
+
+    if(group.description.length > 0)
+    {
+        output.put("  ");
+        output.put(group.description);
+        output.put("\n\n");
+    }
 
     immutable ident = spaces(helpPosition + 2);
 
@@ -3124,6 +3171,8 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
     immutable helpPosition = min(maxInvocationWidth + 4, 24);
 
     //positionals, optionals and user-defined groups
+    foreach(ref group; cmd.arguments.groups[2..$])
+        output.printHelp(group, args, helpPosition);
     output.printHelp(cmd.arguments.requiredGroup, args, helpPosition);
     output.printHelp(cmd.arguments.optionalGroup, args, helpPosition);
 
@@ -3192,6 +3241,55 @@ unittest
         "  -i {1,4,16,8}           \n"~
         "  -h, --help              Show this help message and exit\n\n"~
         "custom epilog\n");
+}
+
+unittest
+{
+    @Command("MYPROG")
+    struct T
+    {
+        @(ArgumentGroup("group1").Description("group1 description"))
+        {
+            @NamedArgument
+            {
+                string a;
+                string b;
+            }
+            @PositionalArgument(0) string p;
+        }
+
+        @(ArgumentGroup("group2").Description("group2 description"))
+        @NamedArgument
+        {
+            string c;
+            string d;
+        }
+        @PositionalArgument(1) string q;
+    }
+
+    auto test(alias func)()
+    {
+        import std.array: appender;
+
+        auto a = appender!string;
+        func!T(a, Config.init);
+        return a[];
+    }
+
+    assert(test!printHelp  == "usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
+        "group1:\n"~
+        "  group1 description\n\n"~
+        "  -a A          \n"~
+        "  -b B          \n"~
+        "  p             \n\n"~
+        "group2:\n"~
+        "  group2 description\n\n"~
+        "  -c C          \n"~
+        "  -d D          \n\n"~
+        "Required arguments:\n"~
+        "  q             \n\n"~
+        "Optional arguments:\n"~
+        "  -h, --help    Show this help message and exit\n\n");
 }
 
 unittest
