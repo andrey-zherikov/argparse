@@ -425,6 +425,13 @@ auto ArgumentGroup(string name)
     return Group(name);
 }
 
+unittest
+{
+    auto g = ArgumentGroup("name").Description("description");
+    assert(g.name == "name");
+    assert(g.description == "description");
+}
+
 private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
 
 private struct Arguments(RECEIVER)
