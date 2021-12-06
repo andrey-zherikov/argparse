@@ -617,14 +617,15 @@ private auto createArguments(RECEIVER)(bool caseSensitive)
 {
     auto args = Arguments!RECEIVER(caseSensitive);
 
-    enum filterByUDA = getSymbolsByUDA!(RECEIVER, ArgumentUDA).length > 0 || getSymbolsByUDA!(RECEIVER, NamedArgument).length > 0;
+    enum hasNoUDAs = getSymbolsByUDA!(RECEIVER, ArgumentUDA  ).length == 0 &&
+                     getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0;
 
     static foreach(sym; __traits(allMembers, RECEIVER))
     {{
         alias mem = __traits(getMember,RECEIVER,sym);
 
         static if(!is(mem)) // skip types
-            static if(!filterByUDA || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
+            static if(hasNoUDAs || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
                 addArgument!(sym)(args);
     }}
 
