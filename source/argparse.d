@@ -410,7 +410,7 @@ private struct Group
     string name;
     string description;
 
-    private ulong[] arguments;
+    private size_t[] arguments;
 
     auto ref Description(string text)
     {
@@ -450,17 +450,17 @@ private struct Arguments(RECEIVER)
     private ParseFunction!RECEIVER[] parseFunctions;
 
     // named arguments
-    private ulong[string] argsNamed;
+    private size_t[string] argsNamed;
 
     // positional arguments
-    private ulong[] argsPositional;
+    private size_t[] argsPositional;
 
 
     Group[] groups;
     enum requiredGroupIndex = 0;
     enum optionalGroupIndex = 1;
 
-    ulong[string] groupsByName;
+    size_t[string] groupsByName;
 
     @property ref Group requiredGroup() { return groups[requiredGroupIndex]; }
     @property ref const(Group) requiredGroup() const { return groups[requiredGroupIndex]; }
@@ -530,7 +530,7 @@ private struct Arguments(RECEIVER)
         group.arguments ~= index;
     }
 
-    private auto findArgumentImpl(const ulong* pIndex) const
+    private auto findArgumentImpl(const size_t* pIndex) const
     {
         import std.typecons : Tuple;
 
@@ -539,7 +539,7 @@ private struct Arguments(RECEIVER)
         return pIndex ? Result(&arguments[*pIndex], parseFunctions[*pIndex]) : Result(null, null);
     }
 
-    auto findPositionalArgument(ulong position) const
+    auto findPositionalArgument(size_t position) const
     {
         return findArgumentImpl(position < argsPositional.length ? &argsPositional[position] : null);
     }
@@ -804,7 +804,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
         return true;
     };
 
-    ulong positionalArgIdx = 0;
+    size_t positionalArgIdx = 0;
 
     while(!args.empty)
     {
