@@ -613,6 +613,62 @@ Optional arguments:
 custom epilog
 ```
 
+### Argument groups
+
+By default, parser groups command-line arguments into “required arguments” and “optional arguments” when displaying help
+message. When there is a better conceptual grouping of arguments than this default one, appropriate groups can be
+created using `ArgumentGroup` UDA:
+
+```d
+struct T
+{
+    @(ArgumentGroup("group1").Description("group1 description"))
+    {
+        @NamedArgument
+        {
+            string a;
+            string b;
+        }
+        @PositionalArgument(0) string p;
+    }
+
+    @(ArgumentGroup("group2").Description("group2 description"))
+    @NamedArgument
+    {
+        string c;
+        string d;
+    }
+    @PositionalArgument(1) string q;
+}
+```
+
+When an argument is attributed with a group, the parser treats it just like a normal argument, but displays the argument
+in a separate group for help messages:
+
+```
+usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q
+
+group1:
+  group1 description
+
+  -a A          
+  -b B          
+  p             
+
+group2:
+  group2 description
+
+  -c C          
+  -d D          
+
+Required arguments:
+  q             
+
+Optional arguments:
+  -h, --help    Show this help message and exit
+```
+
+
 ## Supported types
 
 ### Boolean
