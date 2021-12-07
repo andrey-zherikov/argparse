@@ -481,7 +481,7 @@ private struct Arguments(RECEIVER)
                 return str.toUpper;
             };
 
-        groups = [ Group("Required arguments"), Group("Optional arguments")];
+        groups = [ Group("Required arguments"), Group("Optional arguments") ];
     }
 
     private void addArgument(ArgumentInfo info, Group group)(ParseFunction!RECEIVER parse)
@@ -815,7 +815,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
         if(!res.parse(config, arg.origName, receiver, values))
             return false;
 
-        cliArgs[res.index]= true;
+        cliArgs[res.index] = true;
 
         return true;
     };
@@ -851,7 +851,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
 
                 positionalArgIdx++;
 
-                cliArgs[res.index]= true;
+                cliArgs[res.index] = true;
 
                 break;
             }
@@ -888,7 +888,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                         if(!res.parse(config, arg.origName, receiver, ["false"]))
                             return ParseCLIResult.failure;
 
-                        cliArgs[res.index]= true;
+                        cliArgs[res.index] = true;
 
                         break;
                     }
@@ -930,7 +930,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                     if(!res.parse(config, "-"~name, receiver, [arg.name[1..$]]))
                         return ParseCLIResult.failure;
 
-                    cliArgs[res.index]= true;
+                    cliArgs[res.index] = true;
 
                     if(!res.arg.parsingTerminateCode.isNull)
                         return ParseCLIResult(res.arg.parsingTerminateCode.get);
@@ -952,7 +952,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                             if(!res.parse(config, "-"~name, receiver, []))
                                 return ParseCLIResult.failure;
 
-                            cliArgs[res.index]= true;
+                            cliArgs[res.index] = true;
 
                             arg.name = arg.name[1..$];
                         }
@@ -961,7 +961,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                             if(!res.parse(config, "-"~name, receiver, [arg.name[1..$]]))
                                 return ParseCLIResult.failure;
 
-                            cliArgs[res.index]= true;
+                            cliArgs[res.index] = true;
 
                             arg.name = [];
                         }
@@ -3179,10 +3179,14 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
     immutable maxInvocationWidth = args.map!(_ => _.invocation.length).maxElement;
     immutable helpPosition = min(maxInvocationWidth + 4, 24);
 
-    //positionals, optionals and user-defined groups
+    //user-defined groups
     foreach(ref group; cmd.arguments.groups[2..$])
         output.printHelp(group, args, helpPosition);
+
+    //required args
     output.printHelp(cmd.arguments.requiredGroup, args, helpPosition);
+
+    //optionals args
     output.printHelp(cmd.arguments.optionalGroup, args, helpPosition);
 
     if(cmd.info.epilog.length > 0)
