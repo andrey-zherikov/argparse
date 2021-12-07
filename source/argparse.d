@@ -2908,26 +2908,16 @@ unittest
 }
 
 
-private void printArgumentName(Output)(auto ref Output output, string name, in Config config)
+private string getArgumentName(string name, in Config config)
 {
-    output.put(config.namedArgChar);
-    if(name.length > 1)
-        output.put(config.namedArgChar); // long name
-    output.put(name);
+    name = config.namedArgChar ~ name;
+    return name.length > 2 ? config.namedArgChar ~ name : name;
 }
 
 unittest
 {
-    auto test(string name)
-    {
-        import std.array: appender;
-        auto a = appender!string;
-        a.printArgumentName(name, Config.init);
-        return a[];
-    }
-
-    assert(test("f") == "-f");
-    assert(test("foo") == "--foo");
+    assert(getArgumentName("f", Config.init) == "-f");
+    assert(getArgumentName("foo", Config.init) == "--foo");
 }
 
 
@@ -2944,7 +2934,7 @@ private void printInvocation(Output)(auto ref Output output, in ArgumentInfo inf
             if(i > 0)
                 output.put(", ");
 
-            output.printArgumentName(name, config);
+            output.put(getArgumentName(name, config));
 
             if(info.maxValuesCount.get > 0)
             {
