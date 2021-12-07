@@ -530,13 +530,29 @@ private struct Arguments(RECEIVER)
         group.arguments ~= index;
     }
 
+
+    private bool checkRestrictions(in bool[ulong] cliArgs, in Config config) const
+    {
+        foreach(ref arg; requiredGroup.arguments)
+        {
+            if(!(arg in cliArgs))
+            {
+                config.onError("The following argument is required: ", arguments[arg].names[0].getArgumentName(config));
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+
     private auto findArgumentImpl(const size_t* pIndex) const
     {
         import std.typecons : Tuple;
 
-        alias Result = Tuple!(const(ArgumentInfo)*, "arg", ParseFunction!RECEIVER, "parse");
+        alias Result = Tuple!(size_t, "index", const(ArgumentInfo)*, "arg", ParseFunction!RECEIVER, "parse");
 
-        return pIndex ? Result(&arguments[*pIndex], parseFunctions[*pIndex]) : Result(null, null);
+        return pIndex ? Result(*pIndex, &arguments[*pIndex], parseFunctions[*pIndex]) : Result(size_t.max, null, null);
     }
 
     auto findPositionalArgument(size_t position) const
@@ -789,7 +805,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
 
     checkArgumentName!T(config.namedArgChar);
 
-    auto requiredArgs = command.arguments.requiredGroup.arguments.map!(_ => &command.arguments.arguments[_]).assocArray(true.repeat);
+    bool[size_t] cliArgs;
 
     alias parseNamedArg = (arg, res) {
         args.popFront();
@@ -799,7 +815,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
         if(!res.parse(config, arg.origName, receiver, values))
             return false;
 
-        requiredArgs.remove(res.arg);
+        cliArgs[res.index]= true;
 
         return true;
     };
@@ -835,7 +851,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
 
                 positionalArgIdx++;
 
-                requiredArgs.remove(res.arg);
+                cliArgs[res.index]= true;
 
                 break;
             }
@@ -872,7 +888,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                         if(!res.parse(config, arg.origName, receiver, ["false"]))
                             return ParseCLIResult.failure;
 
-                        requiredArgs.remove(res.arg);
+                        cliArgs[res.index]= true;
 
                         break;
                     }
@@ -914,7 +930,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                     if(!res.parse(config, "-"~name, receiver, [arg.name[1..$]]))
                         return ParseCLIResult.failure;
 
-                    requiredArgs.remove(res.arg);
+                    cliArgs[res.index]= true;
 
                     if(!res.arg.parsingTerminateCode.isNull)
                         return ParseCLIResult(res.arg.parsingTerminateCode.get);
@@ -936,7 +952,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                             if(!res.parse(config, "-"~name, receiver, []))
                                 return ParseCLIResult.failure;
 
-                            requiredArgs.remove(res.arg);
+                            cliArgs[res.index]= true;
 
                             arg.name = arg.name[1..$];
                         }
@@ -945,7 +961,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                             if(!res.parse(config, "-"~name, receiver, [arg.name[1..$]]))
                                 return ParseCLIResult.failure;
 
-                            requiredArgs.remove(res.arg);
+                            cliArgs[res.index]= true;
 
                             arg.name = [];
                         }
@@ -976,12 +992,8 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
         }
     }
 
-    if(requiredArgs.length > 0)
-    {
-        import std.algorithm : map;
-        config.onError("The following arguments are required: ", requiredArgs.byKey().map!(arg => arg.names[0]).join(", "));
+    if(!command.arguments.checkRestrictions(cliArgs, config))
         return ParseCLIResult.failure;
-    }
 
     return ParseCLIResult.success;
 }
@@ -3304,4 +3316,15 @@ unittest
     assert(parseCLIKnownArgs!T(args).isNull());
     assert(args.length == 3);
     assert(parseCLIKnownArgs!T(["-h"], (T t, string[] args) { assert(false); }) == 0);
+}
+
+unittest
+{
+    @Command("MYPROG")
+    struct T
+    {
+        @(NamedArgument.Required())  string s;
+    }
+
+    assert(parseCLIArgs!T([], (T t) { assert(false); }) != 0);
 }
