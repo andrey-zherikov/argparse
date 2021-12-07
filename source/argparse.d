@@ -1266,7 +1266,7 @@ unittest
         @(PositionalArgument(0, "a").Optional())
         string a = "not set";
 
-        @(NamedArgument("b").Required())
+        @(NamedArgument.Required())
         int b;
     }
 
@@ -2538,7 +2538,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a").Counter()) int a;
+        @(NamedArgument.Counter()) int a;
     }
 
     static assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
@@ -2563,7 +2563,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a").AllowedValues!([1,3,5])) int a;
+        @(NamedArgument.AllowedValues!([1,3,5])) int a;
     }
 
     static assert(["-a","3"].parseCLIArgs!T.get == T(3));
@@ -2657,8 +2657,8 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")) int[]   a;
-        @(NamedArgument("b")) int[][] b;
+        @(NamedArgument) int[]   a;
+        @(NamedArgument) int[][] b;
     }
 
     static assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
@@ -2671,7 +2671,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")) int[] a;
+        @NamedArgument int[] a;
     }
 
     Config cfg;
@@ -2684,7 +2684,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")) int[string] a;
+        @NamedArgument int[string] a;
     }
 
     static assert(["-a=foo=3","-a","boo=7"].parseCLIArgs!T.get.a == ["foo":3,"boo":7]);
@@ -2695,7 +2695,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")) int[string] a;
+        @NamedArgument int[string] a;
     }
 
     Config cfg;
@@ -2711,7 +2711,7 @@ unittest
     {
         enum Fruit { apple, pear };
 
-        @(NamedArgument("a")) Fruit a;
+        @NamedArgument Fruit a;
     }
 
     static assert(["-a","apple"].parseCLIArgs!T.get == T(T.Fruit.apple));
@@ -2724,7 +2724,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")) string[] a;
+        @NamedArgument string[] a;
     }
 
     assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T.get == T(["1,2,3","4","5"]));
@@ -2739,8 +2739,8 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a").AllowNoValue  !10) int a;
-        @(NamedArgument("b").RequireNoValue!20) int b;
+        @(NamedArgument.AllowNoValue  !10) int a;
+        @(NamedArgument.RequireNoValue!20) int b;
     }
 
     static assert(["-a"].parseCLIArgs!T.get.a == 10);
@@ -2756,7 +2756,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")
+        @(NamedArgument
          .PreValidation!((string s) { return s.length > 1 && s[0] == '!'; })
          .Parse        !((string s) { return s[1]; })
          .Validation   !((char v) { return v >= '0' && v <= '9'; })
@@ -3294,7 +3294,7 @@ unittest
     @Command("MYPROG")
     struct T
     {
-        @(NamedArgument("s").HideFromHelp())  string s;
+        @(NamedArgument.HideFromHelp())  string s;
     }
 
     assert(parseCLIArgs!T(["-h","-s","asd"]).isNull());
