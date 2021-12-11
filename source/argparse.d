@@ -433,6 +433,46 @@ unittest
 }
 
 private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
+private alias Restriction = bool delegate(in Config config, in bool[ulong] cliArgs);
+
+// Have to do this magic because closures are not supported in CFTE
+// DMD v2.098.0 prints "Error: closures are not yet supported in CTFE"
+auto partiallyApply(alias fun,C...)(C context)
+{
+    import std.traits: ParameterTypeTuple;
+    import core.lifetime: move, forward;
+
+    return &new class(move(context))
+    {
+        C context;
+
+        this(C ctx)
+        {
+            foreach(i, ref c; context)
+                c = move(ctx[i]);
+        }
+
+        auto opCall(ParameterTypeTuple!fun[context.length..$] args) const
+        {
+            return fun(context, forward!args);
+        }
+    }.opCall;
+}
+
+private struct Restrictions
+{
+    static Restriction RequiredArg(string errorMessage)(size_t index)
+    {
+        return partiallyApply!((size_t index, in Config config, in bool[ulong] cliArgs)
+        {
+            if(index in cliArgs)
+                return true;
+
+            config.onError(errorMessage);
+            return false;
+        })(index);
+    }
+}
 
 private struct Arguments(RECEIVER)
 {
@@ -461,6 +501,8 @@ private struct Arguments(RECEIVER)
     enum optionalGroupIndex = 1;
 
     size_t[string] groupsByName;
+
+    Restriction[] restrictions;
 
     @property ref Group requiredGroup() { return groups[requiredGroupIndex]; }
     @property ref const(Group) requiredGroup() const { return groups[requiredGroupIndex]; }
@@ -528,19 +570,17 @@ private struct Arguments(RECEIVER)
         arguments ~= info;
         parseFunctions ~= parse;
         group.arguments ~= index;
+
+        static if(info.required)
+            restrictions ~= Restrictions.RequiredArg!(info.names[0])(index);
     }
 
 
     private bool checkRestrictions(in bool[ulong] cliArgs, in Config config) const
     {
-        foreach(ref arg; requiredGroup.arguments)
-        {
-            if(!(arg in cliArgs))
-            {
-                config.onError("The following argument is required: ", arguments[arg].names[0].getArgumentName(config));
+        foreach(restriction; restrictions)
+            if(!restriction(config, cliArgs))
                 return false;
-            }
-        }
 
         return true;
     }
