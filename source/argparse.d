@@ -410,7 +410,7 @@ private struct Group
     string name;
     string description;
 
-    private ulong[] arguments;
+    private size_t[] arguments;
 
     auto ref Description(string text)
     {
@@ -433,6 +433,46 @@ unittest
 }
 
 private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
+private alias Restriction = bool delegate(in Config config, in bool[ulong] cliArgs);
+
+// Have to do this magic because closures are not supported in CFTE
+// DMD v2.098.0 prints "Error: closures are not yet supported in CTFE"
+auto partiallyApply(alias fun,C...)(C context)
+{
+    import std.traits: ParameterTypeTuple;
+    import core.lifetime: move, forward;
+
+    return &new class(move(context))
+    {
+        C context;
+
+        this(C ctx)
+        {
+            foreach(i, ref c; context)
+                c = move(ctx[i]);
+        }
+
+        auto opCall(ParameterTypeTuple!fun[context.length..$] args) const
+        {
+            return fun(context, forward!args);
+        }
+    }.opCall;
+}
+
+private struct Restrictions
+{
+    static Restriction RequiredArg(string errorMessage)(size_t index)
+    {
+        return partiallyApply!((size_t index, in Config config, in bool[ulong] cliArgs)
+        {
+            if(index in cliArgs)
+                return true;
+
+            config.onError(errorMessage);
+            return false;
+        })(index);
+    }
+}
 
 private struct Arguments(RECEIVER)
 {
@@ -450,24 +490,25 @@ private struct Arguments(RECEIVER)
     private ParseFunction!RECEIVER[] parseFunctions;
 
     // named arguments
-    private ulong[string] argsNamed;
+    private size_t[string] argsNamed;
 
     // positional arguments
-    private ulong[] argsPositional;
+    private size_t[] argsPositional;
 
 
     Group[] groups;
     enum requiredGroupIndex = 0;
     enum optionalGroupIndex = 1;
 
-    ulong[string] groupsByName;
+    size_t[string] groupsByName;
+
+    Restriction[] restrictions;
 
     @property ref Group requiredGroup() { return groups[requiredGroupIndex]; }
     @property ref const(Group) requiredGroup() const { return groups[requiredGroupIndex]; }
     @property ref Group optionalGroup() { return groups[optionalGroupIndex]; }
     @property ref const(Group) optionalGroup() const { return groups[optionalGroupIndex]; }
 
-    @property auto requiredArguments() const { return requiredGroup.arguments; }
     @property auto positionalArguments() const { return argsPositional; }
 
 
@@ -482,7 +523,7 @@ private struct Arguments(RECEIVER)
                 return str.toUpper;
             };
 
-        groups = [ Group("Required arguments"), Group("Optional arguments")];
+        groups = [ Group("Required arguments"), Group("Optional arguments") ];
     }
 
     private void addArgument(ArgumentInfo info, Group group)(ParseFunction!RECEIVER parse)
@@ -529,18 +570,32 @@ private struct Arguments(RECEIVER)
         arguments ~= info;
         parseFunctions ~= parse;
         group.arguments ~= index;
+
+        static if(info.required)
+            restrictions ~= Restrictions.RequiredArg!(info.names[0])(index);
     }
 
-    private auto findArgumentImpl(const ulong* pIndex) const
+
+    private bool checkRestrictions(in bool[ulong] cliArgs, in Config config) const
+    {
+        foreach(restriction; restrictions)
+            if(!restriction(config, cliArgs))
+                return false;
+
+        return true;
+    }
+
+
+    private auto findArgumentImpl(const size_t* pIndex) const
     {
         import std.typecons : Tuple;
 
-        alias Result = Tuple!(const(ArgumentInfo)*, "arg", ParseFunction!RECEIVER, "parse");
+        alias Result = Tuple!(size_t, "index", const(ArgumentInfo)*, "arg", ParseFunction!RECEIVER, "parse");
 
-        return pIndex ? Result(&arguments[*pIndex], parseFunctions[*pIndex]) : Result(null, null);
+        return pIndex ? Result(*pIndex, &arguments[*pIndex], parseFunctions[*pIndex]) : Result(size_t.max, null, null);
     }
 
-    auto findPositionalArgument(ulong position) const
+    auto findPositionalArgument(size_t position) const
     {
         return findArgumentImpl(position < argsPositional.length ? &argsPositional[position] : null);
     }
@@ -618,14 +673,15 @@ private auto createArguments(RECEIVER)(bool caseSensitive)
 {
     auto args = Arguments!RECEIVER(caseSensitive);
 
-    enum filterByUDA = getSymbolsByUDA!(RECEIVER, ArgumentUDA).length > 0 || getSymbolsByUDA!(RECEIVER, NamedArgument).length > 0;
+    enum hasNoUDAs = getSymbolsByUDA!(RECEIVER, ArgumentUDA  ).length == 0 &&
+                     getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0;
 
     static foreach(sym; __traits(allMembers, RECEIVER))
     {{
         alias mem = __traits(getMember,RECEIVER,sym);
 
         static if(!is(mem)) // skip types
-            static if(!filterByUDA || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
+            static if(hasNoUDAs || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
                 addArgument!(sym)(args);
     }}
 
@@ -652,7 +708,7 @@ unittest
     static assert(createArguments!T(true).arguments.length == 6);
 
     auto a = createArguments!T(true);
-    assert(a.requiredArguments == [2,4]);
+    assert(a.requiredGroup.arguments == [2,4]);
     assert(a.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.argsPositional == []);
 }
@@ -666,7 +722,7 @@ unittest
     static assert(createArguments!T(true).arguments.length == 6);
 
     auto a = createArguments!T(true);
-    assert(a.requiredArguments.length == 0);
+    assert(a.requiredGroup.arguments == []);
     assert(a.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.argsPositional == []);
 }
@@ -789,7 +845,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
 
     checkArgumentName!T(config.namedArgChar);
 
-    auto requiredArgs = command.arguments.requiredGroup.arguments.map!(_ => &command.arguments.arguments[_]).assocArray(true.repeat);
+    bool[size_t] cliArgs;
 
     alias parseNamedArg = (arg, res) {
         args.popFront();
@@ -799,12 +855,12 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
         if(!res.parse(config, arg.origName, receiver, values))
             return false;
 
-        requiredArgs.remove(res.arg);
+        cliArgs[res.index] = true;
 
         return true;
     };
 
-    ulong positionalArgIdx = 0;
+    size_t positionalArgIdx = 0;
 
     while(!args.empty)
     {
@@ -835,7 +891,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
 
                 positionalArgIdx++;
 
-                requiredArgs.remove(res.arg);
+                cliArgs[res.index] = true;
 
                 break;
             }
@@ -872,7 +928,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                         if(!res.parse(config, arg.origName, receiver, ["false"]))
                             return ParseCLIResult.failure;
 
-                        requiredArgs.remove(res.arg);
+                        cliArgs[res.index] = true;
 
                         break;
                     }
@@ -914,7 +970,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                     if(!res.parse(config, "-"~name, receiver, [arg.name[1..$]]))
                         return ParseCLIResult.failure;
 
-                    requiredArgs.remove(res.arg);
+                    cliArgs[res.index] = true;
 
                     if(!res.arg.parsingTerminateCode.isNull)
                         return ParseCLIResult(res.arg.parsingTerminateCode.get);
@@ -936,7 +992,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                             if(!res.parse(config, "-"~name, receiver, []))
                                 return ParseCLIResult.failure;
 
-                            requiredArgs.remove(res.arg);
+                            cliArgs[res.index] = true;
 
                             arg.name = arg.name[1..$];
                         }
@@ -945,7 +1001,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                             if(!res.parse(config, "-"~name, receiver, [arg.name[1..$]]))
                                 return ParseCLIResult.failure;
 
-                            requiredArgs.remove(res.arg);
+                            cliArgs[res.index] = true;
 
                             arg.name = [];
                         }
@@ -976,12 +1032,8 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
         }
     }
 
-    if(requiredArgs.length > 0)
-    {
-        import std.algorithm : map;
-        config.onError("The following arguments are required: ", requiredArgs.byKey().map!(arg => arg.names[0]).join(", "));
+    if(!command.arguments.checkRestrictions(cliArgs, config))
         return ParseCLIResult.failure;
-    }
 
     return ParseCLIResult.success;
 }
@@ -1266,7 +1318,7 @@ unittest
         @(PositionalArgument(0, "a").Optional())
         string a = "not set";
 
-        @(NamedArgument("b").Required())
+        @(NamedArgument.Required())
         int b;
     }
 
@@ -2538,7 +2590,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a").Counter()) int a;
+        @(NamedArgument.Counter()) int a;
     }
 
     static assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
@@ -2563,7 +2615,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a").AllowedValues!([1,3,5])) int a;
+        @(NamedArgument.AllowedValues!([1,3,5])) int a;
     }
 
     static assert(["-a","3"].parseCLIArgs!T.get == T(3));
@@ -2657,8 +2709,8 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")) int[]   a;
-        @(NamedArgument("b")) int[][] b;
+        @(NamedArgument) int[]   a;
+        @(NamedArgument) int[][] b;
     }
 
     static assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
@@ -2671,7 +2723,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")) int[] a;
+        @NamedArgument int[] a;
     }
 
     Config cfg;
@@ -2684,7 +2736,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")) int[string] a;
+        @NamedArgument int[string] a;
     }
 
     static assert(["-a=foo=3","-a","boo=7"].parseCLIArgs!T.get.a == ["foo":3,"boo":7]);
@@ -2695,7 +2747,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")) int[string] a;
+        @NamedArgument int[string] a;
     }
 
     Config cfg;
@@ -2711,7 +2763,7 @@ unittest
     {
         enum Fruit { apple, pear };
 
-        @(NamedArgument("a")) Fruit a;
+        @NamedArgument Fruit a;
     }
 
     static assert(["-a","apple"].parseCLIArgs!T.get == T(T.Fruit.apple));
@@ -2724,7 +2776,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")) string[] a;
+        @NamedArgument string[] a;
     }
 
     assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T.get == T(["1,2,3","4","5"]));
@@ -2739,8 +2791,8 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a").AllowNoValue  !10) int a;
-        @(NamedArgument("b").RequireNoValue!20) int b;
+        @(NamedArgument.AllowNoValue  !10) int a;
+        @(NamedArgument.RequireNoValue!20) int b;
     }
 
     static assert(["-a"].parseCLIArgs!T.get.a == 10);
@@ -2756,7 +2808,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument("a")
+        @(NamedArgument
          .PreValidation!((string s) { return s.length > 1 && s[0] == '!'; })
          .Parse        !((string s) { return s[1]; })
          .Validation   !((char v) { return v >= '0' && v <= '9'; })
@@ -2908,26 +2960,16 @@ unittest
 }
 
 
-private void printArgumentName(Output)(auto ref Output output, string name, in Config config)
+private string getArgumentName(string name, in Config config)
 {
-    output.put(config.namedArgChar);
-    if(name.length > 1)
-        output.put(config.namedArgChar); // long name
-    output.put(name);
+    name = config.namedArgChar ~ name;
+    return name.length > 2 ? config.namedArgChar ~ name : name;
 }
 
 unittest
 {
-    auto test(string name)
-    {
-        import std.array: appender;
-        auto a = appender!string;
-        a.printArgumentName(name, Config.init);
-        return a[];
-    }
-
-    assert(test("f") == "-f");
-    assert(test("foo") == "--foo");
+    assert(getArgumentName("f", Config.init) == "-f");
+    assert(getArgumentName("foo", Config.init) == "--foo");
 }
 
 
@@ -2944,7 +2986,7 @@ private void printInvocation(Output)(auto ref Output output, in ArgumentInfo inf
             if(i > 0)
                 output.put(", ");
 
-            output.printArgumentName(name, config);
+            output.put(getArgumentName(name, config));
 
             if(info.maxValuesCount.get > 0)
             {
@@ -3177,10 +3219,14 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
     immutable maxInvocationWidth = args.map!(_ => _.invocation.length).maxElement;
     immutable helpPosition = min(maxInvocationWidth + 4, 24);
 
-    //positionals, optionals and user-defined groups
+    //user-defined groups
     foreach(ref group; cmd.arguments.groups[2..$])
         output.printHelp(group, args, helpPosition);
+
+    //required args
     output.printHelp(cmd.arguments.requiredGroup, args, helpPosition);
+
+    //optionals args
     output.printHelp(cmd.arguments.optionalGroup, args, helpPosition);
 
     if(cmd.info.epilog.length > 0)
@@ -3304,7 +3350,7 @@ unittest
     @Command("MYPROG")
     struct T
     {
-        @(NamedArgument("s").HideFromHelp())  string s;
+        @(NamedArgument.HideFromHelp())  string s;
     }
 
     assert(parseCLIArgs!T(["-h","-s","asd"]).isNull());
@@ -3314,4 +3360,15 @@ unittest
     assert(parseCLIKnownArgs!T(args).isNull());
     assert(args.length == 3);
     assert(parseCLIKnownArgs!T(["-h"], (T t, string[] args) { assert(false); }) == 0);
+}
+
+unittest
+{
+    @Command("MYPROG")
+    struct T
+    {
+        @(NamedArgument.Required())  string s;
+    }
+
+    assert(parseCLIArgs!T([], (T t) { assert(false); }) != 0);
 }
