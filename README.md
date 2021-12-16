@@ -534,6 +534,58 @@ assert(parseCLIKnownArgs!T(args).get == T("A"));
 assert(args == ["-c", "C"]);
 ```
 
+## Argument dependencies
+
+### Mutually exclusive arguments
+
+Mutually exclusive arguments (i.e. those that can't be used together) can be declared using `MutuallyExclusive()` UDA:
+
+```d
+struct T
+{
+    @MutuallyExclusive()
+    {
+        string a;
+        string b;
+    }
+}
+
+// Either or no argument is allowed
+assert(parseCLIArgs!T(["-a","a"], (T t) {}) == 0);
+assert(parseCLIArgs!T(["-b","b"], (T t) {}) == 0);
+assert(parseCLIArgs!T([], (T t) {}) == 0);
+
+// Both arguments are not allowed
+assert(parseCLIArgs!T(["-a","a","-b","b"], (T t) { assert(false); }) != 0);
+```
+
+**Note that parenthesis are required in this UDA to work correctly.**
+
+### Mutually required arguments
+
+Mutually required arguments (i.e. those that require other arguments) can be declared using `RequiredTogether()` UDA:
+
+```d
+struct T
+{
+    @RequiredTogether()
+    {
+        string a;
+        string b;
+    }
+}
+
+// Both or no argument is allowed
+assert(parseCLIArgs!T(["-a","a","-b","b"], (T t) {}) == 0);
+assert(parseCLIArgs!T([], (T t) {}) == 0);
+
+// Only one argument is not allowed
+assert(parseCLIArgs!T(["-a","a"], (T t) { assert(false); }) != 0);
+assert(parseCLIArgs!T(["-b","b"], (T t) { assert(false); }) != 0);
+```
+
+**Note that parenthesis are required in this UDA to work correctly.**
+
 ## Help generation
 
 ### Command

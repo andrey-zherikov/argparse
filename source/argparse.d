@@ -432,8 +432,43 @@ unittest
     assert(g.description == "description");
 }
 
+
+private struct RestrictionGroup
+{
+    string location;
+
+    enum Type { together, exclusive }
+    Type type;
+
+    private size_t[] arguments;
+}
+
+auto RequiredTogether(string file=__FILE__, uint line = __LINE__)()
+{
+    import std.conv: to;
+    return RestrictionGroup(file~":"~line.to!string, RestrictionGroup.Type.together);
+}
+
+auto MutuallyExclusive(string file=__FILE__, uint line = __LINE__)()
+{
+    import std.conv: to;
+    return RestrictionGroup(file~":"~line.to!string, RestrictionGroup.Type.exclusive);
+}
+
+unittest
+{
+    auto t = RequiredTogether();
+    assert(t.location.length > 0);
+    assert(t.type == RestrictionGroup.Type.together);
+
+    auto e = MutuallyExclusive();
+    assert(e.location.length > 0);
+    assert(e.type == RestrictionGroup.Type.exclusive);
+}
+
+
 private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
-private alias Restriction = bool delegate(in Config config, in bool[ulong] cliArgs);
+private alias Restriction = bool delegate(in Config config, in bool[size_t] cliArgs);
 
 // Have to do this magic because closures are not supported in CFTE
 // DMD v2.098.0 prints "Error: closures are not yet supported in CTFE"
@@ -461,16 +496,69 @@ auto partiallyApply(alias fun,C...)(C context)
 
 private struct Restrictions
 {
-    static Restriction RequiredArg(string errorMessage)(size_t index)
+    static Restriction RequiredArg(ArgumentInfo info)(size_t index)
     {
-        return partiallyApply!((size_t index, in Config config, in bool[ulong] cliArgs)
+        return partiallyApply!((size_t index, in Config config, in bool[size_t] cliArgs)
         {
             if(index in cliArgs)
                 return true;
 
-            config.onError(errorMessage);
+            config.onError("The following argument is required: ", info.names[0].getArgumentName(config));
             return false;
         })(index);
+    }
+
+    static bool RequiredTogether(in Config config,
+                                 in bool[size_t] cliArgs,
+                                 in size_t[] restrictionArgs,
+                                 in ArgumentInfo[] allArgs)
+    {
+        size_t foundIndex = size_t.max;
+        size_t missedIndex = size_t.max;
+
+        foreach(index; restrictionArgs)
+        {
+            if(index in cliArgs)
+            {
+                if(foundIndex == size_t.max)
+                    foundIndex = index;
+            }
+            else if(missedIndex == size_t.max)
+                missedIndex = index;
+
+            if(foundIndex != size_t.max && missedIndex != size_t.max)
+            {
+                config.onError("Missed argument '", allArgs[missedIndex].names[0].getArgumentName(config),
+                    "' - it is required by argument '", allArgs[foundIndex].names[0].getArgumentName(config),"'");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static bool MutuallyExclusive(in Config config,
+                                  in bool[size_t] cliArgs,
+                                  in size_t[] restrictionArgs,
+                                  in ArgumentInfo[] allArgs)
+    {
+        size_t foundIndex = size_t.max;
+
+        foreach(index; restrictionArgs)
+            if(index in cliArgs)
+            {
+                if(foundIndex == size_t.max)
+                    foundIndex = index;
+                else
+                {
+                    config.onError("Argument '", allArgs[foundIndex].names[0].getArgumentName(config),
+                                   "' is not allowed with argument '", allArgs[index].names[0].getArgumentName(config),"'");
+                    return false;
+                }
+
+            }
+
+        return true;
     }
 }
 
@@ -503,6 +591,7 @@ private struct Arguments(RECEIVER)
     size_t[string] groupsByName;
 
     Restriction[] restrictions;
+    RestrictionGroup[] restrictionGroups;
 
     @property ref Group requiredGroup() { return groups[requiredGroupIndex]; }
     @property ref const(Group) requiredGroup() const { return groups[requiredGroupIndex]; }
@@ -526,28 +615,28 @@ private struct Arguments(RECEIVER)
         groups = [ Group("Required arguments"), Group("Optional arguments") ];
     }
 
-    private void addArgument(ArgumentInfo info, Group group)(ParseFunction!RECEIVER parse)
+    private void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions, Group group)(ParseFunction!RECEIVER parse)
     {
         auto index = (group.name in groupsByName);
         if(index !is null)
-            addArgument!info(parse, groups[*index]);
+            addArgument!(info, restrictions)(parse, groups[*index]);
         else
         {
             groupsByName[group.name] = groups.length;
             groups ~= group;
-            addArgument!info(parse, groups[$-1]);
+            addArgument!(info, restrictions)(parse, groups[$-1]);
         }
     }
 
-    private void addArgument(ArgumentInfo info)(ParseFunction!RECEIVER parse)
+    private void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions = [])(ParseFunction!RECEIVER parse)
     {
         static if(info.required)
-            addArgument!info(parse, requiredGroup);
+            addArgument!(info, restrictions)(parse, requiredGroup);
         else
-            addArgument!info(parse, optionalGroup);
+            addArgument!(info, restrictions)(parse, optionalGroup);
     }
 
-    private void addArgument(ArgumentInfo info)(ParseFunction!RECEIVER parse, ref Group group)
+    private void addArgument(ArgumentInfo info, RestrictionGroup[] argRestrictions = [])(ParseFunction!RECEIVER parse, ref Group group)
     {
         static assert(info.names.length > 0);
 
@@ -572,15 +661,45 @@ private struct Arguments(RECEIVER)
         group.arguments ~= index;
 
         static if(info.required)
-            restrictions ~= Restrictions.RequiredArg!(info.names[0])(index);
+            restrictions ~= Restrictions.RequiredArg!info(index);
+
+        static foreach(restriction; argRestrictions)
+            addRestriction!(info, restriction)(index);
+    }
+
+    private void addRestriction(ArgumentInfo info, RestrictionGroup restriction)(size_t argIndex)
+    {
+        auto groupIndex = (restriction.location in groupsByName);
+        auto index = groupIndex !is null
+            ? *groupIndex
+            : {
+                auto index = groupsByName[restriction.location] = restrictionGroups.length;
+                restrictionGroups ~= restriction;
+                return index;
+            }();
+
+        restrictionGroups[index].arguments ~= argIndex;
     }
 
 
-    private bool checkRestrictions(in bool[ulong] cliArgs, in Config config) const
+    private bool checkRestrictions(in bool[size_t] cliArgs, in Config config) const
     {
         foreach(restriction; restrictions)
             if(!restriction(config, cliArgs))
                 return false;
+
+        foreach(restriction; restrictionGroups)
+            final switch(restriction.type)
+            {
+                case RestrictionGroup.Type.together:
+                    if(!Restrictions.RequiredTogether(config, cliArgs, restriction.arguments, arguments))
+                        return false;
+                    break;
+                case RestrictionGroup.Type.exclusive:
+                    if(!Restrictions.MutuallyExclusive(config, cliArgs, restriction.arguments, arguments))
+                        return false;
+                    break;
+            }
 
         return true;
     }
@@ -663,10 +782,17 @@ private void addArgument(alias symbol, RECEIVER)(ref Arguments!RECEIVER args)
 
     enum info = uda.info.setDefaults!(typeof(member), symbol);
 
+    enum restrictions = {
+        RestrictionGroup[] restrictions;
+        static foreach(gr; getUDAs!(member, RestrictionGroup))
+            restrictions ~= gr;
+        return restrictions;
+    }();
+
     static if(getUDAs!(member, Group).length > 0)
-        args.addArgument!(info, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
+        args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
     else
-        args.addArgument!info(ParsingFunction!(symbol, uda, info, RECEIVER));
+        args.addArgument!(info, restrictions)(ParsingFunction!(symbol, uda, info, RECEIVER));
 }
 
 private auto createArguments(RECEIVER)(bool caseSensitive)
@@ -3371,4 +3497,38 @@ unittest
     }
 
     assert(parseCLIArgs!T([], (T t) { assert(false); }) != 0);
+}
+
+unittest
+{
+    @Command("MYPROG")
+    struct T
+    {
+        @MutuallyExclusive()
+        {
+            string a;
+            string b;
+        }
+    }
+    assert(parseCLIArgs!T(["-a","a","-b","b"], (T t) { assert(false); }) != 0);
+    assert(parseCLIArgs!T(["-a","a"], (T t) {}) == 0);
+    assert(parseCLIArgs!T(["-b","b"], (T t) {}) == 0);
+    assert(parseCLIArgs!T([], (T t) {}) == 0);
+}
+
+unittest
+{
+    @Command("MYPROG")
+    struct T
+    {
+        @RequiredTogether()
+        {
+            string a;
+            string b;
+        }
+    }
+    assert(parseCLIArgs!T(["-a","a","-b","b"], (T t) {}) == 0);
+    assert(parseCLIArgs!T(["-a","a"], (T t) { assert(false); }) != 0);
+    assert(parseCLIArgs!T(["-b","b"], (T t) { assert(false); }) != 0);
+    assert(parseCLIArgs!T([], (T t) {}) == 0);
 }
