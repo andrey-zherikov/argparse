@@ -3266,7 +3266,7 @@ unittest
 
 private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARGS args, int helpPosition)
 {
-    import std.string: wrap, leftJustify;
+    import std.string: leftJustify;
 
     if(group.arguments.length == 0 || group.name.length == 0)
         return;
@@ -3296,7 +3296,7 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
             auto invocation = appender!string;
             invocation ~= "  ";
             invocation ~= arg.invocation.leftJustify(helpPosition);
-            output.put(arg.help.wrap(80-2, invocation[], ident));
+            output.wrapMutiLine(arg.help, 80-2, invocation[], ident);
         }
         else
         {
@@ -3304,7 +3304,7 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
             output.put("  ");
             output.put(arg.invocation);
             output.put("\n");
-            output.put(arg.help.wrap(80-2, ident, ident));
+            output.wrapMutiLine(arg.help, 80-2, ident, ident);
         }
     }
 
@@ -3531,4 +3531,49 @@ unittest
     assert(parseCLIArgs!T(["-a","a"], (T t) { assert(false); }) != 0);
     assert(parseCLIArgs!T(["-b","b"], (T t) { assert(false); }) != 0);
     assert(parseCLIArgs!T([], (T t) {}) == 0);
+}
+
+
+private void wrapMutiLine(Output, S)(auto ref Output output,
+                                     S s,
+                                     in size_t columns = 80,
+                                     S firstindent = null,
+                                     S indent = null,
+                                     in size_t tabsize = 8)
+if (isSomeString!S)
+{
+    import std.string: wrap, lineSplitter, join;
+    import std.algorithm: map, copy;
+
+    auto lines = s.lineSplitter;
+    if(lines.empty)
+    {
+        output.put(firstindent);
+        output.put("\n");
+        return;
+    }
+
+    output.put(lines.front.wrap(columns, firstindent, indent, tabsize));
+    lines.popFront;
+
+    lines.map!(s => s.wrap(columns, indent, indent, tabsize)).copy(output);
+}
+
+unittest
+{
+    string test(string s, size_t columns, string firstindent = null, string indent = null)
+    {
+        import std.array: appender;
+        auto a = appender!string;
+        a.wrapMutiLine(s, columns, firstindent, indent);
+        return a[];
+    }
+    assert(test("a short string", 7) == "a short\nstring\n");
+    assert(test("a\nshort string", 7) == "a\nshort\nstring\n");
+
+    // wrap will not break inside of a word, but at the next space
+    assert(test("a short string", 4) == "a\nshort\nstring\n");
+
+    assert(test("a short string", 7, "\t") == "\ta\nshort\nstring\n");
+    assert(test("a short string", 7, "\t", "    ") == "\ta\n    short\n    string\n");
 }
