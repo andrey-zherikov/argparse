@@ -186,7 +186,7 @@ if(!is(T == void))
     static if(isBoolean!T)
     {
         enum min = 0;
-        enum max = 1;
+        enum max = 0;
     }
     else static if(isSomeString!T || isScalarType!T)
     {
@@ -1503,13 +1503,9 @@ unittest
     }
 
     static assert(["-b"]        .parseCLIArgs!T.get == T(true));
-    static assert(["-b","true"] .parseCLIArgs!T.get == T(true));
-    static assert(["-b","false"].parseCLIArgs!T.get == T(false));
     static assert(["-b=true"]   .parseCLIArgs!T.get == T(true));
     static assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
     assert(["-b"]        .parseCLIArgs!T.get == T(true));
-    assert(["-b","true"] .parseCLIArgs!T.get == T(true));
-    assert(["-b","false"].parseCLIArgs!T.get == T(false));
     assert(["-b=true"]   .parseCLIArgs!T.get == T(true));
     assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
 }
