@@ -113,7 +113,7 @@ alias RawParam = Param!(string[]);
 
 private enum ArgumentType { unknown, positional, shortName, longName }
 
-private auto splitArgumentName(string arg, const Config config)
+private auto splitArgumentNameValue(string arg, const Config config)
 {
     import std.typecons : nullable;
     import std.string : indexOf;
@@ -164,17 +164,17 @@ unittest
 {
     import std.typecons : tuple, nullable;
 
-    static assert(splitArgumentName("", Config.init).tupleof == tuple(ArgumentType.init, string.init, string.init, Nullable!string.init).tupleof);
-    static assert(splitArgumentName("-", Config.init).tupleof == tuple(ArgumentType.init, string.init, string.init, Nullable!string.init).tupleof);
-    static assert(splitArgumentName("abc=4", Config.init).tupleof == tuple(ArgumentType.positional, string.init, string.init, "abc=4").tupleof);
-    static assert(splitArgumentName("-abc", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", "-abc", Nullable!string.init).tupleof);
-    static assert(splitArgumentName("--abc", Config.init).tupleof == tuple(ArgumentType.longName, "abc", "--abc", Nullable!string.init).tupleof);
-    static assert(splitArgumentName("-abc=fd", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", "-abc", "fd").tupleof);
-    static assert(splitArgumentName("--abc=fd", Config.init).tupleof == tuple(ArgumentType.longName, "abc", "--abc", "fd").tupleof);
-    static assert(splitArgumentName("-abc=", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", "-abc", nullable("")).tupleof);
-    static assert(splitArgumentName("--abc=", Config.init).tupleof == tuple(ArgumentType.longName, "abc", "--abc", nullable("")).tupleof);
-    static assert(splitArgumentName("-=abc", Config.init).tupleof == tuple(ArgumentType.shortName, string.init, "-", "abc").tupleof);
-    static assert(splitArgumentName("--=abc", Config.init).tupleof == tuple(ArgumentType.longName, string.init, "--", "abc").tupleof);
+    static assert(splitArgumentNameValue("", Config.init).tupleof == tuple(ArgumentType.init, string.init, string.init, Nullable!string.init).tupleof);
+    static assert(splitArgumentNameValue("-", Config.init).tupleof == tuple(ArgumentType.init, string.init, string.init, Nullable!string.init).tupleof);
+    static assert(splitArgumentNameValue("abc=4", Config.init).tupleof == tuple(ArgumentType.positional, string.init, string.init, "abc=4").tupleof);
+    static assert(splitArgumentNameValue("-abc", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", "-abc", Nullable!string.init).tupleof);
+    static assert(splitArgumentNameValue("--abc", Config.init).tupleof == tuple(ArgumentType.longName, "abc", "--abc", Nullable!string.init).tupleof);
+    static assert(splitArgumentNameValue("-abc=fd", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", "-abc", "fd").tupleof);
+    static assert(splitArgumentNameValue("--abc=fd", Config.init).tupleof == tuple(ArgumentType.longName, "abc", "--abc", "fd").tupleof);
+    static assert(splitArgumentNameValue("-abc=", Config.init).tupleof == tuple(ArgumentType.shortName, "abc", "-abc", nullable("")).tupleof);
+    static assert(splitArgumentNameValue("--abc=", Config.init).tupleof == tuple(ArgumentType.longName, "abc", "--abc", nullable("")).tupleof);
+    static assert(splitArgumentNameValue("-=abc", Config.init).tupleof == tuple(ArgumentType.shortName, string.init, "-", "abc").tupleof);
+    static assert(splitArgumentNameValue("--=abc", Config.init).tupleof == tuple(ArgumentType.longName, string.init, "--", "abc").tupleof);
 }
 
 
@@ -1000,7 +1000,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
             break;
         }
 
-        auto arg = splitArgumentName(args.front, config);
+        auto arg = splitArgumentNameValue(args.front, config);
 
         final switch(arg.type)
         {
