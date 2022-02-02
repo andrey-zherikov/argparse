@@ -2937,7 +2937,11 @@ auto Command(string name = "")
 
 unittest
 {
-    assert(Command("MYPROG").name == "MYPROG");
+    auto a = Command("MYPROG").Usage("usg").Description("desc").Epilog("epi");
+    assert(a.name == "MYPROG");
+    assert(a.usage == "usg");
+    assert(a.description == "desc");
+    assert(a.epilog == "epi");
 }
 
 
