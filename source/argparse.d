@@ -3142,7 +3142,7 @@ unittest
 
 private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
 {
-    output.put("usage: ");
+    output.put("Usage: ");
 
     if(cmd.info.usage.length > 0)
         substituteProg(output, cmd.info.usage, cmd.info.name);
@@ -3164,9 +3164,9 @@ private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T
         print(cmd.arguments.arguments.filter!((ref _) => !_.positional));
         // positional args
         print(cmd.arguments.positionalArguments.map!(ref (_) => cmd.arguments.arguments[_]));
-
-        output.put('\n');
     }
+
+    output.put('\n');
 }
 
 void printUsage(T, Output)(auto ref Output output, in Config config)
@@ -3191,7 +3191,7 @@ unittest
         return a[];
     }
 
-    enum expected = "usage: custom usage of MYPROG";
+    enum expected = "Usage: custom usage of MYPROG\n";
     static assert(test("custom usage of %(PROG)") == expected);
     assert(test("custom usage of %(PROG)") == expected);
 }
@@ -3335,8 +3335,8 @@ unittest
     static assert(test!printUsage.length > 0);  // ensure that it works at compile time
     static assert(test!printHelp .length > 0);  // ensure that it works at compile time
 
-    assert(test!printUsage == "usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n");
-    assert(test!printHelp  == "usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
+    assert(test!printUsage == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n");
+    assert(test!printHelp  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
         "custom description\n\n"~
         "Required arguments:\n"~
         "  -f {apple,pear}, --fruit {apple,pear}\n"~
@@ -3388,7 +3388,7 @@ unittest
         return a[];
     }
 
-    assert(test!printHelp  == "usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
+    assert(test!printHelp  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
         "group1:\n"~
         "  group1 description\n\n"~
         "  -a A          \n"~
