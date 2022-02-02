@@ -956,7 +956,7 @@ struct ParseCLIResult
 private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                                             string[] args,
                                             out string[] unrecognizedArgs,
-                                            const ref CommandArguments!T command,
+                                            const ref Arguments!T cmdArguments,
                                             in Config config)
 {
     import std.algorithm: map;
@@ -992,7 +992,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
     }
 
     auto positionalArg(CLIArgument.Positional) {
-        auto foundArg = command.arguments.findPositionalArgument(positionalArgIdx);
+        auto foundArg = cmdArguments.findPositionalArgument(positionalArgIdx);
         if(foundArg.arg is null)
             return unknownArg();
 
@@ -1006,11 +1006,11 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
     alias namedLongArg = (CLIArgument.NamedLong arg) {
         import std.algorithm : startsWith;
 
-        auto foundArg = command.arguments.findNamedArgument(arg.name);
+        auto foundArg = cmdArguments.findNamedArgument(arg.name);
 
         if(foundArg.arg is null && arg.name.startsWith("no-"))
         {
-            foundArg = command.arguments.findNamedArgument(arg.name[3..$]);
+            foundArg = cmdArguments.findNamedArgument(arg.name[3..$]);
             if(foundArg.arg is null || !foundArg.arg.allowBooleanNegation)
                 return unknownArg();
 
@@ -1025,7 +1025,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
     };
 
     alias namedShortArg = (CLIArgument.NamedShort arg) {
-        auto foundArg = command.arguments.findNamedArgument(arg.name);
+        auto foundArg = cmdArguments.findNamedArgument(arg.name);
         if(foundArg.arg !is null)
         {
             args.popFront();
@@ -1036,7 +1036,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
         do
         {
             auto name = [arg.name[0]];
-            foundArg = command.arguments.findNamedArgument(name);
+            foundArg = cmdArguments.findNamedArgument(name);
             if(foundArg.arg is null)
                 return unknownArg();
 
@@ -1074,8 +1074,8 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
         if(config.endOfArgs.length > 0 && args.front == config.endOfArgs)
         {
             // End of arguments
-            static if(is(typeof(command.arguments.setTrailingArgs)))
-                command.arguments.setTrailingArgs(receiver, args[1..$]);
+            static if(is(typeof(cmdArguments.setTrailingArgs)))
+                cmdArguments.setTrailingArgs(receiver, args[1..$]);
             else
                 unrecognizedArgs ~= args[1..$];
             break;
@@ -1091,7 +1091,7 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
             return res;
     }
 
-    if(!command.arguments.checkRestrictions(cliArgs, config))
+    if(!cmdArguments.checkRestrictions(cliArgs, config))
         return ParseCLIResult.failure;
 
     return ParseCLIResult.success;
@@ -1103,7 +1103,7 @@ ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                                     in Config config = Config.init)
 {
     auto command = CommandArguments!T(config);
-    return parseCLIKnownArgs(receiver, args, unrecognizedArgs, command, config);
+    return parseCLIKnownArgs(receiver, args, unrecognizedArgs, command.arguments, config);
 }
 
 auto parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)
