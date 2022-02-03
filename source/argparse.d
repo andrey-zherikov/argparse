@@ -252,61 +252,72 @@ unittest
     assert(EnumMembersAsStrings!E == ["abc", "def", "ghi"]);
 }
 
-private auto setDefaults(TYPE, alias symbol)(ArgumentInfo info)
+private auto setDefaults(ArgumentInfo uda, TYPE, alias symbol)()
 {
+    ArgumentInfo info = uda;
+
     static if(!isBoolean!TYPE)
         info.allowBooleanNegation = false;
 
     static if(is(TYPE == enum))
         info.setAllowedValues!(EnumMembersAsStrings!TYPE);
 
-    if(info.names.length == 0)
+    static if(uda.names.length == 0)
         info.names = [ symbol ];
 
-    if(info.minValuesCount.isNull) info.minValuesCount = defaultValuesCount!TYPE.min;
-    if(info.maxValuesCount.isNull) info.maxValuesCount = defaultValuesCount!TYPE.max;
+    static if(uda.minValuesCount.isNull) info.minValuesCount = defaultValuesCount!TYPE.min;
+    static if(uda.maxValuesCount.isNull) info.maxValuesCount = defaultValuesCount!TYPE.max;
 
-    if(info.placeholder.length == 0)
-    {
-        import std.uni : toUpper;
-        info.placeholder = info.positional ? symbol : symbol.toUpper;
-    }
+    static if(uda.placeholder.length == 0)
+        if(info.placeholder.length == 0)
+        {
+            import std.uni : toUpper;
+            info.placeholder = info.positional ? symbol : symbol.toUpper;
+        }
 
     return info;
 }
 
 unittest
 {
-    ArgumentInfo info;
-    info.allowBooleanNegation = true;
-    info.position = 0;
+    auto createInfo(string placeholder = "")()
+    {
+        ArgumentInfo info;
+        info.allowBooleanNegation = true;
+        info.position = 0;
+        info.placeholder = placeholder;
+        return info;
+    }
 
-    auto res = info.setDefaults!(int, "default-name");
+    auto res = setDefaults!(createInfo(), int, "default-name");
     assert(!res.allowBooleanNegation);
     assert(res.names == [ "default-name" ]);
     assert(res.minValuesCount == defaultValuesCount!int.min);
     assert(res.maxValuesCount == defaultValuesCount!int.max);
     assert(res.placeholder == "default-name");
 
-    info.placeholder = "myvalue";
-    res = info.setDefaults!(int, "default-name");
+    res = setDefaults!(createInfo!"myvalue", int, "default-name");
     assert(res.placeholder == "myvalue");
 }
 
 unittest
 {
-    ArgumentInfo info;
-    info.allowBooleanNegation = true;
+    auto createInfo(string placeholder = "")()
+    {
+        ArgumentInfo info;
+        info.allowBooleanNegation = true;
+        info.placeholder = placeholder;
+        return info;
+    }
 
-    auto res = info.setDefaults!(bool, "default_name");
+    auto res = setDefaults!(createInfo(), bool, "default_name");
     assert(res.allowBooleanNegation);
     assert(res.names == ["default_name"]);
     assert(res.minValuesCount == defaultValuesCount!bool.min);
     assert(res.maxValuesCount == defaultValuesCount!bool.max);
     assert(res.placeholder == "DEFAULT_NAME");
 
-    info.placeholder = "myvalue";
-    res = info.setDefaults!(bool, "default_name");
+    res = setDefaults!(createInfo!"myvalue", bool, "default_name");
     assert(res.placeholder == "myvalue");
 }
 
@@ -315,12 +326,17 @@ unittest
     enum E { a=1, b=1, c }
     static assert(EnumMembersAsStrings!E == ["a","b","c"]);
 
-    ArgumentInfo info;
-    auto res = info.setDefaults!(E, "default-name");
+    auto createInfo(string placeholder = "")()
+    {
+        ArgumentInfo info;
+        info.placeholder = placeholder;
+        return info;
+    }
+
+    auto res = setDefaults!(createInfo(), E, "default-name");
     assert(res.placeholder == "{a,b,c}");
 
-    info.placeholder = "myvalue";
-    res = info.setDefaults!(E, "default-name");
+    res = setDefaults!(createInfo!"myvalue", E, "default-name");
     assert(res.placeholder == "myvalue");
 }
 
@@ -778,7 +794,7 @@ private void addArgument(alias symbol, RECEIVER)(ref Arguments!RECEIVER args)
     else
         enum uda = NamedArgument();
 
-    enum info = uda.info.setDefaults!(typeof(member), symbol);
+    enum info = setDefaults!(uda.info, typeof(member), symbol);
 
     enum restrictions = {
         RestrictionGroup[] restrictions;
@@ -3060,21 +3076,24 @@ private void printInvocation(Output)(auto ref Output output, in ArgumentInfo inf
 
 unittest
 {
-    auto test(bool positional)
+    auto test(bool positional)()
     {
-        ArgumentInfo info;
-        info.placeholder = "v";
-        if(positional)
-            info.position = 0;
+        enum info = {
+            ArgumentInfo info;
+            info.placeholder = "v";
+            static if (positional)
+                info.position = 0;
+            return info;
+        }();
 
         import std.array: appender;
         auto a = appender!string;
-        a.printInvocation(info.setDefaults!(int, "foo"), ["f","foo"], Config.init);
+        a.printInvocation(setDefaults!(info, int, "foo"), ["f","foo"], Config.init);
         return a[];
     }
 
-    assert(test(false) == "-f v, --foo v");
-    assert(test(true) == "v");
+    assert(test!false == "-f v, --foo v");
+    assert(test!true == "v");
 }
 
 
@@ -3091,25 +3110,28 @@ private void printUsage(Output)(auto ref Output output, in ArgumentInfo info, in
 
 unittest
 {
-    auto test(bool required, bool positional)
+    auto test(bool required, bool positional)()
     {
-        ArgumentInfo info;
-        info.names ~= "foo";
-        info.placeholder = "v";
-        info.required = required;
-        if(positional)
-            info.position = 0;
+        enum info = {
+            ArgumentInfo info;
+            info.names ~= "foo";
+            info.placeholder = "v";
+            info.required = required;
+            static if (positional)
+                info.position = 0;
+            return info;
+        }();
 
         import std.array: appender;
         auto a = appender!string;
-        a.printUsage(info.setDefaults!(int, "foo"), Config.init);
+        a.printUsage(setDefaults!(info, int, "foo"), Config.init);
         return a[];
     }
 
-    assert(test(false, false) == "[--foo v]");
-    assert(test(false, true) == "[v]");
-    assert(test(true, false) == "--foo v");
-    assert(test(true, true) == "v");
+    assert(test!(false, false) == "[--foo v]");
+    assert(test!(false, true) == "[v]");
+    assert(test!(true, false) == "--foo v");
+    assert(test!(true, true) == "v");
 }
 
 
