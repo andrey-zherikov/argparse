@@ -702,11 +702,14 @@ private struct Arguments(RECEIVER)
 
     private auto findArgumentImpl(const size_t* pIndex) const
     {
-        import std.typecons : Tuple;
+        struct Result
+        {
+            size_t index = size_t.max;
+            const(ArgumentInfo)* arg;
+            ParseFunction!RECEIVER parse;
+        }
 
-        alias Result = Tuple!(size_t, "index", const(ArgumentInfo)*, "arg", ParseFunction!RECEIVER, "parse");
-
-        return pIndex ? Result(*pIndex, &arguments[*pIndex], parseFunctions[*pIndex]) : Result(size_t.max, null, null);
+        return pIndex ? Result(*pIndex, &arguments[*pIndex], parseFunctions[*pIndex]) : Result.init;
     }
 
     auto findPositionalArgument(size_t position) const
@@ -962,7 +965,6 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
     import std.algorithm: map;
     import std.array: assocArray;
     import std.range: repeat, empty, front, popFront, join;
-    import std.typecons : tuple;
     import std.sumtype : match;
 
     checkArgumentName!T(config.namedArgChar);
@@ -3264,15 +3266,18 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
         cmd.arguments.arguments
         .map!((ref _)
         {
-            import std.typecons : tuple;
+            struct Result
+            {
+                string invocation, help;
+            }
 
             if(_.hideFromHelp)
-                return tuple!("invocation","help")("", "");
+                return Result.init;
 
             auto invocation = appender!string;
             invocation.printInvocation(_, _.names, config);
 
-            return tuple!("invocation","help")(invocation[], _.description);
+            return Result(invocation[], _.description);
         }).array;
 
     immutable maxInvocationWidth = args.map!(_ => _.invocation.length).maxElement;
