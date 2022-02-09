@@ -387,7 +387,7 @@ mixin Main.parseCLIKnownArgs!(T, (args, unparsed)
 
 There is a top-level function `parseCLIArgs` that parses the command line. It has the following signatures:
 
-- `ParseCLIResult parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)`
+- `Result parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)`
 
   **Parameters:**
 
@@ -468,7 +468,7 @@ Sometimes a program may only parse a few of the command-line arguments, passing 
 program. In these cases, `parseCLIKnownArgs` function can be used. It works much like `parseCLIArgs` except that it does
 not produce an error when extra arguments are present. It has the following signatures:
 
-- `ParseCLIResult parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecognizedArgs, in Config config = Config.init)`
+- `Result parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecognizedArgs, in Config config = Config.init)`
 
   **Parameters:**
 
@@ -481,7 +481,7 @@ not produce an error when extra arguments are present. It has the following sign
 
   An object that can be cast to `bool` to check whether the parsing was successful or not.
 
-- `ParseCLIResult parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)`
+- `Result parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)`
 
   **Parameters:**
 
