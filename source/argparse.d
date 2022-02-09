@@ -481,7 +481,7 @@ unittest
 }
 
 
-private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
+private alias ParseFunction(RECEIVER) = Result delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
 private alias Restriction = bool delegate(in Config config, in bool[size_t] cliArgs);
 
 // Have to do this magic because closures are not supported in CFTE
@@ -763,21 +763,21 @@ private alias ParsingFunction(alias symbol, alias uda, ArgumentInfo info, RECEIV
         try
         {
             if(!info.checkValuesCount(config, argName, rawValues.length))
-                return false;
+                return Result.Failure;
 
             auto param = RawParam(config, argName, rawValues);
 
             auto target = &__traits(getMember, receiver, symbol);
 
             static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                return uda.parsingFunc.parse(target, param);
+                return uda.parsingFunc.parse(target, param) ? Result.Success : Result.Failure;
             else
-                return uda.parsingFunc.parse(*target, param);
+                return uda.parsingFunc.parse(*target, param) ? Result.Success : Result.Failure;
         }
         catch(Exception e)
         {
             config.onError(argName, ": ", e.msg);
-            return false;
+            return Result.Failure;
         }
     };
 
@@ -960,22 +960,22 @@ private enum helpArgument = {
     return arg;
 }();
 
-struct ParseCLIResult
+struct Result
 {
     int  resultCode;
 
-    private bool done;
+    private bool success;
 
-    bool opCast(type)() if (is(type == bool))
+    bool opCast(type)() const if (is(type == bool))
     {
-        return done;
+        return success;
     }
 
-    private static enum failure = ParseCLIResult(1);
-    private static enum success = ParseCLIResult(0, true);
+    private static enum Failure = Result(1);
+    private static enum Success = Result(0, true);
 }
 
-private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
+private Result parseCLIKnownArgs(T)(ref T receiver,
                                             string[] args,
                                             out string[] unrecognizedArgs,
                                             const ref Arguments!T cmdArguments,
@@ -995,21 +995,22 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
     alias parseArgument = (string value, nameWithDash, foundArg) {
         auto values = value is null ? consumeValuesFromCLI(args, *foundArg.arg, config) : [ value ];
 
-        if(!foundArg.parse(config, nameWithDash, receiver, values))
-            return ParseCLIResult.failure;
+        immutable res = foundArg.parse(config, nameWithDash, receiver, values);
+        if(!res)
+            return res;
 
         if(!foundArg.arg.parsingTerminateCode.isNull)
-            return ParseCLIResult(foundArg.arg.parsingTerminateCode.get);
+            return Result(foundArg.arg.parsingTerminateCode.get);
 
         cliArgs[foundArg.index] = true;
 
-        return ParseCLIResult.success;
+        return Result.Success;
     };
 
     auto unknownArg(CLIArgument.Unknown = CLIArgument.Unknown.init) {
         unrecognizedArgs ~= args.front;
         args.popFront();
-        return ParseCLIResult.success;
+        return Result.Success;
     }
 
     auto positionalArg(CLIArgument.Positional) {
@@ -1017,8 +1018,8 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
         if(foundArg.arg is null)
             return unknownArg();
 
-        auto res = parseArgument(null, foundArg.arg.names[0], foundArg);
-        if(res == ParseCLIResult.success)
+        immutable res = parseArgument(null, foundArg.arg.names[0], foundArg);
+        if(res)
             positionalArgIdx++;
 
         return res;
@@ -1080,14 +1081,14 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
                 arg.name = "";
             }
 
-            auto res = parseArgument(value, "-"~name, foundArg);
-            if(res != ParseCLIResult.success)
+            immutable res = parseArgument(value, "-"~name, foundArg);
+            if(!res)
                 return res;
         }
         while(arg.name.length > 0);
 
         args.popFront();
-        return ParseCLIResult.success;
+        return Result.Success;
     };
 
     while(!args.empty)
@@ -1108,17 +1109,17 @@ private ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
             namedLongArg,
             namedShortArg
         );
-        if(res != ParseCLIResult.success)
+        if(!res)
             return res;
     }
 
     if(!cmdArguments.checkRestrictions(cliArgs, config))
-        return ParseCLIResult.failure;
+        return Result.Failure;
 
-    return ParseCLIResult.success;
+    return Result.Success;
 }
 
-ParseCLIResult parseCLIKnownArgs(T)(ref T receiver,
+Result parseCLIKnownArgs(T)(ref T receiver,
                                     string[] args,
                                     out string[] unrecognizedArgs,
                                     in Config config = Config.init)
@@ -1175,7 +1176,7 @@ auto parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.in
     if(res && unrecognizedArgs.length > 0)
     {
         config.onError("Unrecognized arguments: ", unrecognizedArgs);
-        return ParseCLIResult.failure;
+        return Result.Failure;
     }
 
     return res;
@@ -2990,7 +2991,7 @@ private struct CommandArguments(RECEIVER)
 
                 printHelp(stdout.lockingTextWriter(), this, config);
 
-                return true;
+                return Result.Success;
             });
         }
     }
