@@ -158,18 +158,18 @@ unittest
 {
     import std.typecons : tuple, nullable;
 
-    static assert(splitArgumentNameValue("") == CLIArgument.Argument(CLIArgument.Unknown.init));
-    static assert(splitArgumentNameValue("-") == CLIArgument.Argument(CLIArgument.Unknown.init));
-    static assert(splitArgumentNameValue("--") == CLIArgument.Argument(CLIArgument.Unknown.init));
-    static assert(splitArgumentNameValue("abc=4") == CLIArgument.Argument(CLIArgument.Positional.init));
-    static assert(splitArgumentNameValue("-abc") == CLIArgument.Argument(CLIArgument.NamedShort("abc", "-abc", null)));
-    static assert(splitArgumentNameValue("--abc") == CLIArgument.Argument(CLIArgument.NamedLong("abc", "--abc", null)));
-    static assert(splitArgumentNameValue("-abc=fd") == CLIArgument.Argument(CLIArgument.NamedShort("abc", "-abc", "fd")));
-    static assert(splitArgumentNameValue("--abc=fd") == CLIArgument.Argument(CLIArgument.NamedLong("abc", "--abc", "fd")));
-    static assert(splitArgumentNameValue("-abc=") == CLIArgument.Argument(CLIArgument.NamedShort("abc", "-abc", "")));
-    static assert(splitArgumentNameValue("--abc=") == CLIArgument.Argument(CLIArgument.NamedLong("abc", "--abc", "")));
-    static assert(splitArgumentNameValue("-=abc") == CLIArgument.Argument(CLIArgument.NamedShort("", "-", "abc")));
-    static assert(splitArgumentNameValue("--=abc") == CLIArgument.Argument(CLIArgument.NamedLong("", "--", "abc")));
+    assert(splitArgumentNameValue("") == CLIArgument.Argument(CLIArgument.Unknown.init));
+    assert(splitArgumentNameValue("-") == CLIArgument.Argument(CLIArgument.Unknown.init));
+    assert(splitArgumentNameValue("--") == CLIArgument.Argument(CLIArgument.Unknown.init));
+    assert(splitArgumentNameValue("abc=4") == CLIArgument.Argument(CLIArgument.Positional.init));
+    assert(splitArgumentNameValue("-abc") == CLIArgument.Argument(CLIArgument.NamedShort("abc", "-abc", null)));
+    assert(splitArgumentNameValue("--abc") == CLIArgument.Argument(CLIArgument.NamedLong("abc", "--abc", null)));
+    assert(splitArgumentNameValue("-abc=fd") == CLIArgument.Argument(CLIArgument.NamedShort("abc", "-abc", "fd")));
+    assert(splitArgumentNameValue("--abc=fd") == CLIArgument.Argument(CLIArgument.NamedLong("abc", "--abc", "fd")));
+    assert(splitArgumentNameValue("-abc=") == CLIArgument.Argument(CLIArgument.NamedShort("abc", "-abc", "")));
+    assert(splitArgumentNameValue("--abc=") == CLIArgument.Argument(CLIArgument.NamedLong("abc", "--abc", "")));
+    assert(splitArgumentNameValue("-=abc") == CLIArgument.Argument(CLIArgument.NamedShort("", "-", "abc")));
+    assert(splitArgumentNameValue("--=abc") == CLIArgument.Argument(CLIArgument.NamedLong("", "--", "abc")));
 }
 
 
@@ -288,6 +288,7 @@ unittest
         info.placeholder = placeholder;
         return info;
     }
+    assert(createInfo().allowBooleanNegation); // make codecov happy
 
     auto res = setDefaults!(createInfo(), int, "default-name");
     assert(!res.allowBooleanNegation);
@@ -309,6 +310,7 @@ unittest
         info.placeholder = placeholder;
         return info;
     }
+    assert(createInfo().allowBooleanNegation); // make codecov happy
 
     auto res = setDefaults!(createInfo(), bool, "default_name");
     assert(res.allowBooleanNegation);
@@ -332,6 +334,7 @@ unittest
         info.placeholder = placeholder;
         return info;
     }
+    assert(createInfo().allowBooleanNegation); // make codecov happy
 
     auto res = setDefaults!(createInfo(), E, "default-name");
     assert(res.placeholder == "{a,b,c}");
