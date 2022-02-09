@@ -481,7 +481,7 @@ unittest
 }
 
 
-private alias ParseFunction(RECEIVER) = bool delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
+private alias ParseFunction(RECEIVER) = Result delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
 private alias Restriction = bool delegate(in Config config, in bool[size_t] cliArgs);
 
 // Have to do this magic because closures are not supported in CFTE
@@ -763,21 +763,21 @@ private alias ParsingFunction(alias symbol, alias uda, ArgumentInfo info, RECEIV
         try
         {
             if(!info.checkValuesCount(config, argName, rawValues.length))
-                return false;
+                return Result.Failure;
 
             auto param = RawParam(config, argName, rawValues);
 
             auto target = &__traits(getMember, receiver, symbol);
 
             static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                return uda.parsingFunc.parse(target, param);
+                return uda.parsingFunc.parse(target, param) ? Result.Success : Result.Failure;
             else
-                return uda.parsingFunc.parse(*target, param);
+                return uda.parsingFunc.parse(*target, param) ? Result.Success : Result.Failure;
         }
         catch(Exception e)
         {
             config.onError(argName, ": ", e.msg);
-            return false;
+            return Result.Failure;
         }
     };
 
@@ -995,8 +995,9 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
     alias parseArgument = (string value, nameWithDash, foundArg) {
         auto values = value is null ? consumeValuesFromCLI(args, *foundArg.arg, config) : [ value ];
 
-        if(!foundArg.parse(config, nameWithDash, receiver, values))
-            return Result.Failure;
+        immutable res = foundArg.parse(config, nameWithDash, receiver, values);
+        if(!res)
+            return res;
 
         if(!foundArg.arg.parsingTerminateCode.isNull)
             return Result(foundArg.arg.parsingTerminateCode.get);
@@ -2990,7 +2991,7 @@ private struct CommandArguments(RECEIVER)
 
                 printHelp(stdout.lockingTextWriter(), this, config);
 
-                return true;
+                return Result.Success;
             });
         }
     }
