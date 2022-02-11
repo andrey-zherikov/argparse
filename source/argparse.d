@@ -956,7 +956,6 @@ private enum helpArgument = {
     arg.minValuesCount = 0;
     arg.maxValuesCount = 0;
     arg.allowBooleanNegation = false;
-    arg.parsingTerminateCode = 0;
     return arg;
 }();
 
@@ -1014,9 +1013,6 @@ private struct Parser
         immutable res = foundArg.parse(config, nameWithDash, receiver, values);
         if(!res)
             return res;
-
-        if(!foundArg.arg.parsingTerminateCode.isNull)
-            return Result(foundArg.arg.parsingTerminateCode.get);
 
         idxParsedArgs[foundArg.index] = true;
 
@@ -2517,8 +2513,6 @@ private struct ArgumentInfo
     }
 
     private bool allowBooleanNegation = true;
-
-    Nullable!int parsingTerminateCode;
 }
 
 
@@ -3031,7 +3025,7 @@ private struct CommandArguments(RECEIVER)
 
                 printHelp(stdout.lockingTextWriter(), this, config);
 
-                return Result.Success;
+                return Result(0);
             });
         }
     }
