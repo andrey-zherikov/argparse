@@ -111,68 +111,6 @@ struct Param(VALUE_TYPE)
 alias RawParam = Param!(string[]);
 
 
-private struct CLIArgument
-{
-    struct Unknown {}
-    struct Positional {}
-    struct NamedShort {
-        string name;
-        string nameWithDash;
-        string value = null;  // null when there is no value
-    }
-    struct NamedLong {
-        string name;
-        string nameWithDash;
-        string value = null;  // null when there is no value
-    }
-
-    import std.sumtype: SumType;
-    alias Argument = SumType!(Unknown, Positional, NamedShort, NamedLong);
-}
-
-private CLIArgument.Argument splitArgumentNameValue(string arg, const Config config = Config.init)
-{
-    import std.typecons : nullable;
-    import std.string : indexOf;
-
-    if(arg.length == 0)
-        return CLIArgument.Argument.init;
-
-    if(arg[0] != config.namedArgChar)
-        return CLIArgument.Argument(CLIArgument.Positional.init);
-
-    if(arg.length == 1 || arg.length == 2 && arg[1] == config.namedArgChar)
-        return CLIArgument.Argument.init;
-
-    auto idxAssignChar = config.assignChar == char.init ? -1 : arg.indexOf(config.assignChar);
-
-    immutable string nameWithDash = idxAssignChar < 0 ? arg  : arg[0 .. idxAssignChar];
-    immutable string value        = idxAssignChar < 0 ? null : arg[idxAssignChar + 1 .. $];
-
-    return arg[1] == config.namedArgChar
-        ? CLIArgument.Argument(CLIArgument.NamedLong (nameWithDash[2..$], nameWithDash, value))
-        : CLIArgument.Argument(CLIArgument.NamedShort(nameWithDash[1..$], nameWithDash, value));
-}
-
-unittest
-{
-    import std.typecons : tuple, nullable;
-
-    assert(splitArgumentNameValue("") == CLIArgument.Argument(CLIArgument.Unknown.init));
-    assert(splitArgumentNameValue("-") == CLIArgument.Argument(CLIArgument.Unknown.init));
-    assert(splitArgumentNameValue("--") == CLIArgument.Argument(CLIArgument.Unknown.init));
-    assert(splitArgumentNameValue("abc=4") == CLIArgument.Argument(CLIArgument.Positional.init));
-    assert(splitArgumentNameValue("-abc") == CLIArgument.Argument(CLIArgument.NamedShort("abc", "-abc", null)));
-    assert(splitArgumentNameValue("--abc") == CLIArgument.Argument(CLIArgument.NamedLong("abc", "--abc", null)));
-    assert(splitArgumentNameValue("-abc=fd") == CLIArgument.Argument(CLIArgument.NamedShort("abc", "-abc", "fd")));
-    assert(splitArgumentNameValue("--abc=fd") == CLIArgument.Argument(CLIArgument.NamedLong("abc", "--abc", "fd")));
-    assert(splitArgumentNameValue("-abc=") == CLIArgument.Argument(CLIArgument.NamedShort("abc", "-abc", "")));
-    assert(splitArgumentNameValue("--abc=") == CLIArgument.Argument(CLIArgument.NamedLong("abc", "--abc", "")));
-    assert(splitArgumentNameValue("-=abc") == CLIArgument.Argument(CLIArgument.NamedShort("", "-", "abc")));
-    assert(splitArgumentNameValue("--=abc") == CLIArgument.Argument(CLIArgument.NamedLong("", "--", "abc")));
-}
-
-
 private template defaultValuesCount(T)
 if(!is(T == void))
 {
@@ -976,6 +914,22 @@ struct Result
 
 private struct Parser
 {
+    struct Unknown {}
+    struct Positional {}
+    struct NamedShort {
+        string name;
+        string nameWithDash;
+        string value = null;  // null when there is no value
+    }
+    struct NamedLong {
+        string name;
+        string nameWithDash;
+        string value = null;  // null when there is no value
+    }
+
+    import std.sumtype: SumType;
+    alias Argument = SumType!(Unknown, Positional, NamedShort, NamedLong);
+
     immutable Config config;
 
     string[] args;
@@ -984,6 +938,30 @@ private struct Parser
     bool[size_t] idxParsedArgs;
     size_t idxNextPositional = 0;
 
+    
+    Argument splitArgumentNameValue(string arg)
+    {
+        import std.string : indexOf;
+
+        if(arg.length == 0)
+            return Argument.init;
+
+        if(arg[0] != config.namedArgChar)
+            return Argument(Positional.init);
+
+        if(arg.length == 1 || arg.length == 2 && arg[1] == config.namedArgChar)
+            return Argument.init;
+
+        auto idxAssignChar = config.assignChar == char.init ? -1 : arg.indexOf(config.assignChar);
+
+        immutable string nameWithDash = idxAssignChar < 0 ? arg  : arg[0 .. idxAssignChar];
+        immutable string value        = idxAssignChar < 0 ? null : arg[idxAssignChar + 1 .. $];
+
+        return arg[1] == config.namedArgChar
+        ? Argument(NamedLong (nameWithDash[2..$], nameWithDash, value))
+        : Argument(NamedShort(nameWithDash[1..$], nameWithDash, value));
+    }
+    
     auto endOfArgs(T)(const ref Arguments!T cmdArguments, ref T receiver)
     {
         static if(is(typeof(cmdArguments.setTrailingArgs)))
@@ -1019,12 +997,12 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, CLIArgument.Unknown)
+    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, Unknown)
     {
         return unknownArg();
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, CLIArgument.Positional)
+    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, Positional)
     {
         auto foundArg = cmdArguments.findPositionalArgument(idxNextPositional);
         if(foundArg.arg is null)
@@ -1039,7 +1017,7 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, CLIArgument.NamedLong arg)
+    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, NamedLong arg)
     {
         import std.algorithm : startsWith;
         import std.range: popFront;
@@ -1062,7 +1040,7 @@ private struct Parser
         return parseArgument(receiver, arg.value, arg.nameWithDash, foundArg);
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, CLIArgument.NamedShort arg)
+    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, NamedShort arg)
     {
         import std.range: popFront;
 
@@ -1120,13 +1098,29 @@ private struct Parser
             if(config.endOfArgs.length > 0 && args.front == config.endOfArgs)
                 return endOfArgs(cmdArguments, receiver);
 
-            immutable res = splitArgumentNameValue(args.front, config).match!(_ => parse(cmdArguments, receiver, _));
+            immutable res = splitArgumentNameValue(args.front).match!(_ => parse(cmdArguments, receiver, _));
             if(!res)
                 return res;
         }
 
         return Result.Success;
     }
+}
+
+unittest
+{
+    assert(Parser.init.splitArgumentNameValue("") == Parser.Argument(Parser.Unknown.init));
+    assert(Parser.init.splitArgumentNameValue("-") == Parser.Argument(Parser.Unknown.init));
+    assert(Parser.init.splitArgumentNameValue("--") == Parser.Argument(Parser.Unknown.init));
+    assert(Parser.init.splitArgumentNameValue("abc=4") == Parser.Argument(Parser.Positional.init));
+    assert(Parser.init.splitArgumentNameValue("-abc") == Parser.Argument(Parser.NamedShort("abc", "-abc", null)));
+    assert(Parser.init.splitArgumentNameValue("--abc") == Parser.Argument(Parser.NamedLong("abc", "--abc", null)));
+    assert(Parser.init.splitArgumentNameValue("-abc=fd") == Parser.Argument(Parser.NamedShort("abc", "-abc", "fd")));
+    assert(Parser.init.splitArgumentNameValue("--abc=fd") == Parser.Argument(Parser.NamedLong("abc", "--abc", "fd")));
+    assert(Parser.init.splitArgumentNameValue("-abc=") == Parser.Argument(Parser.NamedShort("abc", "-abc", "")));
+    assert(Parser.init.splitArgumentNameValue("--abc=") == Parser.Argument(Parser.NamedLong("abc", "--abc", "")));
+    assert(Parser.init.splitArgumentNameValue("-=abc") == Parser.Argument(Parser.NamedShort("", "-", "abc")));
+    assert(Parser.init.splitArgumentNameValue("--=abc") == Parser.Argument(Parser.NamedLong("", "--", "abc")));
 }
 
 
