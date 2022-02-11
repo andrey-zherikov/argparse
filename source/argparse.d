@@ -975,24 +975,40 @@ struct Result
     private static enum Success = Result(0, true);
 }
 
-private Result parseCLIKnownArgs(T)(ref T receiver,
-                                            string[] args,
-                                            out string[] unrecognizedArgs,
-                                            const ref Arguments!T cmdArguments,
-                                            in Config config)
+private struct Parser
 {
-    import std.algorithm: map;
-    import std.array: assocArray;
-    import std.range: repeat, empty, front, popFront, join;
-    import std.sumtype : match;
+    immutable Config config;
 
-    checkArgumentName!T(config.namedArgChar);
+    string[] args;
+    string[] unrecognizedArgs;
 
-    bool[size_t] cliArgs;
+    bool[size_t] idxParsedArgs;
+    size_t idxNextPositional = 0;
 
-    size_t positionalArgIdx = 0;
+    auto endOfArgs(T)(const ref Arguments!T cmdArguments, ref T receiver)
+    {
+        static if(is(typeof(cmdArguments.setTrailingArgs)))
+            cmdArguments.setTrailingArgs(receiver, args[1..$]);
+        else
+            unrecognizedArgs ~= args[1..$];
 
-    alias parseArgument = (string value, nameWithDash, foundArg) {
+        args = [];
+
+        return Result.Success;
+    }
+
+    auto unknownArg()
+    {
+        import std.range: front, popFront;
+
+        unrecognizedArgs ~= args.front;
+        args.popFront();
+
+        return Result.Success;
+    }
+
+    auto parseArgument(T, ARG)(ref T receiver, string value, string nameWithDash, ARG foundArg)
+    {
         auto values = value is null ? consumeValuesFromCLI(args, *foundArg.arg, config) : [ value ];
 
         immutable res = foundArg.parse(config, nameWithDash, receiver, values);
@@ -1002,31 +1018,35 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
         if(!foundArg.arg.parsingTerminateCode.isNull)
             return Result(foundArg.arg.parsingTerminateCode.get);
 
-        cliArgs[foundArg.index] = true;
+        idxParsedArgs[foundArg.index] = true;
 
-        return Result.Success;
-    };
-
-    auto unknownArg(CLIArgument.Unknown = CLIArgument.Unknown.init) {
-        unrecognizedArgs ~= args.front;
-        args.popFront();
         return Result.Success;
     }
 
-    auto positionalArg(CLIArgument.Positional) {
-        auto foundArg = cmdArguments.findPositionalArgument(positionalArgIdx);
+    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, CLIArgument.Unknown)
+    {
+        return unknownArg();
+    }
+
+    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, CLIArgument.Positional)
+    {
+        auto foundArg = cmdArguments.findPositionalArgument(idxNextPositional);
         if(foundArg.arg is null)
             return unknownArg();
 
-        immutable res = parseArgument(null, foundArg.arg.names[0], foundArg);
-        if(res)
-            positionalArgIdx++;
+        immutable res = parseArgument(receiver, null, foundArg.arg.names[0], foundArg);
+        if(!res)
+            return res;
 
-        return res;
+        idxNextPositional++;
+
+        return Result.Success;
     }
 
-    alias namedLongArg = (CLIArgument.NamedLong arg) {
+    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, CLIArgument.NamedLong arg)
+    {
         import std.algorithm : startsWith;
+        import std.range: popFront;
 
         auto foundArg = cmdArguments.findNamedArgument(arg.name);
 
@@ -1043,15 +1063,18 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
             return unknownArg();
 
         args.popFront();
-        return parseArgument(arg.value, arg.nameWithDash, foundArg);
-    };
+        return parseArgument(receiver, arg.value, arg.nameWithDash, foundArg);
+    }
 
-    alias namedShortArg = (CLIArgument.NamedShort arg) {
+    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, CLIArgument.NamedShort arg)
+    {
+        import std.range: popFront;
+
         auto foundArg = cmdArguments.findNamedArgument(arg.name);
         if(foundArg.arg !is null)
         {
             args.popFront();
-            return parseArgument(arg.value, arg.nameWithDash, foundArg);
+            return parseArgument(receiver, arg.value, arg.nameWithDash, foundArg);
         }
 
         // Try to parse "-ABC..." where "A","B","B" are different single-letter arguments
@@ -1081,7 +1104,7 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
                 arg.name = "";
             }
 
-            immutable res = parseArgument(value, "-"~name, foundArg);
+            immutable res = parseArgument(receiver, value, "-"~name, foundArg);
             if(!res)
                 return res;
         }
@@ -1089,32 +1112,49 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
 
         args.popFront();
         return Result.Success;
-    };
-
-    while(!args.empty)
-    {
-        if(config.endOfArgs.length > 0 && args.front == config.endOfArgs)
-        {
-            // End of arguments
-            static if(is(typeof(cmdArguments.setTrailingArgs)))
-                cmdArguments.setTrailingArgs(receiver, args[1..$]);
-            else
-                unrecognizedArgs ~= args[1..$];
-            break;
-        }
-
-        immutable res = splitArgumentNameValue(args.front, config).match!(
-            unknownArg,
-            positionalArg,
-            namedLongArg,
-            namedShortArg
-        );
-        if(!res)
-            return res;
     }
 
-    if(!cmdArguments.checkRestrictions(cliArgs, config))
+    auto parseAll(T)(const ref Arguments!T cmdArguments, ref T receiver)
+    {
+        import std.range: front, empty;
+        import std.sumtype: match;
+
+        while(!args.empty)
+        {
+            if(config.endOfArgs.length > 0 && args.front == config.endOfArgs)
+                return endOfArgs(cmdArguments, receiver);
+
+            immutable res = splitArgumentNameValue(args.front, config).match!(_ => parse(cmdArguments, receiver, _));
+            if(!res)
+                return res;
+        }
+
+        return Result.Success;
+    }
+}
+
+
+private Result parseCLIKnownArgs(T)(ref T receiver,
+                                    string[] args,
+                                    out string[] unrecognizedArgs,
+                                    const ref Arguments!T cmdArguments,
+                                    in Config config)
+{
+    import std.range: front, empty;
+    import std.sumtype: match;
+
+    checkArgumentName!T(config.namedArgChar);
+
+    auto parser = Parser(config, args);
+
+    immutable res = parser.parseAll(cmdArguments, receiver);
+    if(!res)
+        return res;
+
+    if(!cmdArguments.checkRestrictions(parser.idxParsedArgs, config))
         return Result.Failure;
+
+    unrecognizedArgs = parser.unrecognizedArgs;
 
     return Result.Success;
 }
