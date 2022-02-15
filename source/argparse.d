@@ -419,7 +419,7 @@ unittest
 }
 
 
-private alias ParseFunction(RECEIVER) = Result delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
+private alias ParseFunction(RECEIVER) = Result delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
 private alias Restriction = bool delegate(in Config config, in bool[size_t] cliArgs);
 
 // Have to do this magic because closures are not supported in CFTE
@@ -696,10 +696,12 @@ private struct Arguments(RECEIVER)
 }
 
 private alias ParsingFunction(alias symbol, alias uda, ArgumentInfo info, RECEIVER) =
-    delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
+    delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
     {
         try
         {
+            auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, info, config);
+
             if(!info.checkValuesCount(config, argName, rawValues.length))
                 return Result.Failure;
 
@@ -986,9 +988,7 @@ private struct Parser
 
     auto parseArgument(T, ARG)(ref T receiver, string value, string nameWithDash, ARG foundArg)
     {
-        auto values = value is null ? consumeValuesFromCLI(args, *foundArg.arg, config) : [ value ];
-
-        immutable res = foundArg.parse(config, nameWithDash, receiver, values);
+        immutable res = foundArg.parse(config, nameWithDash, receiver, value, args);
         if(!res)
             return res;
 
@@ -3013,7 +3013,7 @@ private struct CommandArguments(RECEIVER)
 
         if(config.addHelp)
         {
-            arguments.addArgument!helpArgument(delegate (in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
+            arguments.addArgument!helpArgument(delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
             {
                 import std.stdio: stdout;
 
