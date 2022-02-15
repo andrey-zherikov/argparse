@@ -940,7 +940,7 @@ private struct Parser
     bool[size_t] idxParsedArgs;
     size_t idxNextPositional = 0;
 
-    
+
     Argument splitArgumentNameValue(string arg)
     {
         import std.string : indexOf;
@@ -963,7 +963,7 @@ private struct Parser
         ? Argument(NamedLong (nameWithDash[2..$], nameWithDash, value))
         : Argument(NamedShort(nameWithDash[1..$], nameWithDash, value));
     }
-    
+
     auto endOfArgs(T)(const ref Arguments!T cmdArguments, ref T receiver)
     {
         static if(is(typeof(cmdArguments.setTrailingArgs)))
@@ -1150,9 +1150,9 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
 }
 
 Result parseCLIKnownArgs(T)(ref T receiver,
-                                    string[] args,
-                                    out string[] unrecognizedArgs,
-                                    in Config config = Config.init)
+                            string[] args,
+                            out string[] unrecognizedArgs,
+                            in Config config = Config.init)
 {
     auto command = CommandArguments!T(config);
     return parseCLIKnownArgs(receiver, args, unrecognizedArgs, command.arguments, config);
