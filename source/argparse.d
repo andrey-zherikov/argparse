@@ -1130,11 +1130,6 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
                                     const ref Arguments!T cmdArguments,
                                     in Config config)
 {
-    import std.range: front, empty;
-    import std.sumtype: match;
-
-    checkArgumentName!T(config.namedArgChar);
-
     auto parser = Parser(config, args);
 
     immutable res = parser.parseAll(cmdArguments, receiver);
@@ -3009,6 +3004,8 @@ private struct CommandArguments(RECEIVER)
 
     private this(in Config config)
     {
+        checkArgumentName!RECEIVER(config.namedArgChar);
+
         arguments = createArguments!RECEIVER(config.caseSensitive);
 
         if(config.addHelp)
