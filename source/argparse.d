@@ -1103,6 +1103,9 @@ private struct Parser
                 return res;
         }
 
+        if(!cmdArguments.checkRestrictions(idxParsedArgs, config))
+            return Result.Failure;
+
         return Result.Success;
     }
 }
@@ -1135,9 +1138,6 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
     immutable res = parser.parseAll(cmdArguments, receiver);
     if(!res)
         return res;
-
-    if(!cmdArguments.checkRestrictions(parser.idxParsedArgs, config))
-        return Result.Failure;
 
     unrecognizedArgs = parser.unrecognizedArgs;
 
