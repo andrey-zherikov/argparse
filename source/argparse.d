@@ -514,15 +514,8 @@ private struct Restrictions
     }
 }
 
-private struct Arguments(RECEIVER)
+private struct Arguments
 {
-    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1,
-                  "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
-
-    private enum _validate = checkArgumentNames!RECEIVER &&
-                             checkPositionalIndexes!RECEIVER;
-
-
 
     immutable string function(string str) convertCase;
 
@@ -2945,6 +2938,12 @@ private mixin template ForwardMemberFunction(string dest)
 
 private struct CommandArguments(RECEIVER)
 {
+    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1,
+        "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
+
+    private enum _validate = checkArgumentNames!RECEIVER &&
+                             checkPositionalIndexes!RECEIVER;
+
     static assert(getUDAs!(RECEIVER, CommandInfo).length <= 1);
 
     static if(getUDAs!(RECEIVER, CommandInfo).length == 0)
@@ -2952,7 +2951,7 @@ private struct CommandArguments(RECEIVER)
     else
         CommandInfo info = getUDAs!(RECEIVER, CommandInfo)[0];
 
-    Arguments!RECEIVER arguments;
+    Arguments arguments;
 
     ParseFunction!RECEIVER[] parseFunctions;
 
@@ -2966,7 +2965,7 @@ private struct CommandArguments(RECEIVER)
     {
         checkArgumentName!RECEIVER(config.namedArgChar);
 
-        arguments = Arguments!RECEIVER(config.caseSensitive);
+        arguments = Arguments(config.caseSensitive);
         fillArguments();
 
         if(config.addHelp)
