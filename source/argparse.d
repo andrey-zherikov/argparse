@@ -959,10 +959,10 @@ private struct Parser
         : Argument(NamedShort(nameWithDash[1..$], nameWithDash, value));
     }
 
-    auto endOfArgs(T)(const ref Arguments!T cmdArguments, ref T receiver)
+    auto endOfArgs(T)(const ref CommandArguments!T cmd, ref T receiver)
     {
-        static if(is(typeof(cmdArguments.setTrailingArgs)))
-            cmdArguments.setTrailingArgs(receiver, args[1..$]);
+        static if(is(typeof(cmd.setTrailingArgs)))
+            cmd.arguments.setTrailingArgs(receiver, args[1..$]);
         else
             unrecognizedArgs ~= args[1..$];
 
@@ -992,14 +992,14 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, Unknown)
+    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Unknown)
     {
         return unknownArg();
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, Positional)
+    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Positional)
     {
-        auto foundArg = cmdArguments.findPositionalArgument(idxNextPositional);
+        auto foundArg = cmd.findPositionalArgument(idxNextPositional);
         if(foundArg.arg is null)
             return unknownArg();
 
@@ -1012,16 +1012,16 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, NamedLong arg)
+    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, NamedLong arg)
     {
         import std.algorithm : startsWith;
         import std.range: popFront;
 
-        auto foundArg = cmdArguments.findNamedArgument(arg.name);
+        auto foundArg = cmd.findNamedArgument(arg.name);
 
         if(foundArg.arg is null && arg.name.startsWith("no-"))
         {
-            foundArg = cmdArguments.findNamedArgument(arg.name[3..$]);
+            foundArg = cmd.findNamedArgument(arg.name[3..$]);
             if(foundArg.arg is null || !foundArg.arg.allowBooleanNegation)
                 return unknownArg();
 
@@ -1035,11 +1035,11 @@ private struct Parser
         return parseArgument(receiver, arg.value, arg.nameWithDash, foundArg);
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, NamedShort arg)
+    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, NamedShort arg)
     {
         import std.range: popFront;
 
-        auto foundArg = cmdArguments.findNamedArgument(arg.name);
+        auto foundArg = cmd.findNamedArgument(arg.name);
         if(foundArg.arg !is null)
         {
             args.popFront();
@@ -1050,7 +1050,7 @@ private struct Parser
         do
         {
             auto name = [arg.name[0]];
-            foundArg = cmdArguments.findNamedArgument(name);
+            foundArg = cmd.findNamedArgument(name);
             if(foundArg.arg is null)
                 return unknownArg();
 
@@ -1083,7 +1083,7 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parseAll(T)(const ref Arguments!T cmdArguments, ref T receiver)
+    auto parseAll(T)(const ref CommandArguments!T cmd, ref T receiver)
     {
         import std.range: front, empty;
         import std.sumtype: match;
@@ -1091,14 +1091,14 @@ private struct Parser
         while(!args.empty)
         {
             if(config.endOfArgs.length > 0 && args.front == config.endOfArgs)
-                return endOfArgs(cmdArguments, receiver);
+                return endOfArgs(cmd, receiver);
 
-            immutable res = splitArgumentNameValue(args.front).match!(_ => parse(cmdArguments, receiver, _));
+            immutable res = splitArgumentNameValue(args.front).match!(_ => parse(cmd, receiver, _));
             if(!res)
                 return res;
         }
 
-        if(!cmdArguments.checkRestrictions(idxParsedArgs, config))
+        if(!cmd.checkRestrictions(idxParsedArgs, config))
             return Result.Failure;
 
         return Result.Success;
@@ -1125,12 +1125,12 @@ unittest
 private Result parseCLIKnownArgs(T)(ref T receiver,
                                     string[] args,
                                     out string[] unrecognizedArgs,
-                                    const ref Arguments!T cmdArguments,
+                                    const ref CommandArguments!T cmd,
                                     in Config config)
 {
     auto parser = Parser(config, args);
 
-    immutable res = parser.parseAll(cmdArguments, receiver);
+    immutable res = parser.parseAll(cmd, receiver);
     if(!res)
         return res;
 
@@ -1145,7 +1145,7 @@ Result parseCLIKnownArgs(T)(ref T receiver,
                             in Config config = Config.init)
 {
     auto command = CommandArguments!T(config);
-    return parseCLIKnownArgs(receiver, args, unrecognizedArgs, command.arguments, config);
+    return parseCLIKnownArgs(receiver, args, unrecognizedArgs, command, config);
 }
 
 auto parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)
@@ -1271,11 +1271,11 @@ unittest
     }
 
     enum p = CommandArguments!params(Config.init);
-    static assert(p.arguments.findNamedArgument("a").arg is null);
-    static assert(p.arguments.findNamedArgument("b").arg !is null);
-    static assert(p.arguments.findNamedArgument("boo").arg !is null);
-    static assert(p.arguments.findPositionalArgument(0).arg !is null);
-    static assert(p.arguments.findPositionalArgument(1).arg is null);
+    static assert(p.findNamedArgument("a").arg is null);
+    static assert(p.findNamedArgument("b").arg !is null);
+    static assert(p.findNamedArgument("boo").arg !is null);
+    static assert(p.findPositionalArgument(0).arg !is null);
+    static assert(p.findPositionalArgument(1).arg is null);
 }
 
 unittest
@@ -2995,6 +2995,15 @@ private struct CommandArguments(RECEIVER)
         CommandInfo info = getUDAs!(RECEIVER, CommandInfo)[0];
 
     Arguments!RECEIVER arguments;
+
+    auto findPositionalArgument(ARGS...)(auto ref ARGS args) const { return arguments.findPositionalArgument(args); }
+    auto findNamedArgument(ARGS...)(auto ref ARGS args) const { return arguments.findNamedArgument(args); }
+    auto checkRestrictions(ARGS...)(auto ref ARGS args) const { return arguments.checkRestrictions(args); }
+
+    static if(is(typeof(arguments.setTrailingArgs)))
+        auto setTrailingArgs(ARGS...)(auto ref ARGS args) const { return arguments.setTrailingArgs(args); }
+
+    //void printParent
 
 
     private this(in Config config)
