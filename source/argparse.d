@@ -3040,7 +3040,7 @@ private struct CommandArguments(RECEIVER)
                 *target = rawValues;
             else
                 static assert(false, "Type '"~typeof(*target).stringof~"' of `"~
-                RECEIVER.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
+                    RECEIVER.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
         }
     }
 }
