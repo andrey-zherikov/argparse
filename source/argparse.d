@@ -3321,23 +3321,14 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
 }
 
 
-private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
+private void printHelp(Output)(auto ref Output output, in Arguments arguments, in Config config)
 {
     import std.algorithm: map, maxElement, min;
     import std.array: appender, array;
 
-    printUsage(output, cmd, config);
-    output.put('\n');
-
-    if(cmd.info.description.length > 0)
-    {
-        output.put(cmd.info.description);
-        output.put("\n\n");
-    }
-
     // pre-compute the output
     auto args =
-        cmd.arguments.arguments
+        arguments.arguments
         .map!((ref _)
         {
             struct Result
@@ -3358,14 +3349,29 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
     immutable helpPosition = min(maxInvocationWidth + 4, 24);
 
     //user-defined groups
-    foreach(ref group; cmd.arguments.groups[2..$])
+    foreach(ref group; arguments.groups[2..$])
         output.printHelp(group, args, helpPosition);
 
     //required args
-    output.printHelp(cmd.arguments.requiredGroup, args, helpPosition);
+    output.printHelp(arguments.requiredGroup, args, helpPosition);
 
     //optionals args
-    output.printHelp(cmd.arguments.optionalGroup, args, helpPosition);
+    output.printHelp(arguments.optionalGroup, args, helpPosition);
+}
+
+
+private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
+{
+    printUsage(output, cmd, config);
+    output.put('\n');
+
+    if(cmd.info.description.length > 0)
+    {
+        output.put(cmd.info.description);
+        output.put("\n\n");
+    }
+
+    output.printHelp(cmd.arguments, config);
 
     if(cmd.info.epilog.length > 0)
     {
