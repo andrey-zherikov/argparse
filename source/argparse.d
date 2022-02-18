@@ -722,36 +722,6 @@ private alias ParsingFunction(alias symbol, alias uda, ArgumentInfo info, RECEIV
     };
 
 
-private void addArgument(alias symbol, RECEIVER)(ref Arguments!RECEIVER args)
-{
-    alias member = __traits(getMember, RECEIVER, symbol);
-
-    static assert(getUDAs!(member, ArgumentUDA).length <= 1,
-        "Member "~RECEIVER.stringof~"."~symbol~" has multiple '*Argument' UDAs");
-
-    static assert(getUDAs!(member, Group).length <= 1,
-        "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
-
-    static if(getUDAs!(member, ArgumentUDA).length > 0)
-        enum uda = getUDAs!(member, ArgumentUDA)[0];
-    else
-        enum uda = NamedArgument();
-
-    enum info = setDefaults!(uda.info, typeof(member), symbol);
-
-    enum restrictions = {
-        RestrictionGroup[] restrictions;
-        static foreach(gr; getUDAs!(member, RestrictionGroup))
-            restrictions ~= gr;
-        return restrictions;
-    }();
-
-    static if(getUDAs!(member, Group).length > 0)
-        args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
-    else
-        args.addArgument!(info, restrictions)(ParsingFunction!(symbol, uda, info, RECEIVER));
-}
-
 unittest
 {
     struct T
@@ -3033,12 +3003,42 @@ private struct CommandArguments(RECEIVER)
 
         static foreach(sym; __traits(allMembers, RECEIVER))
         {{
-            alias mem = __traits(getMember,RECEIVER,sym);
+            alias mem = __traits(getMember, RECEIVER, sym);
 
             static if(!is(mem)) // skip types
                 static if(hasNoUDAs || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
-                    addArgument!(sym)(arguments);
+                    addArgument!sym;
         }}
+    }
+
+    private void addArgument(alias symbol)()
+    {
+        alias member = __traits(getMember, RECEIVER, symbol);
+
+        static assert(getUDAs!(member, ArgumentUDA).length <= 1,
+            "Member "~RECEIVER.stringof~"."~symbol~" has multiple '*Argument' UDAs");
+
+        static assert(getUDAs!(member, Group).length <= 1,
+            "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
+
+        static if(getUDAs!(member, ArgumentUDA).length > 0)
+            enum uda = getUDAs!(member, ArgumentUDA)[0];
+        else
+            enum uda = NamedArgument();
+
+        enum info = setDefaults!(uda.info, typeof(member), symbol);
+
+        enum restrictions = {
+            RestrictionGroup[] restrictions;
+            static foreach(gr; getUDAs!(member, RestrictionGroup))
+                restrictions ~= gr;
+            return restrictions;
+        }();
+
+        static if(getUDAs!(member, Group).length > 0)
+            arguments.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
+        else
+            arguments.addArgument!(info, restrictions)(ParsingFunction!(symbol, uda, info, RECEIVER));
     }
 }
 
