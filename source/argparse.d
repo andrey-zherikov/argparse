@@ -678,21 +678,6 @@ private struct Arguments(RECEIVER)
     {
         return findArgumentImpl(convertCase(name) in argsNamed);
     }
-
-    static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
-    {
-        private void setTrailingArgs(ref RECEIVER receiver, string[] rawValues) const
-        {
-            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArguments)[0]);
-            auto target = &__traits(getMember, receiver, symbol);
-
-            static if(__traits(compiles, { *target = rawValues; }))
-                *target = rawValues;
-            else
-                static assert(false, "Type '"~typeof(*target).stringof~"' of `"~
-                    RECEIVER.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
-        }
-    }
 }
 
 private alias ParsingFunction(alias symbol, alias uda, ArgumentInfo info, RECEIVER) =
@@ -932,7 +917,7 @@ private struct Parser
     auto endOfArgs(T)(const ref CommandArguments!T cmd, ref T receiver)
     {
         static if(is(typeof(cmd.setTrailingArgs)))
-            cmd.arguments.setTrailingArgs(receiver, args[1..$]);
+            cmd.setTrailingArgs(receiver, args[1..$]);
         else
             unrecognizedArgs ~= args[1..$];
 
@@ -2976,10 +2961,6 @@ private struct CommandArguments(RECEIVER)
     mixin ForwardMemberFunction!"arguments.findNamedArgument";
     mixin ForwardMemberFunction!"arguments.checkRestrictions";
 
-    static if(is(typeof(arguments.setTrailingArgs)))
-        mixin ForwardMemberFunction!"arguments.setTrailingArgs";
-
-    //void printParent
 
 
     private this(in Config config)
@@ -3045,6 +3026,21 @@ private struct CommandArguments(RECEIVER)
             arguments.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
         else
             arguments.addArgument!(info, restrictions)(ParsingFunction!(symbol, uda, info, RECEIVER));
+    }
+
+    static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
+    {
+        private void setTrailingArgs(ref RECEIVER receiver, string[] rawValues) const
+        {
+            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArguments)[0]);
+            auto target = &__traits(getMember, receiver, symbol);
+
+            static if(__traits(compiles, { *target = rawValues; }))
+                *target = rawValues;
+            else
+                static assert(false, "Type '"~typeof(*target).stringof~"' of `"~
+                RECEIVER.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
+        }
     }
 }
 
