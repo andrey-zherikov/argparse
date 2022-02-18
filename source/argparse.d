@@ -527,7 +527,6 @@ private struct Arguments(RECEIVER)
     immutable string function(string str) convertCase;
 
     private ArgumentInfo[] arguments;
-    private ParseFunction!RECEIVER[] parseFunctions;
 
     // named arguments
     private size_t[string] argsNamed;
@@ -567,28 +566,28 @@ private struct Arguments(RECEIVER)
         groups = [ Group("Required arguments"), Group("Optional arguments") ];
     }
 
-    private void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions, Group group)(ParseFunction!RECEIVER parse)
+    private void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions, Group group)()
     {
         auto index = (group.name in groupsByName);
         if(index !is null)
-            addArgument!(info, restrictions)(parse, groups[*index]);
+            addArgument!(info, restrictions)(groups[*index]);
         else
         {
             groupsByName[group.name] = groups.length;
             groups ~= group;
-            addArgument!(info, restrictions)(parse, groups[$-1]);
+            addArgument!(info, restrictions)(groups[$-1]);
         }
     }
 
-    private void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions = [])(ParseFunction!RECEIVER parse)
+    private void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions = [])()
     {
         static if(info.required)
-            addArgument!(info, restrictions)(parse, requiredGroup);
+            addArgument!(info, restrictions)(requiredGroup);
         else
-            addArgument!(info, restrictions)(parse, optionalGroup);
+            addArgument!(info, restrictions)(optionalGroup);
     }
 
-    private void addArgument(ArgumentInfo info, RestrictionGroup[] argRestrictions = [])(ParseFunction!RECEIVER parse, ref Group group)
+    private void addArgument(ArgumentInfo info, RestrictionGroup[] argRestrictions = [])( ref Group group)
     {
         static assert(info.names.length > 0);
 
@@ -609,7 +608,6 @@ private struct Arguments(RECEIVER)
             }
 
         arguments ~= info;
-        parseFunctions ~= parse;
         group.arguments ~= index;
 
         static if(info.required)
@@ -663,10 +661,9 @@ private struct Arguments(RECEIVER)
         {
             size_t index = size_t.max;
             const(ArgumentInfo)* arg;
-            ParseFunction!RECEIVER parse;
         }
 
-        return pIndex ? Result(*pIndex, &arguments[*pIndex], parseFunctions[*pIndex]) : Result.init;
+        return pIndex ? Result(*pIndex, &arguments[*pIndex]) : Result.init;
     }
 
     auto findPositionalArgument(size_t position) const
@@ -936,9 +933,9 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parseArgument(T, ARG)(ref T receiver, string value, string nameWithDash, ARG foundArg)
+    auto parseArgument(T, ARG)(const ref CommandArguments!T cmd, ref T receiver, string value, string nameWithDash, ARG foundArg)
     {
-        immutable res = foundArg.parse(config, nameWithDash, receiver, value, args);
+        immutable res = cmd.parseFunctions[foundArg.index](config, nameWithDash, receiver, value, args);
         if(!res)
             return res;
 
@@ -958,7 +955,7 @@ private struct Parser
         if(foundArg.arg is null)
             return unknownArg();
 
-        immutable res = parseArgument(receiver, null, foundArg.arg.names[0], foundArg);
+        immutable res = parseArgument(cmd, receiver, null, foundArg.arg.names[0], foundArg);
         if(!res)
             return res;
 
@@ -987,7 +984,7 @@ private struct Parser
             return unknownArg();
 
         args.popFront();
-        return parseArgument(receiver, arg.value, arg.nameWithDash, foundArg);
+        return parseArgument(cmd, receiver, arg.value, arg.nameWithDash, foundArg);
     }
 
     auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, NamedShort arg)
@@ -998,7 +995,7 @@ private struct Parser
         if(foundArg.arg !is null)
         {
             args.popFront();
-            return parseArgument(receiver, arg.value, arg.nameWithDash, foundArg);
+            return parseArgument(cmd, receiver, arg.value, arg.nameWithDash, foundArg);
         }
 
         // Try to parse "-ABC..." where "A","B","B" are different single-letter arguments
@@ -1028,7 +1025,7 @@ private struct Parser
                 arg.name = "";
             }
 
-            immutable res = parseArgument(receiver, value, "-"~name, foundArg);
+            immutable res = parseArgument(cmd, receiver, value, "-"~name, foundArg);
             if(!res)
                 return res;
         }
@@ -2957,6 +2954,8 @@ private struct CommandArguments(RECEIVER)
 
     Arguments!RECEIVER arguments;
 
+    ParseFunction!RECEIVER[] parseFunctions;
+
     mixin ForwardMemberFunction!"arguments.findPositionalArgument";
     mixin ForwardMemberFunction!"arguments.findNamedArgument";
     mixin ForwardMemberFunction!"arguments.checkRestrictions";
@@ -2972,14 +2971,15 @@ private struct CommandArguments(RECEIVER)
 
         if(config.addHelp)
         {
-            arguments.addArgument!helpArgument(delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
+            arguments.addArgument!helpArgument;
+            parseFunctions ~= delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
             {
                 import std.stdio: stdout;
 
                 printHelp(stdout.lockingTextWriter(), this, config);
 
                 return Result(0);
-            });
+            };
         }
     }
 
@@ -3023,9 +3023,11 @@ private struct CommandArguments(RECEIVER)
         }();
 
         static if(getUDAs!(member, Group).length > 0)
-            arguments.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
+            arguments.addArgument!(info, restrictions, getUDAs!(member, Group)[0]);
         else
-            arguments.addArgument!(info, restrictions)(ParsingFunction!(symbol, uda, info, RECEIVER));
+            arguments.addArgument!(info, restrictions);
+
+        parseFunctions ~= ParsingFunction!(symbol, uda, info, RECEIVER);
     }
 
     static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
