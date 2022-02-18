@@ -2954,6 +2954,12 @@ unittest
     assert(a.epilog == "epi");
 }
 
+private mixin template ForwardMemberFunction(string dest)
+{
+    import std.array: split;
+    mixin("auto "~dest.split('.')[$-1]~"(Args...)(auto ref Args args) inout { import core.lifetime: forward; return "~dest~"(forward!args); }");
+}
+
 
 private struct CommandArguments(RECEIVER)
 {
@@ -2966,12 +2972,12 @@ private struct CommandArguments(RECEIVER)
 
     Arguments!RECEIVER arguments;
 
-    auto findPositionalArgument(ARGS...)(auto ref ARGS args) const { return arguments.findPositionalArgument(args); }
-    auto findNamedArgument(ARGS...)(auto ref ARGS args) const { return arguments.findNamedArgument(args); }
-    auto checkRestrictions(ARGS...)(auto ref ARGS args) const { return arguments.checkRestrictions(args); }
+    mixin ForwardMemberFunction!"arguments.findPositionalArgument";
+    mixin ForwardMemberFunction!"arguments.findNamedArgument";
+    mixin ForwardMemberFunction!"arguments.checkRestrictions";
 
     static if(is(typeof(arguments.setTrailingArgs)))
-        auto setTrailingArgs(ARGS...)(auto ref ARGS args) const { return arguments.setTrailingArgs(args); }
+        mixin ForwardMemberFunction!"arguments.setTrailingArgs";
 
     //void printParent
 
