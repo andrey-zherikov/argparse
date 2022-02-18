@@ -752,25 +752,6 @@ private void addArgument(alias symbol, RECEIVER)(ref Arguments!RECEIVER args)
         args.addArgument!(info, restrictions)(ParsingFunction!(symbol, uda, info, RECEIVER));
 }
 
-private auto createArguments(RECEIVER)(bool caseSensitive)
-{
-    auto args = Arguments!RECEIVER(caseSensitive);
-
-    enum hasNoUDAs = getSymbolsByUDA!(RECEIVER, ArgumentUDA  ).length == 0 &&
-                     getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0;
-
-    static foreach(sym; __traits(allMembers, RECEIVER))
-    {{
-        alias mem = __traits(getMember,RECEIVER,sym);
-
-        static if(!is(mem)) // skip types
-            static if(hasNoUDAs || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
-                addArgument!(sym)(args);
-    }}
-
-    return args;
-}
-
 unittest
 {
     struct T
@@ -788,12 +769,19 @@ unittest
         @(NamedArgument)
         int f;
     }
-    static assert(createArguments!T(true).arguments.length == 6);
 
-    auto a = createArguments!T(true);
-    assert(a.requiredGroup.arguments == [2,4]);
-    assert(a.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
-    assert(a.argsPositional == []);
+    enum config = {
+        Config config;
+        config.addHelp = false;
+        return config;
+    }();
+
+    static assert(CommandArguments!T(config).arguments.arguments.length == 6);
+
+    auto a = CommandArguments!T(config);
+    assert(a.arguments.requiredGroup.arguments == [2,4]);
+    assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    assert(a.arguments.argsPositional == []);
 }
 
 unittest
@@ -802,12 +790,19 @@ unittest
     {
         int a,b,c,d,e,f;
     }
-    static assert(createArguments!T(true).arguments.length == 6);
 
-    auto a = createArguments!T(true);
-    assert(a.requiredGroup.arguments == []);
-    assert(a.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
-    assert(a.argsPositional == []);
+    enum config = {
+        Config config;
+        config.addHelp = false;
+        return config;
+    }();
+
+    static assert(CommandArguments!T(config).arguments.arguments.length == 6);
+
+    auto a = CommandArguments!T(config);
+    assert(a.arguments.requiredGroup.arguments == []);
+    assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    assert(a.arguments.argsPositional == []);
 }
 
 unittest
@@ -818,7 +813,7 @@ unittest
         @(NamedArgument("2"))
         int a;
     }
-    static assert(!__traits(compiles, { createArguments!T1(true); }));
+    static assert(!__traits(compiles, { CommandArguments!T1(Config.init); }));
 
     struct T2
     {
@@ -827,21 +822,21 @@ unittest
         @(NamedArgument("1"))
         int b;
     }
-    static assert(!__traits(compiles, { createArguments!T1(true); }));
+    static assert(!__traits(compiles, { CommandArguments!T1(Config.init); }));
 
     struct T3
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(0)) int b;
     }
-    static assert(!__traits(compiles, { createArguments!T3(true); }));
+    static assert(!__traits(compiles, { CommandArguments!T3(Config.init); }));
 
     struct T4
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(2)) int b;
     }
-    static assert(!__traits(compiles, { createArguments!T4(true); }));
+    static assert(!__traits(compiles, { CommandArguments!T4(Config.init); }));
 }
 
 private void checkArgumentName(T)(char namedArgChar)
@@ -3006,7 +3001,8 @@ private struct CommandArguments(RECEIVER)
     {
         checkArgumentName!RECEIVER(config.namedArgChar);
 
-        arguments = createArguments!RECEIVER(config.caseSensitive);
+        arguments = Arguments!RECEIVER(config.caseSensitive);
+        fillArguments();
 
         if(config.addHelp)
         {
@@ -3019,6 +3015,21 @@ private struct CommandArguments(RECEIVER)
                 return Result(0);
             });
         }
+    }
+
+    private void fillArguments()
+    {
+        enum hasNoUDAs = getSymbolsByUDA!(RECEIVER, ArgumentUDA  ).length == 0 &&
+                         getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0;
+
+        static foreach(sym; __traits(allMembers, RECEIVER))
+        {{
+            alias mem = __traits(getMember,RECEIVER,sym);
+
+            static if(!is(mem)) // skip types
+                static if(hasNoUDAs || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
+                    addArgument!(sym)(arguments);
+        }}
     }
 }
 
