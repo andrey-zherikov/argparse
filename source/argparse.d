@@ -3297,15 +3297,18 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
     if(group.arguments.length == 0 || group.name.length == 0)
         return;
 
-    output.put(group.name);
-    output.put(":\n");
+    alias printDescription = {
+        output.put(group.name);
+        output.put(":\n");
 
-    if(group.description.length > 0)
-    {
-        output.put("  ");
-        output.put(group.description);
-        output.put("\n\n");
-    }
+        if (group.description.length > 0)
+        {
+            output.put("  ");
+            output.put(group.description);
+            output.put("\n\n");
+        }
+    };
+    bool descriptionIsPrinted = false;
 
     immutable ident = spaces(helpPosition + 2);
 
@@ -3315,7 +3318,14 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
 
         if(arg.invocation.length == 0)
             continue;
-        else if(arg.invocation.length <= helpPosition - 4) // 2=indent, 2=two spaces between invocation and help text
+
+        if(!descriptionIsPrinted)
+        {
+            printDescription();
+            descriptionIsPrinted = true;
+        }
+
+        if(arg.invocation.length <= helpPosition - 4) // 2=indent, 2=two spaces between invocation and help text
         {
             import std.array: appender;
 
