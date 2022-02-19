@@ -839,6 +839,23 @@ private enum helpArgument = {
     return arg;
 }();
 
+private bool isHelpArgument(string name)
+{
+    static foreach(n; helpArgument.names)
+        if(n == name)
+            return true;
+
+    return false;
+}
+
+unittest
+{
+    assert(isHelpArgument("h"));
+    assert(isHelpArgument("help"));
+    assert(!isHelpArgument("a"));
+    assert(!isHelpArgument("help1"));
+}
+
 struct Result
 {
     int  resultCode;
