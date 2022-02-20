@@ -2911,6 +2911,7 @@ private struct CommandInfo
     private string name;
     private string usage;
     private string description;
+    private string summary;
     private string epilog;
 
     auto ref Usage(string text)
@@ -2922,6 +2923,12 @@ private struct CommandInfo
     auto ref Description(string text)
     {
         description = text;
+        return this;
+    }
+
+    auto ref Summary(string text)
+    {
+        summary = text;
         return this;
     }
 
@@ -2939,10 +2946,11 @@ auto Command(string name = "")
 
 unittest
 {
-    auto a = Command("MYPROG").Usage("usg").Description("desc").Epilog("epi");
+    auto a = Command("MYPROG").Usage("usg").Description("desc").Summary("sum").Epilog("epi");
     assert(a.name == "MYPROG");
     assert(a.usage == "usg");
     assert(a.description == "desc");
+    assert(a.summary == "sum");
     assert(a.epilog == "epi");
 }
 
