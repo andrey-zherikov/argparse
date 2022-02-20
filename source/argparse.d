@@ -419,7 +419,7 @@ unittest
 }
 
 
-private alias ParseFunction(RECEIVER) = Result delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues);
+private alias ParseFunction(RECEIVER) = Result delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
 private alias Restriction = bool delegate(in Config config, in bool[size_t] cliArgs);
 
 // Have to do this magic because closures are not supported in CFTE
@@ -514,20 +514,12 @@ private struct Restrictions
     }
 }
 
-private struct Arguments(RECEIVER)
+private struct Arguments
 {
-    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1,
-                  "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
-
-    private enum _validate = checkArgumentNames!RECEIVER &&
-                             checkPositionalIndexes!RECEIVER;
-
-
 
     immutable string function(string str) convertCase;
 
     private ArgumentInfo[] arguments;
-    private ParseFunction!RECEIVER[] parseFunctions;
 
     // named arguments
     private size_t[string] argsNamed;
@@ -567,28 +559,28 @@ private struct Arguments(RECEIVER)
         groups = [ Group("Required arguments"), Group("Optional arguments") ];
     }
 
-    private void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions, Group group)(ParseFunction!RECEIVER parse)
+    private void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions, Group group)()
     {
         auto index = (group.name in groupsByName);
         if(index !is null)
-            addArgument!(info, restrictions)(parse, groups[*index]);
+            addArgument!(info, restrictions)(groups[*index]);
         else
         {
             groupsByName[group.name] = groups.length;
             groups ~= group;
-            addArgument!(info, restrictions)(parse, groups[$-1]);
+            addArgument!(info, restrictions)(groups[$-1]);
         }
     }
 
-    private void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions = [])(ParseFunction!RECEIVER parse)
+    private void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions = [])()
     {
         static if(info.required)
-            addArgument!(info, restrictions)(parse, requiredGroup);
+            addArgument!(info, restrictions)(requiredGroup);
         else
-            addArgument!(info, restrictions)(parse, optionalGroup);
+            addArgument!(info, restrictions)(optionalGroup);
     }
 
-    private void addArgument(ArgumentInfo info, RestrictionGroup[] argRestrictions = [])(ParseFunction!RECEIVER parse, ref Group group)
+    private void addArgument(ArgumentInfo info, RestrictionGroup[] argRestrictions = [])( ref Group group)
     {
         static assert(info.names.length > 0);
 
@@ -609,7 +601,6 @@ private struct Arguments(RECEIVER)
             }
 
         arguments ~= info;
-        parseFunctions ~= parse;
         group.arguments ~= index;
 
         static if(info.required)
@@ -663,10 +654,9 @@ private struct Arguments(RECEIVER)
         {
             size_t index = size_t.max;
             const(ArgumentInfo)* arg;
-            ParseFunction!RECEIVER parse;
         }
 
-        return pIndex ? Result(*pIndex, &arguments[*pIndex], parseFunctions[*pIndex]) : Result.init;
+        return pIndex ? Result(*pIndex, &arguments[*pIndex]) : Result.init;
     }
 
     auto findPositionalArgument(size_t position) const
@@ -678,28 +668,15 @@ private struct Arguments(RECEIVER)
     {
         return findArgumentImpl(convertCase(name) in argsNamed);
     }
-
-    static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
-    {
-        private void setTrailingArgs(ref RECEIVER receiver, string[] rawValues) const
-        {
-            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArguments)[0]);
-            auto target = &__traits(getMember, receiver, symbol);
-
-            static if(__traits(compiles, { *target = rawValues; }))
-                *target = rawValues;
-            else
-                static assert(false, "Type '"~typeof(*target).stringof~"' of `"~
-                    RECEIVER.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
-        }
-    }
 }
 
 private alias ParsingFunction(alias symbol, alias uda, ArgumentInfo info, RECEIVER) =
-    delegate(in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
+    delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
     {
         try
         {
+            auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, info, config);
+
             if(!info.checkValuesCount(config, argName, rawValues.length))
                 return Result.Failure;
 
@@ -720,55 +697,6 @@ private alias ParsingFunction(alias symbol, alias uda, ArgumentInfo info, RECEIV
     };
 
 
-private void addArgument(alias symbol, RECEIVER)(ref Arguments!RECEIVER args)
-{
-    alias member = __traits(getMember, RECEIVER, symbol);
-
-    static assert(getUDAs!(member, ArgumentUDA).length <= 1,
-        "Member "~RECEIVER.stringof~"."~symbol~" has multiple '*Argument' UDAs");
-
-    static assert(getUDAs!(member, Group).length <= 1,
-        "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
-
-    static if(getUDAs!(member, ArgumentUDA).length > 0)
-        enum uda = getUDAs!(member, ArgumentUDA)[0];
-    else
-        enum uda = NamedArgument();
-
-    enum info = setDefaults!(uda.info, typeof(member), symbol);
-
-    enum restrictions = {
-        RestrictionGroup[] restrictions;
-        static foreach(gr; getUDAs!(member, RestrictionGroup))
-            restrictions ~= gr;
-        return restrictions;
-    }();
-
-    static if(getUDAs!(member, Group).length > 0)
-        args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
-    else
-        args.addArgument!(info, restrictions)(ParsingFunction!(symbol, uda, info, RECEIVER));
-}
-
-private auto createArguments(RECEIVER)(bool caseSensitive)
-{
-    auto args = Arguments!RECEIVER(caseSensitive);
-
-    enum hasNoUDAs = getSymbolsByUDA!(RECEIVER, ArgumentUDA  ).length == 0 &&
-                     getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0;
-
-    static foreach(sym; __traits(allMembers, RECEIVER))
-    {{
-        alias mem = __traits(getMember,RECEIVER,sym);
-
-        static if(!is(mem)) // skip types
-            static if(hasNoUDAs || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
-                addArgument!(sym)(args);
-    }}
-
-    return args;
-}
-
 unittest
 {
     struct T
@@ -786,12 +714,19 @@ unittest
         @(NamedArgument)
         int f;
     }
-    static assert(createArguments!T(true).arguments.length == 6);
 
-    auto a = createArguments!T(true);
-    assert(a.requiredGroup.arguments == [2,4]);
-    assert(a.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
-    assert(a.argsPositional == []);
+    enum config = {
+        Config config;
+        config.addHelp = false;
+        return config;
+    }();
+
+    static assert(CommandArguments!T(config).arguments.arguments.length == 6);
+
+    auto a = CommandArguments!T(config);
+    assert(a.arguments.requiredGroup.arguments == [2,4]);
+    assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    assert(a.arguments.argsPositional == []);
 }
 
 unittest
@@ -800,12 +735,19 @@ unittest
     {
         int a,b,c,d,e,f;
     }
-    static assert(createArguments!T(true).arguments.length == 6);
 
-    auto a = createArguments!T(true);
-    assert(a.requiredGroup.arguments == []);
-    assert(a.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
-    assert(a.argsPositional == []);
+    enum config = {
+        Config config;
+        config.addHelp = false;
+        return config;
+    }();
+
+    static assert(CommandArguments!T(config).arguments.arguments.length == 6);
+
+    auto a = CommandArguments!T(config);
+    assert(a.arguments.requiredGroup.arguments == []);
+    assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    assert(a.arguments.argsPositional == []);
 }
 
 unittest
@@ -816,7 +758,7 @@ unittest
         @(NamedArgument("2"))
         int a;
     }
-    static assert(!__traits(compiles, { createArguments!T1(true); }));
+    static assert(!__traits(compiles, { CommandArguments!T1(Config.init); }));
 
     struct T2
     {
@@ -825,21 +767,21 @@ unittest
         @(NamedArgument("1"))
         int b;
     }
-    static assert(!__traits(compiles, { createArguments!T1(true); }));
+    static assert(!__traits(compiles, { CommandArguments!T1(Config.init); }));
 
     struct T3
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(0)) int b;
     }
-    static assert(!__traits(compiles, { createArguments!T3(true); }));
+    static assert(!__traits(compiles, { CommandArguments!T3(Config.init); }));
 
     struct T4
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(2)) int b;
     }
-    static assert(!__traits(compiles, { createArguments!T4(true); }));
+    static assert(!__traits(compiles, { CommandArguments!T4(Config.init); }));
 }
 
 private void checkArgumentName(T)(char namedArgChar)
@@ -897,6 +839,23 @@ private enum helpArgument = {
     return arg;
 }();
 
+private bool isHelpArgument(string name)
+{
+    static foreach(n; helpArgument.names)
+        if(n == name)
+            return true;
+
+    return false;
+}
+
+unittest
+{
+    assert(isHelpArgument("h"));
+    assert(isHelpArgument("help"));
+    assert(!isHelpArgument("a"));
+    assert(!isHelpArgument("help1"));
+}
+
 struct Result
 {
     int  resultCode;
@@ -938,7 +897,7 @@ private struct Parser
     bool[size_t] idxParsedArgs;
     size_t idxNextPositional = 0;
 
-    
+
     Argument splitArgumentNameValue(string arg)
     {
         import std.string : indexOf;
@@ -961,11 +920,11 @@ private struct Parser
         ? Argument(NamedLong (nameWithDash[2..$], nameWithDash, value))
         : Argument(NamedShort(nameWithDash[1..$], nameWithDash, value));
     }
-    
-    auto endOfArgs(T)(const ref Arguments!T cmdArguments, ref T receiver)
+
+    auto endOfArgs(T)(const ref CommandArguments!T cmd, ref T receiver)
     {
-        static if(is(typeof(cmdArguments.setTrailingArgs)))
-            cmdArguments.setTrailingArgs(receiver, args[1..$]);
+        static if(is(typeof(cmd.setTrailingArgs)))
+            cmd.setTrailingArgs(receiver, args[1..$]);
         else
             unrecognizedArgs ~= args[1..$];
 
@@ -984,11 +943,9 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parseArgument(T, ARG)(ref T receiver, string value, string nameWithDash, ARG foundArg)
+    auto parseArgument(T, ARG)(const ref CommandArguments!T cmd, ref T receiver, string value, string nameWithDash, ARG foundArg)
     {
-        auto values = value is null ? consumeValuesFromCLI(args, *foundArg.arg, config) : [ value ];
-
-        immutable res = foundArg.parse(config, nameWithDash, receiver, values);
+        immutable res = cmd.parseFunctions[foundArg.index](config, nameWithDash, receiver, value, args);
         if(!res)
             return res;
 
@@ -997,18 +954,18 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, Unknown)
+    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Unknown)
     {
         return unknownArg();
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, Positional)
+    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Positional)
     {
-        auto foundArg = cmdArguments.findPositionalArgument(idxNextPositional);
+        auto foundArg = cmd.findPositionalArgument(idxNextPositional);
         if(foundArg.arg is null)
             return unknownArg();
 
-        immutable res = parseArgument(receiver, null, foundArg.arg.names[0], foundArg);
+        immutable res = parseArgument(cmd, receiver, null, foundArg.arg.names[0], foundArg);
         if(!res)
             return res;
 
@@ -1017,16 +974,16 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, NamedLong arg)
+    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, NamedLong arg)
     {
         import std.algorithm : startsWith;
         import std.range: popFront;
 
-        auto foundArg = cmdArguments.findNamedArgument(arg.name);
+        auto foundArg = cmd.findNamedArgument(arg.name);
 
         if(foundArg.arg is null && arg.name.startsWith("no-"))
         {
-            foundArg = cmdArguments.findNamedArgument(arg.name[3..$]);
+            foundArg = cmd.findNamedArgument(arg.name[3..$]);
             if(foundArg.arg is null || !foundArg.arg.allowBooleanNegation)
                 return unknownArg();
 
@@ -1037,25 +994,25 @@ private struct Parser
             return unknownArg();
 
         args.popFront();
-        return parseArgument(receiver, arg.value, arg.nameWithDash, foundArg);
+        return parseArgument(cmd, receiver, arg.value, arg.nameWithDash, foundArg);
     }
 
-    auto parse(T)(const ref Arguments!T cmdArguments, ref T receiver, NamedShort arg)
+    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, NamedShort arg)
     {
         import std.range: popFront;
 
-        auto foundArg = cmdArguments.findNamedArgument(arg.name);
+        auto foundArg = cmd.findNamedArgument(arg.name);
         if(foundArg.arg !is null)
         {
             args.popFront();
-            return parseArgument(receiver, arg.value, arg.nameWithDash, foundArg);
+            return parseArgument(cmd, receiver, arg.value, arg.nameWithDash, foundArg);
         }
 
         // Try to parse "-ABC..." where "A","B","B" are different single-letter arguments
         do
         {
             auto name = [arg.name[0]];
-            foundArg = cmdArguments.findNamedArgument(name);
+            foundArg = cmd.findNamedArgument(name);
             if(foundArg.arg is null)
                 return unknownArg();
 
@@ -1078,7 +1035,7 @@ private struct Parser
                 arg.name = "";
             }
 
-            immutable res = parseArgument(receiver, value, "-"~name, foundArg);
+            immutable res = parseArgument(cmd, receiver, value, "-"~name, foundArg);
             if(!res)
                 return res;
         }
@@ -1088,7 +1045,7 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parseAll(T)(const ref Arguments!T cmdArguments, ref T receiver)
+    auto parseAll(T)(const ref CommandArguments!T cmd, ref T receiver)
     {
         import std.range: front, empty;
         import std.sumtype: match;
@@ -1096,12 +1053,15 @@ private struct Parser
         while(!args.empty)
         {
             if(config.endOfArgs.length > 0 && args.front == config.endOfArgs)
-                return endOfArgs(cmdArguments, receiver);
+                return endOfArgs(cmd, receiver);
 
-            immutable res = splitArgumentNameValue(args.front).match!(_ => parse(cmdArguments, receiver, _));
+            immutable res = splitArgumentNameValue(args.front).match!(_ => parse(cmd, receiver, _));
             if(!res)
                 return res;
         }
+
+        if(!cmd.checkRestrictions(idxParsedArgs, config))
+            return Result.Failure;
 
         return Result.Success;
     }
@@ -1127,22 +1087,14 @@ unittest
 private Result parseCLIKnownArgs(T)(ref T receiver,
                                     string[] args,
                                     out string[] unrecognizedArgs,
-                                    const ref Arguments!T cmdArguments,
+                                    const ref CommandArguments!T cmd,
                                     in Config config)
 {
-    import std.range: front, empty;
-    import std.sumtype: match;
-
-    checkArgumentName!T(config.namedArgChar);
-
     auto parser = Parser(config, args);
 
-    immutable res = parser.parseAll(cmdArguments, receiver);
+    immutable res = parser.parseAll(cmd, receiver);
     if(!res)
         return res;
-
-    if(!cmdArguments.checkRestrictions(parser.idxParsedArgs, config))
-        return Result.Failure;
 
     unrecognizedArgs = parser.unrecognizedArgs;
 
@@ -1150,12 +1102,12 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
 }
 
 Result parseCLIKnownArgs(T)(ref T receiver,
-                                    string[] args,
-                                    out string[] unrecognizedArgs,
-                                    in Config config = Config.init)
+                            string[] args,
+                            out string[] unrecognizedArgs,
+                            in Config config = Config.init)
 {
     auto command = CommandArguments!T(config);
-    return parseCLIKnownArgs(receiver, args, unrecognizedArgs, command.arguments, config);
+    return parseCLIKnownArgs(receiver, args, unrecognizedArgs, command, config);
 }
 
 auto parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)
@@ -1281,11 +1233,11 @@ unittest
     }
 
     enum p = CommandArguments!params(Config.init);
-    static assert(p.arguments.findNamedArgument("a").arg is null);
-    static assert(p.arguments.findNamedArgument("b").arg !is null);
-    static assert(p.arguments.findNamedArgument("boo").arg !is null);
-    static assert(p.arguments.findPositionalArgument(0).arg !is null);
-    static assert(p.arguments.findPositionalArgument(1).arg is null);
+    static assert(p.findNamedArgument("a").arg is null);
+    static assert(p.findNamedArgument("b").arg !is null);
+    static assert(p.findNamedArgument("boo").arg !is null);
+    static assert(p.findPositionalArgument(0).arg !is null);
+    static assert(p.findPositionalArgument(1).arg is null);
 }
 
 unittest
@@ -2994,9 +2946,21 @@ unittest
     assert(a.epilog == "epi");
 }
 
+private mixin template ForwardMemberFunction(string dest)
+{
+    import std.array: split;
+    mixin("auto "~dest.split('.')[$-1]~"(Args...)(auto ref Args args) inout { import core.lifetime: forward; return "~dest~"(forward!args); }");
+}
+
 
 private struct CommandArguments(RECEIVER)
 {
+    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1,
+        "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
+
+    private enum _validate = checkArgumentNames!RECEIVER &&
+                             checkPositionalIndexes!RECEIVER;
+
     static assert(getUDAs!(RECEIVER, CommandInfo).length <= 1);
 
     static if(getUDAs!(RECEIVER, CommandInfo).length == 0)
@@ -3004,23 +2968,96 @@ private struct CommandArguments(RECEIVER)
     else
         CommandInfo info = getUDAs!(RECEIVER, CommandInfo)[0];
 
-    Arguments!RECEIVER arguments;
+    Arguments arguments;
+
+    ParseFunction!RECEIVER[] parseFunctions;
+
+    mixin ForwardMemberFunction!"arguments.findPositionalArgument";
+    mixin ForwardMemberFunction!"arguments.findNamedArgument";
+    mixin ForwardMemberFunction!"arguments.checkRestrictions";
+
 
 
     private this(in Config config)
     {
-        arguments = createArguments!RECEIVER(config.caseSensitive);
+        checkArgumentName!RECEIVER(config.namedArgChar);
+
+        arguments = Arguments(config.caseSensitive);
+        fillArguments();
 
         if(config.addHelp)
         {
-            arguments.addArgument!helpArgument(delegate (in Config config, string argName, ref RECEIVER receiver, string[] rawValues)
+            arguments.addArgument!helpArgument;
+            parseFunctions ~= delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
             {
                 import std.stdio: stdout;
 
                 printHelp(stdout.lockingTextWriter(), this, config);
 
                 return Result(0);
-            });
+            };
+        }
+    }
+
+    private void fillArguments()
+    {
+        enum hasNoUDAs = getSymbolsByUDA!(RECEIVER, ArgumentUDA  ).length == 0 &&
+                         getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0;
+
+        static foreach(sym; __traits(allMembers, RECEIVER))
+        {{
+            alias mem = __traits(getMember, RECEIVER, sym);
+
+            static if(!is(mem)) // skip types
+                static if(hasNoUDAs || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
+                    addArgument!sym;
+        }}
+    }
+
+    private void addArgument(alias symbol)()
+    {
+        alias member = __traits(getMember, RECEIVER, symbol);
+
+        static assert(getUDAs!(member, ArgumentUDA).length <= 1,
+            "Member "~RECEIVER.stringof~"."~symbol~" has multiple '*Argument' UDAs");
+
+        static assert(getUDAs!(member, Group).length <= 1,
+            "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
+
+        static if(getUDAs!(member, ArgumentUDA).length > 0)
+            enum uda = getUDAs!(member, ArgumentUDA)[0];
+        else
+            enum uda = NamedArgument();
+
+        enum info = setDefaults!(uda.info, typeof(member), symbol);
+
+        enum restrictions = {
+            RestrictionGroup[] restrictions;
+            static foreach(gr; getUDAs!(member, RestrictionGroup))
+                restrictions ~= gr;
+            return restrictions;
+        }();
+
+        static if(getUDAs!(member, Group).length > 0)
+            arguments.addArgument!(info, restrictions, getUDAs!(member, Group)[0]);
+        else
+            arguments.addArgument!(info, restrictions);
+
+        parseFunctions ~= ParsingFunction!(symbol, uda, info, RECEIVER);
+    }
+
+    static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
+    {
+        private void setTrailingArgs(ref RECEIVER receiver, string[] rawValues) const
+        {
+            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArguments)[0]);
+            auto target = &__traits(getMember, receiver, symbol);
+
+            static if(__traits(compiles, { *target = rawValues; }))
+                *target = rawValues;
+            else
+                static assert(false, "Type '"~typeof(*target).stringof~"' of `"~
+                    RECEIVER.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
         }
     }
 }
@@ -3260,15 +3297,18 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
     if(group.arguments.length == 0 || group.name.length == 0)
         return;
 
-    output.put(group.name);
-    output.put(":\n");
+    alias printDescription = {
+        output.put(group.name);
+        output.put(":\n");
 
-    if(group.description.length > 0)
-    {
-        output.put("  ");
-        output.put(group.description);
-        output.put("\n\n");
-    }
+        if (group.description.length > 0)
+        {
+            output.put("  ");
+            output.put(group.description);
+            output.put("\n\n");
+        }
+    };
+    bool descriptionIsPrinted = false;
 
     immutable ident = spaces(helpPosition + 2);
 
@@ -3278,7 +3318,14 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
 
         if(arg.invocation.length == 0)
             continue;
-        else if(arg.invocation.length <= helpPosition - 4) // 2=indent, 2=two spaces between invocation and help text
+
+        if(!descriptionIsPrinted)
+        {
+            printDescription();
+            descriptionIsPrinted = true;
+        }
+
+        if(arg.invocation.length <= helpPosition - 4) // 2=indent, 2=two spaces between invocation and help text
         {
             import std.array: appender;
 
@@ -3301,23 +3348,14 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
 }
 
 
-private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
+private void printHelp(Output)(auto ref Output output, in Arguments arguments, in Config config)
 {
     import std.algorithm: map, maxElement, min;
     import std.array: appender, array;
 
-    printUsage(output, cmd, config);
-    output.put('\n');
-
-    if(cmd.info.description.length > 0)
-    {
-        output.put(cmd.info.description);
-        output.put("\n\n");
-    }
-
     // pre-compute the output
     auto args =
-        cmd.arguments.arguments
+        arguments.arguments
         .map!((ref _)
         {
             struct Result
@@ -3338,14 +3376,29 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
     immutable helpPosition = min(maxInvocationWidth + 4, 24);
 
     //user-defined groups
-    foreach(ref group; cmd.arguments.groups[2..$])
+    foreach(ref group; arguments.groups[2..$])
         output.printHelp(group, args, helpPosition);
 
     //required args
-    output.printHelp(cmd.arguments.requiredGroup, args, helpPosition);
+    output.printHelp(arguments.requiredGroup, args, helpPosition);
 
     //optionals args
-    output.printHelp(cmd.arguments.optionalGroup, args, helpPosition);
+    output.printHelp(arguments.optionalGroup, args, helpPosition);
+}
+
+
+private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
+{
+    printUsage(output, cmd, config);
+    output.put('\n');
+
+    if(cmd.info.description.length > 0)
+    {
+        output.put(cmd.info.description);
+        output.put("\n\n");
+    }
+
+    output.printHelp(cmd.arguments, config);
 
     if(cmd.info.epilog.length > 0)
     {
