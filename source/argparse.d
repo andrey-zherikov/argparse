@@ -3768,6 +3768,49 @@ unittest
 
 unittest
 {
+    import std.sumtype: SumType, match;
+
+    @Command("MYPROG")
+    struct T
+    {
+        @(Command("cmd1").ShortDescription("Perform cmd 1"))
+        struct CMD1
+        {
+            string a;
+        }
+        @(Command("cmd2").ShortDescription("Perform cmd 2"))
+        struct CMD2
+        {
+            string b;
+        }
+
+        string c;
+        string d;
+
+        SumType!(CMD1, CMD2) cmd;
+    }
+
+    auto test(alias func)()
+    {
+        import std.array: appender;
+
+        auto a = appender!string;
+        func!T(a, Config.init);
+        return a[];
+    }
+
+    assert(test!printHelp  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
+        "Available commands:\n"~
+        "  cmd1    Perform cmd 1\n"~
+        "  cmd2    Perform cmd 2\n\n"~
+        "Optional arguments:\n"~
+        "  -c C          \n"~
+        "  -d D          \n"~
+        "  -h, --help    Show this help message and exit\n\n");
+}
+
+unittest
+{
     @Command("MYPROG")
     struct T
     {
