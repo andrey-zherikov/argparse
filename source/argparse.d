@@ -1531,6 +1531,24 @@ unittest
     assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
 }
 
+unittest
+{
+    import std.sumtype: SumType, match;
+
+    struct T
+    {
+        struct cmd1 { string a; }
+        struct cmd2 { string b; }
+
+        string c;
+        string d;
+
+        SumType!(cmd1, cmd2) cmd;
+    }
+
+    assert(["-c","C","cmd2","-b","B"].parseCLIArgs!T.get == T("C",null,typeof(T.cmd)(T.cmd2("B"))));
+}
+
 struct Main
 {
     mixin template parseCLIKnownArgs(TYPE, alias newMain, Config config = Config.init)
