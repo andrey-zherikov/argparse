@@ -818,7 +818,6 @@ private auto consumeValuesFromCLI(ref string[] args, in ArgumentInfo argumentInf
 
     while(!args.empty &&
         values.length < maxValuesCount &&
-        (config.endOfArgs.length == 0 || args.front != config.endOfArgs) &&
         (args.front.length == 0 || args.front[0] != config.namedArgChar))
     {
         values ~= args.front;
@@ -860,15 +859,17 @@ struct Result
 {
     int  resultCode;
 
-    private bool success;
+    private enum Status { failure, success, unknownArgument };
+    private Status status;
 
     bool opCast(type)() const if (is(type == bool))
     {
-        return success;
+        return status == Status.success;
     }
 
-    private static enum Failure = Result(1);
-    private static enum Success = Result(0, true);
+    private static enum Failure = Result(1, Status.failure);
+    private static enum Success = Result(0, Status.success);
+    private static enum UnknownArgument = Result(0, Status.unknownArgument);
 }
 
 private struct Parser
@@ -897,6 +898,9 @@ private struct Parser
     bool[size_t] idxParsedArgs;
     size_t idxNextPositional = 0;
 
+    private alias CmdParser = Result delegate(const ref Argument);
+
+    CmdParser[] cmdStack;
 
     Argument splitArgumentNameValue(string arg)
     {
@@ -921,51 +925,46 @@ private struct Parser
         : Argument(NamedShort(nameWithDash[1..$], nameWithDash, value));
     }
 
-    auto endOfArgs(T)(const ref CommandArguments!T cmd, ref T receiver)
+    void parseEndOfArgs(T)(const ref CommandArguments!T cmd, ref T receiver)
     {
-        static if(is(typeof(cmd.setTrailingArgs)))
-            cmd.setTrailingArgs(receiver, args[1..$]);
-        else
-            unrecognizedArgs ~= args[1..$];
+        if(config.endOfArgs.length == 0)
+            return;
 
-        args = [];
+        foreach(i, arg; args)
+            if(arg == config.endOfArgs)
+            {
+                static if(is(typeof(cmd.setTrailingArgs)))
+                    cmd.setTrailingArgs(receiver, args[i+1..$]);
+                else
+                    unrecognizedArgs ~= args[i+1..$];
 
-        return Result.Success;
+                args = args[0..i];
+            }
     }
 
-    auto unknownArg()
+    auto parseArgument(T, PARSE)(PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
     {
-        import std.range: front, popFront;
-
-        unrecognizedArgs ~= args.front;
-        args.popFront();
-
-        return Result.Success;
-    }
-
-    auto parseArgument(T, ARG)(const ref CommandArguments!T cmd, ref T receiver, string value, string nameWithDash, ARG foundArg)
-    {
-        immutable res = cmd.parseFunctions[foundArg.index](config, nameWithDash, receiver, value, args);
+        immutable res = parse(config, nameWithDash, receiver, value, args);
         if(!res)
             return res;
 
-        idxParsedArgs[foundArg.index] = true;
+        idxParsedArgs[argIndex] = true;
 
         return Result.Success;
     }
 
     auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Unknown)
     {
-        return unknownArg();
+        return Result.UnknownArgument;
     }
 
     auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Positional)
     {
         auto foundArg = cmd.findPositionalArgument(idxNextPositional);
         if(foundArg.arg is null)
-            return unknownArg();
+            return Result.UnknownArgument;
 
-        immutable res = parseArgument(cmd, receiver, null, foundArg.arg.names[0], foundArg);
+        immutable res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, null, foundArg.arg.names[0], foundArg.index);
         if(!res)
             return res;
 
@@ -985,16 +984,16 @@ private struct Parser
         {
             foundArg = cmd.findNamedArgument(arg.name[3..$]);
             if(foundArg.arg is null || !foundArg.arg.allowBooleanNegation)
-                return unknownArg();
+                return Result.UnknownArgument;
 
             arg.value = "false";
         }
 
         if(foundArg.arg is null)
-            return unknownArg();
+            return Result.UnknownArgument;
 
         args.popFront();
-        return parseArgument(cmd, receiver, arg.value, arg.nameWithDash, foundArg);
+        return parseArgument(cmd.parseFunctions[foundArg.index], receiver, arg.value, arg.nameWithDash, foundArg.index);
     }
 
     auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, NamedShort arg)
@@ -1005,24 +1004,24 @@ private struct Parser
         if(foundArg.arg !is null)
         {
             args.popFront();
-            return parseArgument(cmd, receiver, arg.value, arg.nameWithDash, foundArg);
+            return parseArgument(cmd.parseFunctions[foundArg.index], receiver, arg.value, arg.nameWithDash, foundArg.index);
         }
 
-        // Try to parse "-ABC..." where "A","B","B" are different single-letter arguments
+        // Try to parse "-ABC..." where "A","B","C" are different single-letter arguments
         do
         {
             auto name = [arg.name[0]];
             foundArg = cmd.findNamedArgument(name);
             if(foundArg.arg is null)
-                return unknownArg();
+                return Result.UnknownArgument;
 
             // In case of bundling there can be no or one argument value
             if(config.bundling && foundArg.arg.minValuesCount.get > 1)
-                return unknownArg();
+                return Result.UnknownArgument;
 
             // In case of NO bundling there MUST be one argument value
             if(!config.bundling && foundArg.arg.minValuesCount.get != 1)
-                return unknownArg();
+                return Result.UnknownArgument;
 
             string value;
             if(foundArg.arg.minValuesCount == 0)
@@ -1035,7 +1034,7 @@ private struct Parser
                 arg.name = "";
             }
 
-            immutable res = parseArgument(cmd, receiver, value, "-"~name, foundArg);
+            immutable res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, value, "-"~name, foundArg.index);
             if(!res)
                 return res;
         }
@@ -1045,17 +1044,40 @@ private struct Parser
         return Result.Success;
     }
 
+    auto parse(Argument arg)
+    {
+        import std.range: front, popFront;
+
+        foreach_reverse(cmdParser; cmdStack)
+        {
+            immutable res = cmdParser(arg);
+            if(res.status != Result.Status.unknownArgument)
+                return res;
+        }
+
+        unrecognizedArgs ~= args.front;
+        args.popFront();
+
+        return Result.Success;
+    }
+
     auto parseAll(T)(const ref CommandArguments!T cmd, ref T receiver)
     {
-        import std.range: front, empty;
-        import std.sumtype: match;
+        import std.range: empty, front;
+
+        // Process trailing args first
+        parseEndOfArgs(cmd, receiver);
+
+        cmdStack ~= (const ref arg)
+        {
+            import std.sumtype: match;
+
+            return arg.match!(_ => parse(cmd, receiver, _));
+        };
 
         while(!args.empty)
         {
-            if(config.endOfArgs.length > 0 && args.front == config.endOfArgs)
-                return endOfArgs(cmd, receiver);
-
-            immutable res = splitArgumentNameValue(args.front).match!(_ => parse(cmd, receiver, _));
+            immutable res = parse(splitArgumentNameValue(args.front));
             if(!res)
                 return res;
         }
