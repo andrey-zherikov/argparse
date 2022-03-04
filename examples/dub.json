@@ -3,13 +3,16 @@
 	"name": "all",
 	"targetType":"none",
 	"dependencies":{
-		"all:argparse":"*",
 		"all:getting_started_basic":"*",
-		"all:getting_started_extended":"*"
+		"all:getting_started_extended":"*",
+		"all:sub_commands-advanced":"*",
+		"all:sub_commands-basic":"*"
 	},
 	"subPackages": [
 		"..",
 		"getting_started_basic",
-		"getting_started_extended"
+		"getting_started_extended",
+		"sub_commands/advanced",
+		"sub_commands/basic"
 	]
 }

@@ -420,6 +420,7 @@ unittest
 
 
 private alias ParseFunction(RECEIVER) = Result delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
+private alias ParseSubCommandFunction(RECEIVER) = Result delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver);
 private alias Restriction = bool delegate(in Config config, in bool[size_t] cliArgs);
 
 // Have to do this magic because closures are not supported in CFTE
@@ -527,6 +528,7 @@ private struct Arguments
     // positional arguments
     private size_t[] argsPositional;
 
+    private const Arguments* parentArguments;
 
     Group[] groups;
     enum requiredGroupIndex = 0;
@@ -545,7 +547,7 @@ private struct Arguments
     @property auto positionalArguments() const { return argsPositional; }
 
 
-    this(bool caseSensitive)
+    this(bool caseSensitive, const Arguments* parentArguments = null)
     {
         if(caseSensitive)
             convertCase = s => s;
@@ -555,6 +557,8 @@ private struct Arguments
                 import std.uni : toUpper;
                 return str.toUpper;
             };
+
+        this.parentArguments = parentArguments;
 
         groups = [ Group("Required arguments"), Group("Optional arguments") ];
     }
@@ -696,6 +700,46 @@ private alias ParsingFunction(alias symbol, alias uda, ArgumentInfo info, RECEIV
         }
     };
 
+private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol)(const CommandArguments!RECEIVER* parentArguments)
+{
+    return delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver)
+    {
+        try
+        {
+            import std.sumtype: match;
+
+            auto target = &__traits(getMember, receiver, symbol);
+
+            *target = COMMAND_TYPE.init;
+
+            alias parse = (ref COMMAND_TYPE cmdTarget)
+            {
+                auto command = CommandArguments!COMMAND_TYPE(parser.config, parentArguments);
+
+                return arg.match!(_ => parser.parse(command, cmdTarget, _));
+            };
+
+
+            static if(typeof(*target).Types.length == 1)
+                return (*target).match!parse;
+            else
+                return (*target).match!(parse,
+                    (_)
+                    {
+                        assert(false, "This should never happen");
+                        return Result.Failure;
+                    }
+                );
+        }
+        catch(Exception e)
+        {
+            parser.config.onError(e.msg);
+            return Result.Failure;
+        }
+    };
+}
+
+struct SubCommands {}
 
 unittest
 {
@@ -953,6 +997,24 @@ private struct Parser
         return Result.Success;
     }
 
+    auto parseSubCommand(T)(const ref CommandArguments!T cmd, ref T receiver)
+    {
+        import std.range: front, popFront;
+
+        auto found = cmd.findSubCommand(args.front);
+        if(found.parse is null)
+            return Result.UnknownArgument;
+
+        if(found.level < cmdStack.length)
+            cmdStack.length = found.level;
+
+        cmdStack ~= (const ref arg) => found.parse(this, arg, receiver);
+
+        args.popFront();
+
+        return Result.Success;
+    }
+
     auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Unknown)
     {
         return Result.UnknownArgument;
@@ -962,7 +1024,7 @@ private struct Parser
     {
         auto foundArg = cmd.findPositionalArgument(idxNextPositional);
         if(foundArg.arg is null)
-            return Result.UnknownArgument;
+            return parseSubCommand(cmd, receiver);
 
         immutable res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, null, foundArg.arg.names[0], foundArg.index);
         if(!res)
@@ -2933,7 +2995,7 @@ private struct CommandInfo
     private string name;
     private string usage;
     private string description;
-    private string summary;
+    private string shortDescription;
     private string epilog;
 
     auto ref Usage(string text)
@@ -2948,9 +3010,9 @@ private struct CommandInfo
         return this;
     }
 
-    auto ref Summary(string text)
+    auto ref ShortDescription(string text)
     {
-        summary = text;
+        shortDescription = text;
         return this;
     }
 
@@ -2968,11 +3030,11 @@ auto Command(string name = "")
 
 unittest
 {
-    auto a = Command("MYPROG").Usage("usg").Description("desc").Summary("sum").Epilog("epi");
+    auto a = Command("MYPROG").Usage("usg").Description("desc").ShortDescription("sum").Epilog("epi");
     assert(a.name == "MYPROG");
     assert(a.usage == "usg");
     assert(a.description == "desc");
-    assert(a.summary == "sum");
+    assert(a.shortDescription == "sum");
     assert(a.epilog == "epi");
 }
 
@@ -3002,17 +3064,34 @@ private struct CommandArguments(RECEIVER)
 
     ParseFunction!RECEIVER[] parseFunctions;
 
+    uint level; // (sub-)command level, 0 = top level
+
+    // sub commands
+    size_t[string] subCommandsByName;
+    CommandInfo[] subCommands;
+    ParseSubCommandFunction!RECEIVER[] parseSubCommands;
+
     mixin ForwardMemberFunction!"arguments.findPositionalArgument";
     mixin ForwardMemberFunction!"arguments.findNamedArgument";
     mixin ForwardMemberFunction!"arguments.checkRestrictions";
 
 
 
-    private this(in Config config)
+    private this(PARENT = void)(in Config config, const PARENT* parentArguments = null)
     {
         checkArgumentName!RECEIVER(config.namedArgChar);
 
-        arguments = Arguments(config.caseSensitive);
+        static if(is(PARENT == void))
+        {
+            level = 0;
+            arguments = Arguments(config.caseSensitive);
+        }
+        else
+        {
+            level = parentArguments.level + 1;
+            arguments = Arguments(config.caseSensitive, &parentArguments.arguments);
+        }
+
         fillArguments();
 
         if(config.addHelp)
@@ -3032,15 +3111,31 @@ private struct CommandArguments(RECEIVER)
     private void fillArguments()
     {
         enum hasNoUDAs = getSymbolsByUDA!(RECEIVER, ArgumentUDA  ).length == 0 &&
-                         getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0;
+                         getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0 &&
+                         getSymbolsByUDA!(RECEIVER, SubCommands  ).length == 0;
 
         static foreach(sym; __traits(allMembers, RECEIVER))
         {{
             alias mem = __traits(getMember, RECEIVER, sym);
 
             static if(!is(mem)) // skip types
-                static if(hasNoUDAs || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
+            {
+                static if(hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
                     addArgument!sym;
+                else static if(hasUDA!(mem, SubCommands))
+                    addSubCommands!sym;
+                else static if(hasNoUDAs &&
+                    // skip "op*" functions
+                    !(is(typeof(mem) == function) && sym.length > 2 && sym[0..2] == "op"))
+                {
+                    import std.sumtype: isSumType;
+
+                    static if(isSumType!(typeof(mem)))
+                        addSubCommands!sym;
+                    else
+                        addArgument!sym;
+                }
+            }
         }}
     }
 
@@ -3074,6 +3169,54 @@ private struct CommandArguments(RECEIVER)
             arguments.addArgument!(info, restrictions);
 
         parseFunctions ~= ParsingFunction!(symbol, uda, info, RECEIVER);
+    }
+
+    private void addSubCommands(alias symbol)()
+    {
+        alias member = __traits(getMember, RECEIVER, symbol);
+
+        static assert(getUDAs!(member, SubCommands).length <= 1,
+            "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'SubCommands' UDAs");
+
+        static foreach(COMMAND_TYPE; typeof(member).Types)
+        {{
+            static assert(getUDAs!(COMMAND_TYPE, CommandInfo).length <= 1);
+
+            //static assert(getUDAs!(member, Group).length <= 1,
+            //    "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
+
+            static if(getUDAs!(COMMAND_TYPE, CommandInfo).length > 0)
+                enum info = getUDAs!(COMMAND_TYPE, CommandInfo)[0];
+            else
+                enum info = CommandInfo(COMMAND_TYPE.stringof);
+
+            static assert(info.name.length > 0);
+            assert(!(info.name in subCommandsByName), "Duplicated name of sub command: "~info.name);
+
+            //static if(getUDAs!(member, Group).length > 0)
+            //    args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
+            //else
+            //arguments.addSubCommand!(info);
+
+            immutable index = subCommands.length;
+
+            subCommandsByName[arguments.convertCase(info.name)] = index;
+            subCommands ~= info;
+            //group.arguments ~= index;
+            parseSubCommands ~= ParsingSubCommand!(COMMAND_TYPE, info, RECEIVER, symbol)(&this);
+        }}
+    }
+
+    auto findSubCommand(string name) const
+    {
+        struct Result
+        {
+            uint level = uint.max;
+            ParseSubCommandFunction!RECEIVER parse;
+        }
+
+        auto p = arguments.convertCase(name) in subCommandsByName;
+        return !p ? Result.init : Result(level+1, parseSubCommands[*p]);
     }
 
     static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
@@ -3287,6 +3430,9 @@ private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T
         print(cmd.arguments.arguments.filter!((ref _) => !_.positional));
         // positional args
         print(cmd.arguments.positionalArguments.map!(ref (_) => cmd.arguments.arguments[_]));
+        // sub commands
+        if(cmd.subCommands.length > 0)
+            output.put(" <command> [<args>]");
     }
 
     output.put('\n');
@@ -3378,7 +3524,7 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
 }
 
 
-private void printHelp(Output)(auto ref Output output, in Arguments arguments, in Config config)
+private void printHelp(Output)(auto ref Output output, in Arguments arguments, in Config config, bool helpArgIsPrinted = false)
 {
     import std.algorithm: map, maxElement, min;
     import std.array: appender, array;
@@ -3395,6 +3541,14 @@ private void printHelp(Output)(auto ref Output output, in Arguments arguments, i
 
             if(_.hideFromHelp)
                 return Result.init;
+
+            if(isHelpArgument(_.names[0]))
+            {
+                if(helpArgIsPrinted)
+                    return Result.init;
+
+                helpArgIsPrinted = true;
+            }
 
             auto invocation = appender!string;
             invocation.printInvocation(_, _.names, config);
@@ -3414,6 +3568,68 @@ private void printHelp(Output)(auto ref Output output, in Arguments arguments, i
 
     //optionals args
     output.printHelp(arguments.optionalGroup, args, helpPosition);
+
+    if(arguments.parentArguments)
+        output.printHelp(*arguments.parentArguments, config, helpArgIsPrinted);
+}
+
+private void printHelp(Output)(auto ref Output output, in CommandInfo[] commands, in Config config)
+{
+    import std.algorithm: map, maxElement, min;
+    import std.array: appender, array;
+
+    if(commands.length == 0)
+        return;
+
+    output.put("Available commands:\n");
+
+    // pre-compute the output
+    auto cmds = commands
+        .map!((ref _)
+        {
+            struct Result
+            {
+                string invocation, help;
+            }
+
+            //if(_.hideFromHelp)
+            //    return Result.init;
+
+            return Result(_.name, _.shortDescription);
+        }).array;
+
+    immutable maxInvocationWidth = cmds.map!(_ => _.invocation.length).maxElement;
+    immutable helpPosition = min(maxInvocationWidth + 4, 24);
+
+
+    immutable ident = spaces(helpPosition + 2);
+
+    foreach(const ref cmd; cmds)
+    {
+        if(cmd.invocation.length == 0)
+            continue;
+
+        if(cmd.invocation.length <= helpPosition - 4) // 2=indent, 2=two spaces between invocation and help text
+        {
+            import std.array: appender;
+            import std.string: leftJustify;
+
+            auto invocation = appender!string;
+            invocation ~= "  ";
+            invocation ~= cmd.invocation.leftJustify(helpPosition);
+            output.wrapMutiLine(cmd.help, 80-2, invocation[], ident);
+        }
+        else
+        {
+            // long action name; start on the next line
+            output.put("  ");
+            output.put(cmd.invocation);
+            output.put("\n");
+            output.wrapMutiLine(cmd.help, 80-2, ident, ident);
+        }
+    }
+
+    output.put('\n');
 }
 
 
@@ -3427,6 +3643,10 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
         output.put(cmd.info.description);
         output.put("\n\n");
     }
+
+    // sub commands
+    if(cmd.subCommands.length > 0)
+        output.printHelp(cmd.subCommands, config);
 
     output.printHelp(cmd.arguments, config);
 
