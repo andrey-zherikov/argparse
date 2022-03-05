@@ -3796,7 +3796,7 @@ unittest
         {
             string a;
         }
-        @(Command("cmd2").ShortDescription("Perform cmd 2"))
+        @(Command("very-long-command-name-2").ShortDescription("Perform cmd 2"))
         struct CMD2
         {
             string b;
@@ -3819,8 +3819,9 @@ unittest
 
     assert(test!printHelp  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~
-        "  cmd1    Perform cmd 1\n"~
-        "  cmd2    Perform cmd 2\n\n"~
+        "  cmd1                    Perform cmd 1\n"~
+        "  very-long-command-name-2\n"~
+        "                          Perform cmd 2\n\n"~
         "Optional arguments:\n"~
         "  -c C          \n"~
         "  -d D          \n"~
