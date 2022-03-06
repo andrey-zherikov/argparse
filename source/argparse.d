@@ -704,38 +704,30 @@ private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias s
 {
     return delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver)
     {
-        try
+        import std.sumtype: match;
+
+        auto target = &__traits(getMember, receiver, symbol);
+
+        *target = COMMAND_TYPE.init;
+
+        alias parse = (ref COMMAND_TYPE cmdTarget)
         {
-            import std.sumtype: match;
+            auto command = CommandArguments!COMMAND_TYPE(parser.config, parentArguments);
 
-            auto target = &__traits(getMember, receiver, symbol);
-
-            *target = COMMAND_TYPE.init;
-
-            alias parse = (ref COMMAND_TYPE cmdTarget)
-            {
-                auto command = CommandArguments!COMMAND_TYPE(parser.config, parentArguments);
-
-                return arg.match!(_ => parser.parse(command, cmdTarget, _));
-            };
+            return arg.match!(_ => parser.parse(command, cmdTarget, _));
+        };
 
 
-            static if(typeof(*target).Types.length == 1)
-                return (*target).match!parse;
-            else
-                return (*target).match!(parse,
-                    (_)
-                    {
-                        assert(false, "This should never happen");
-                        return Result.Failure;
-                    }
-                );
-        }
-        catch(Exception e)
-        {
-            parser.config.onError(e.msg);
-            return Result.Failure;
-        }
+        static if(typeof(*target).Types.length == 1)
+            return (*target).match!parse;
+        else
+            return (*target).match!(parse,
+                (_)
+                {
+                    assert(false, "This should never happen");
+                    return Result.Failure;
+                }
+            );
     };
 }
 
