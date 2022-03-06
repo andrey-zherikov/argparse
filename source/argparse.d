@@ -3655,8 +3655,7 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
     }
 
     // sub commands
-    if(cmd.subCommands.length > 0)
-        output.printHelp(cmd.subCommands, config);
+    output.printHelp(cmd.subCommands, config);
 
     output.printHelp(cmd.arguments, config);
 
