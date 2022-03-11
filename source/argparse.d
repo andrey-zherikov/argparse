@@ -708,8 +708,6 @@ private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias s
 
         auto target = &__traits(getMember, receiver, symbol);
 
-        *target = COMMAND_TYPE.init;
-
         alias parse = (ref COMMAND_TYPE cmdTarget)
         {
             auto command = CommandArguments!COMMAND_TYPE(parser.config, parentArguments);
@@ -721,6 +719,10 @@ private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias s
         static if(typeof(*target).Types.length == 1)
             return (*target).match!parse;
         else
+        {
+            if((*target).match!((COMMAND_TYPE t) => false, _ => true))
+                *target = COMMAND_TYPE.init;
+
             return (*target).match!(parse,
                 (_)
                 {
@@ -728,6 +730,7 @@ private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias s
                     return Result.Failure;
                 }
             );
+        }
     };
 }
 
