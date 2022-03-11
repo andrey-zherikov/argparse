@@ -1563,6 +1563,49 @@ struct Main
     }
 }
 
+template CLI(Config config, COMMANDS...)
+{
+    mixin template main(alias newMain)
+    {
+        int main(string[] argv)
+        {
+            import std.sumtype: SumType, match;
+
+            struct Program
+            {
+                SumType!COMMANDS cmd;   // Sub-commands
+            }
+
+            return parseCLIArgs!Program(argv[1..$], (Program prog) => prog.cmd.match!newMain, config);
+        }
+    }
+}
+
+template CLI(Config config, COMMAND)
+{
+    mixin template main(alias newMain)
+    {
+        int main(string[] argv)
+        {
+            return parseCLIArgs!COMMAND(argv[1..$], (COMMAND cmd) => newMain(cmd), config);
+        }
+    }
+}
+
+template CLI(Config config)
+{
+    mixin template main(COMMAND, alias newMain)
+    {
+        int main(string[] argv)
+        {
+            return parseCLIArgs!COMMAND(argv[1..$], (COMMAND cmd) => newMain(cmd), config);
+        }
+    }
+}
+
+alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS);
+
+
 unittest
 {
     struct T
