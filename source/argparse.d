@@ -710,7 +710,7 @@ private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias s
 
         alias parse = (ref COMMAND_TYPE cmdTarget)
         {
-            auto command = CommandArguments!COMMAND_TYPE(parser.config, parentArguments);
+            auto command = CommandArguments!COMMAND_TYPE(parser.config, info, parentArguments);
 
             return arg.match!(_ => parser.parse(command, cmdTarget, _));
         };
@@ -3067,10 +3067,7 @@ private struct CommandArguments(RECEIVER)
 
     static assert(getUDAs!(RECEIVER, CommandInfo).length <= 1);
 
-    static if(getUDAs!(RECEIVER, CommandInfo).length == 0)
-        CommandInfo info;
-    else
-        CommandInfo info = getUDAs!(RECEIVER, CommandInfo)[0];
+    CommandInfo info;
 
     Arguments arguments;
 
@@ -3089,8 +3086,20 @@ private struct CommandArguments(RECEIVER)
 
 
 
-    private this(PARENT = void)(in Config config, const PARENT* parentArguments = null)
+    private this(in Config config)
     {
+        static if(getUDAs!(RECEIVER, CommandInfo).length > 0)
+            CommandInfo info = getUDAs!(RECEIVER, CommandInfo)[0];
+        else
+            CommandInfo info;
+
+        this(config, info);
+    }
+
+    private this(PARENT = void)(in Config config, CommandInfo info, const PARENT* parentArguments = null)
+    {
+        this.info = info;
+
         checkArgumentName!RECEIVER(config.namedArgChar);
 
         static if(is(PARENT == void))
