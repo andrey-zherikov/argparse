@@ -2989,8 +2989,7 @@ unittest
 }
 
 
-//private
-string getProgramName()
+private string getProgramName()
 {
     import core.runtime: Runtime;
     import std.path: baseName;
@@ -3005,11 +3004,11 @@ unittest
 
 private struct CommandInfo
 {
-    private string name;
-    private string usage;
-    private string description;
-    private string shortDescription;
-    private string epilog;
+    string[] names = [""];
+    string usage;
+    string description;
+    string shortDescription;
+    string epilog;
 
     auto ref Usage(string text)
     {
