@@ -3035,7 +3035,7 @@ private struct CommandInfo
     }
 }
 
-auto Command(string name = "")
+auto Command(string[] name...)
 {
     return CommandInfo(name);
 }
@@ -3043,7 +3043,7 @@ auto Command(string name = "")
 unittest
 {
     auto a = Command("MYPROG").Usage("usg").Description("desc").ShortDescription("sum").Epilog("epi");
-    assert(a.name == "MYPROG");
+    assert(a.names == ["MYPROG"]);
     assert(a.usage == "usg");
     assert(a.description == "desc");
     assert(a.shortDescription == "sum");
@@ -3068,6 +3068,7 @@ private struct CommandArguments(RECEIVER)
     static assert(getUDAs!(RECEIVER, CommandInfo).length <= 1);
 
     CommandInfo info;
+    const(string)[] parentNames;
 
     Arguments arguments;
 
@@ -3109,6 +3110,7 @@ private struct CommandArguments(RECEIVER)
         }
         else
         {
+            parentNames = parentArguments.parentNames ~ parentArguments.info.names[0];
             level = parentArguments.level + 1;
             arguments = Arguments(config.caseSensitive, &parentArguments.arguments);
         }
@@ -3209,10 +3211,9 @@ private struct CommandArguments(RECEIVER)
             static if(getUDAs!(COMMAND_TYPE, CommandInfo).length > 0)
                 enum info = getUDAs!(COMMAND_TYPE, CommandInfo)[0];
             else
-                enum info = CommandInfo(COMMAND_TYPE.stringof);
+                enum info = CommandInfo([COMMAND_TYPE.stringof]);
 
-            static assert(info.name.length > 0);
-            assert(!(info.name in subCommandsByName), "Duplicated name of sub command: "~info.name);
+            static assert(info.names.length > 0 && info.names[0].length > 0);
 
             //static if(getUDAs!(member, Group).length > 0)
             //    args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
@@ -3221,7 +3222,12 @@ private struct CommandArguments(RECEIVER)
 
             immutable index = subCommands.length;
 
-            subCommandsByName[arguments.convertCase(info.name)] = index;
+            static foreach(name; info.names)
+            {
+                assert(!(name in subCommandsByName), "Duplicated name of sub command: "~name);
+                subCommandsByName[arguments.convertCase(name)] = index;
+            }
+
             subCommands ~= info;
             //group.arguments ~= index;
             parseSubCommands ~= ParsingSubCommand!(COMMAND_TYPE, info, RECEIVER, symbol)(&this);
@@ -3429,10 +3435,15 @@ unittest
 
 private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
 {
+    import std.algorithm: map;
+    import std.array: join;
+
+    string progName = (cmd.parentNames ~ cmd.info.names[0]).map!(_ => _.length > 0 ? _ : getProgramName()).join(" ");
+
     output.put("Usage: ");
 
     if(cmd.info.usage.length > 0)
-        substituteProg(output, cmd.info.usage, cmd.info.name);
+        substituteProg(output, cmd.info.usage, progName);
     else
     {
         import std.algorithm: filter, each, map;
@@ -3445,7 +3456,7 @@ private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T
                 output.printUsage(_, config);
             });
 
-        output.put(cmd.info.name.length > 0 ? cmd.info.name : getProgramName());
+        output.put(progName);
 
         // named args
         print(cmd.arguments.arguments.filter!((ref _) => !_.positional));
@@ -3597,7 +3608,7 @@ private void printHelp(Output)(auto ref Output output, in Arguments arguments, i
 private void printHelp(Output)(auto ref Output output, in CommandInfo[] commands, in Config config)
 {
     import std.algorithm: map, maxElement, min;
-    import std.array: appender, array;
+    import std.array: appender, array, join;
 
     if(commands.length == 0)
         return;
@@ -3616,7 +3627,7 @@ private void printHelp(Output)(auto ref Output output, in CommandInfo[] commands
             //if(_.hideFromHelp)
             //    return Result.init;
 
-            return Result(_.name, _.shortDescription);
+            return Result(_.names.join(","), _.shortDescription);
         }).array;
 
     immutable maxInvocationWidth = cmds.map!(_ => _.invocation.length).maxElement;
