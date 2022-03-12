@@ -1,59 +1,48 @@
 import argparse;
 import std.stdio: writeln;
-import std.sumtype: SumType, match;
 
 
 struct sum
 {
-    @PositionalArgument(0)
-    int[] numbers;
-
-    int opCall() const
-    {
-        import std.algorithm: sum;
-
-        return numbers.sum;
-    }
+    int[] numbers;  // --numbers argument
 }
 
 struct min
 {
-    @PositionalArgument(0)
-    int[] numbers;
-
-    int opCall() const
-    {
-        import std.algorithm: minElement;
-
-        return numbers.length > 0 ? numbers.minElement : 0;
-    }
+    int[] numbers;  // --numbers argument
 }
 
 struct max
 {
-    @PositionalArgument(0)
-    int[] numbers;
-
-    int opCall() const
-    {
-        import std.algorithm: maxElement;
-
-        return numbers.length > 0 ? numbers.maxElement : 0;
-    }
+    int[] numbers;  // --numbers argument
 }
 
-struct Program
+int main_(max cmd)
 {
-    // SumType indicates sub-command
-    // name of the command is the same as a name of the type
-    SumType!(sum, min, max) cmd;
-}
+    import std.algorithm: maxElement;
 
-
-// This mixin defines standard main function that parses command line and calls the provided function:
-mixin Main.parseCLIArgs!(Program, (prog) => prog.cmd.match!((cmd)
-{
-    writeln(typeof(cmd).stringof," = ", cmd());
+    writeln("max = ", cmd.numbers.maxElement);
 
     return 0;
-}));
+}
+
+int main_(min cmd)
+{
+    import std.algorithm: minElement;
+
+    writeln("min = ", cmd.numbers.minElement);
+
+    return 0;
+}
+
+int main_(sum cmd)
+{
+    import std.algorithm: sum;
+
+    writeln("sum = ", cmd.numbers.sum);
+
+    return 0;
+}
+
+// This mixin defines standard main function that parses command line and calls the provided function:
+mixin CLI!(sum, min, max).main!main_;

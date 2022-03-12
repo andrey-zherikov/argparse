@@ -2,7 +2,7 @@ import argparse;
 import std.stdio: writeln;
 import std.sumtype: SumType, match;
 
-enum Filter { even, odd };
+enum Filter { none, even, odd };
 
 auto filter(R)(R numbers, Filter filt)
 {
@@ -13,6 +13,7 @@ auto filter(R)(R numbers, Filter filt)
     {
         final switch(filt)
         {
+            case Filter.none:   return true;
             case Filter.even:   return isEven(n);
             case Filter.odd :   return isOdd(n);
         }
@@ -31,16 +32,9 @@ struct SumCmd
 {
     @PositionalArgument(0)
     int[] numbers;
-
-    int opCall(Filter filter) const
-    {
-        import std.algorithm: sum;
-
-        return numbers.filter(filter).sum;
-    }
 }
 
-@(Command("min")
+@(Command("minimum", "min")
 .Usage("%(PROG) [<number>...]")
 .Description("Print the minimal number across provided")
 .ShortDescription("Print the minimum")
@@ -49,16 +43,9 @@ struct MinCmd
 {
     @PositionalArgument(0)
     int[] numbers;
-
-    int opCall(Filter filter) const
-    {
-        import std.algorithm: minElement;
-
-        return numbers.length > 0 ? numbers.filter(filter).minElement : 0;
-    }
 }
 
-@(Command("max")
+@(Command("maximum", "max")
 .Usage("%(PROG) [<number>...]")
 .Description("Print the maximal number across provided")
 .ShortDescription("Print the maximum")
@@ -67,13 +54,6 @@ struct MaxCmd
 {
     @PositionalArgument(0)
     int[] numbers;
-
-    int opCall(Filter filter) const
-    {
-        import std.algorithm: maxElement;
-
-        return numbers.length > 0 ? numbers.filter(filter).maxElement : 0;
-    }
 }
 
 struct Program
@@ -93,9 +73,29 @@ struct Program
 
 
 // This mixin defines standard main function that parses command line and calls the provided function:
-mixin Main.parseCLIArgs!(Program, (prog) => prog.cmd.match!((cmd)
+mixin CLI!Program.main!((prog)
 {
-    writeln(typeof(cmd).stringof," = ", cmd(prog.filter));
+    static assert(is(typeof(prog) == Program));
+
+    int result = prog.cmd.match!(
+        (MaxCmd cmd)
+        {
+            import std.algorithm: maxElement;
+            return cmd.numbers.filter(prog.filter).maxElement(0);
+        },
+        (MinCmd cmd)
+        {
+            import std.algorithm: minElement;
+            return cmd.numbers.filter(prog.filter).minElement(0);
+        },
+        (SumCmd cmd)
+        {
+            import std.algorithm: sum;
+            return cmd.numbers.filter(prog.filter).sum;
+        }
+    );
+
+    writeln("result = ", result);
 
     return 0;
-}));
+});
