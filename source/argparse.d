@@ -420,6 +420,7 @@ unittest
 
 
 private alias ParseFunction(RECEIVER) = Result delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
+private alias ParseSubCommandFunction(RECEIVER) = Result delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver);
 private alias Restriction = bool delegate(in Config config, in bool[size_t] cliArgs);
 
 // Have to do this magic because closures are not supported in CFTE
@@ -527,6 +528,7 @@ private struct Arguments
     // positional arguments
     private size_t[] argsPositional;
 
+    private const Arguments* parentArguments;
 
     Group[] groups;
     enum requiredGroupIndex = 0;
@@ -545,7 +547,7 @@ private struct Arguments
     @property auto positionalArguments() const { return argsPositional; }
 
 
-    this(bool caseSensitive)
+    this(bool caseSensitive, const Arguments* parentArguments = null)
     {
         if(caseSensitive)
             convertCase = s => s;
@@ -555,6 +557,8 @@ private struct Arguments
                 import std.uni : toUpper;
                 return str.toUpper;
             };
+
+        this.parentArguments = parentArguments;
 
         groups = [ Group("Required arguments"), Group("Optional arguments") ];
     }
@@ -696,6 +700,41 @@ private alias ParsingFunction(alias symbol, alias uda, ArgumentInfo info, RECEIV
         }
     };
 
+private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol)(const CommandArguments!RECEIVER* parentArguments)
+{
+    return delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver)
+    {
+        import std.sumtype: match;
+
+        auto target = &__traits(getMember, receiver, symbol);
+
+        alias parse = (ref COMMAND_TYPE cmdTarget)
+        {
+            auto command = CommandArguments!COMMAND_TYPE(parser.config, info, parentArguments);
+
+            return arg.match!(_ => parser.parse(command, cmdTarget, _));
+        };
+
+
+        static if(typeof(*target).Types.length == 1)
+            return (*target).match!parse;
+        else
+        {
+            if((*target).match!((COMMAND_TYPE t) => false, _ => true))
+                *target = COMMAND_TYPE.init;
+
+            return (*target).match!(parse,
+                (_)
+                {
+                    assert(false, "This should never happen");
+                    return Result.Failure;
+                }
+            );
+        }
+    };
+}
+
+struct SubCommands {}
 
 unittest
 {
@@ -953,6 +992,24 @@ private struct Parser
         return Result.Success;
     }
 
+    auto parseSubCommand(T)(const ref CommandArguments!T cmd, ref T receiver)
+    {
+        import std.range: front, popFront;
+
+        auto found = cmd.findSubCommand(args.front);
+        if(found.parse is null)
+            return Result.UnknownArgument;
+
+        if(found.level < cmdStack.length)
+            cmdStack.length = found.level;
+
+        cmdStack ~= (const ref arg) => found.parse(this, arg, receiver);
+
+        args.popFront();
+
+        return Result.Success;
+    }
+
     auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Unknown)
     {
         return Result.UnknownArgument;
@@ -962,7 +1019,7 @@ private struct Parser
     {
         auto foundArg = cmd.findPositionalArgument(idxNextPositional);
         if(foundArg.arg is null)
-            return Result.UnknownArgument;
+            return parseSubCommand(cmd, receiver);
 
         immutable res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, null, foundArg.arg.names[0], foundArg.index);
         if(!res)
@@ -1469,6 +1526,24 @@ unittest
     assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
 }
 
+unittest
+{
+    import std.sumtype: SumType, match;
+
+    struct T
+    {
+        struct cmd1 { string a; }
+        struct cmd2 { string b; }
+
+        string c;
+        string d;
+
+        SumType!(cmd1, cmd2) cmd;
+    }
+
+    assert(["-c","C","cmd2","-b","B"].parseCLIArgs!T.get == T("C",null,typeof(T.cmd)(T.cmd2("B"))));
+}
+
 struct Main
 {
     mixin template parseCLIKnownArgs(TYPE, alias newMain, Config config = Config.init)
@@ -1487,6 +1562,49 @@ struct Main
         }
     }
 }
+
+template CLI(Config config, COMMANDS...)
+{
+    mixin template main(alias newMain)
+    {
+        int main(string[] argv)
+        {
+            import std.sumtype: SumType, match;
+
+            struct Program
+            {
+                SumType!COMMANDS cmd;   // Sub-commands
+            }
+
+            return parseCLIArgs!Program(argv[1..$], (Program prog) => prog.cmd.match!newMain, config);
+        }
+    }
+}
+
+template CLI(Config config, COMMAND)
+{
+    mixin template main(alias newMain)
+    {
+        int main(string[] argv)
+        {
+            return parseCLIArgs!COMMAND(argv[1..$], (COMMAND cmd) => newMain(cmd), config);
+        }
+    }
+}
+
+template CLI(Config config)
+{
+    mixin template main(COMMAND, alias newMain)
+    {
+        int main(string[] argv)
+        {
+            return parseCLIArgs!COMMAND(argv[1..$], (COMMAND cmd) => newMain(cmd), config);
+        }
+    }
+}
+
+alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS);
+
 
 unittest
 {
@@ -2914,8 +3032,7 @@ unittest
 }
 
 
-//private
-string getProgramName()
+private string getProgramName()
 {
     import core.runtime: Runtime;
     import std.path: baseName;
@@ -2930,10 +3047,11 @@ unittest
 
 private struct CommandInfo
 {
-    private string name;
-    private string usage;
-    private string description;
-    private string epilog;
+    string[] names = [""];
+    string usage;
+    string description;
+    string shortDescription;
+    string epilog;
 
     auto ref Usage(string text)
     {
@@ -2947,6 +3065,12 @@ private struct CommandInfo
         return this;
     }
 
+    auto ref ShortDescription(string text)
+    {
+        shortDescription = text;
+        return this;
+    }
+
     auto ref Epilog(string text)
     {
         epilog = text;
@@ -2954,17 +3078,18 @@ private struct CommandInfo
     }
 }
 
-auto Command(string name = "")
+auto Command(string[] name...)
 {
     return CommandInfo(name);
 }
 
 unittest
 {
-    auto a = Command("MYPROG").Usage("usg").Description("desc").Epilog("epi");
-    assert(a.name == "MYPROG");
+    auto a = Command("MYPROG").Usage("usg").Description("desc").ShortDescription("sum").Epilog("epi");
+    assert(a.names == ["MYPROG"]);
     assert(a.usage == "usg");
     assert(a.description == "desc");
+    assert(a.shortDescription == "sum");
     assert(a.epilog == "epi");
 }
 
@@ -2985,14 +3110,19 @@ private struct CommandArguments(RECEIVER)
 
     static assert(getUDAs!(RECEIVER, CommandInfo).length <= 1);
 
-    static if(getUDAs!(RECEIVER, CommandInfo).length == 0)
-        CommandInfo info;
-    else
-        CommandInfo info = getUDAs!(RECEIVER, CommandInfo)[0];
+    CommandInfo info;
+    const(string)[] parentNames;
 
     Arguments arguments;
 
     ParseFunction!RECEIVER[] parseFunctions;
+
+    uint level; // (sub-)command level, 0 = top level
+
+    // sub commands
+    size_t[string] subCommandsByName;
+    CommandInfo[] subCommands;
+    ParseSubCommandFunction!RECEIVER[] parseSubCommands;
 
     mixin ForwardMemberFunction!"arguments.findPositionalArgument";
     mixin ForwardMemberFunction!"arguments.findNamedArgument";
@@ -3002,9 +3132,32 @@ private struct CommandArguments(RECEIVER)
 
     private this(in Config config)
     {
+        static if(getUDAs!(RECEIVER, CommandInfo).length > 0)
+            CommandInfo info = getUDAs!(RECEIVER, CommandInfo)[0];
+        else
+            CommandInfo info;
+
+        this(config, info);
+    }
+
+    private this(PARENT = void)(in Config config, CommandInfo info, const PARENT* parentArguments = null)
+    {
+        this.info = info;
+
         checkArgumentName!RECEIVER(config.namedArgChar);
 
-        arguments = Arguments(config.caseSensitive);
+        static if(is(PARENT == void))
+        {
+            level = 0;
+            arguments = Arguments(config.caseSensitive);
+        }
+        else
+        {
+            parentNames = parentArguments.parentNames ~ parentArguments.info.names[0];
+            level = parentArguments.level + 1;
+            arguments = Arguments(config.caseSensitive, &parentArguments.arguments);
+        }
+
         fillArguments();
 
         if(config.addHelp)
@@ -3024,15 +3177,31 @@ private struct CommandArguments(RECEIVER)
     private void fillArguments()
     {
         enum hasNoUDAs = getSymbolsByUDA!(RECEIVER, ArgumentUDA  ).length == 0 &&
-                         getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0;
+                         getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0 &&
+                         getSymbolsByUDA!(RECEIVER, SubCommands  ).length == 0;
 
         static foreach(sym; __traits(allMembers, RECEIVER))
         {{
             alias mem = __traits(getMember, RECEIVER, sym);
 
             static if(!is(mem)) // skip types
-                static if(hasNoUDAs || hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
+            {
+                static if(hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
                     addArgument!sym;
+                else static if(hasUDA!(mem, SubCommands))
+                    addSubCommands!sym;
+                else static if(hasNoUDAs &&
+                    // skip "op*" functions
+                    !(is(typeof(mem) == function) && sym.length > 2 && sym[0..2] == "op"))
+                {
+                    import std.sumtype: isSumType;
+
+                    static if(isSumType!(typeof(mem)))
+                        addSubCommands!sym;
+                    else
+                        addArgument!sym;
+                }
+            }
         }}
     }
 
@@ -3066,6 +3235,58 @@ private struct CommandArguments(RECEIVER)
             arguments.addArgument!(info, restrictions);
 
         parseFunctions ~= ParsingFunction!(symbol, uda, info, RECEIVER);
+    }
+
+    private void addSubCommands(alias symbol)()
+    {
+        alias member = __traits(getMember, RECEIVER, symbol);
+
+        static assert(getUDAs!(member, SubCommands).length <= 1,
+            "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'SubCommands' UDAs");
+
+        static foreach(COMMAND_TYPE; typeof(member).Types)
+        {{
+            static assert(getUDAs!(COMMAND_TYPE, CommandInfo).length <= 1);
+
+            //static assert(getUDAs!(member, Group).length <= 1,
+            //    "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
+
+            static if(getUDAs!(COMMAND_TYPE, CommandInfo).length > 0)
+                enum info = getUDAs!(COMMAND_TYPE, CommandInfo)[0];
+            else
+                enum info = CommandInfo([COMMAND_TYPE.stringof]);
+
+            static assert(info.names.length > 0 && info.names[0].length > 0);
+
+            //static if(getUDAs!(member, Group).length > 0)
+            //    args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
+            //else
+            //arguments.addSubCommand!(info);
+
+            immutable index = subCommands.length;
+
+            static foreach(name; info.names)
+            {
+                assert(!(name in subCommandsByName), "Duplicated name of sub command: "~name);
+                subCommandsByName[arguments.convertCase(name)] = index;
+            }
+
+            subCommands ~= info;
+            //group.arguments ~= index;
+            parseSubCommands ~= ParsingSubCommand!(COMMAND_TYPE, info, RECEIVER, symbol)(&this);
+        }}
+    }
+
+    auto findSubCommand(string name) const
+    {
+        struct Result
+        {
+            uint level = uint.max;
+            ParseSubCommandFunction!RECEIVER parse;
+        }
+
+        auto p = arguments.convertCase(name) in subCommandsByName;
+        return !p ? Result.init : Result(level+1, parseSubCommands[*p]);
     }
 
     static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
@@ -3257,10 +3478,15 @@ unittest
 
 private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
 {
+    import std.algorithm: map;
+    import std.array: join;
+
+    string progName = (cmd.parentNames ~ cmd.info.names[0]).map!(_ => _.length > 0 ? _ : getProgramName()).join(" ");
+
     output.put("Usage: ");
 
     if(cmd.info.usage.length > 0)
-        substituteProg(output, cmd.info.usage, cmd.info.name);
+        substituteProg(output, cmd.info.usage, progName);
     else
     {
         import std.algorithm: filter, each, map;
@@ -3273,12 +3499,15 @@ private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T
                 output.printUsage(_, config);
             });
 
-        output.put(cmd.info.name.length > 0 ? cmd.info.name : getProgramName());
+        output.put(progName);
 
         // named args
         print(cmd.arguments.arguments.filter!((ref _) => !_.positional));
         // positional args
         print(cmd.arguments.positionalArguments.map!(ref (_) => cmd.arguments.arguments[_]));
+        // sub commands
+        if(cmd.subCommands.length > 0)
+            output.put(" <command> [<args>]");
     }
 
     output.put('\n');
@@ -3370,7 +3599,7 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
 }
 
 
-private void printHelp(Output)(auto ref Output output, in Arguments arguments, in Config config)
+private void printHelp(Output)(auto ref Output output, in Arguments arguments, in Config config, bool helpArgIsPrinted = false)
 {
     import std.algorithm: map, maxElement, min;
     import std.array: appender, array;
@@ -3387,6 +3616,14 @@ private void printHelp(Output)(auto ref Output output, in Arguments arguments, i
 
             if(_.hideFromHelp)
                 return Result.init;
+
+            if(isHelpArgument(_.names[0]))
+            {
+                if(helpArgIsPrinted)
+                    return Result.init;
+
+                helpArgIsPrinted = true;
+            }
 
             auto invocation = appender!string;
             invocation.printInvocation(_, _.names, config);
@@ -3406,6 +3643,68 @@ private void printHelp(Output)(auto ref Output output, in Arguments arguments, i
 
     //optionals args
     output.printHelp(arguments.optionalGroup, args, helpPosition);
+
+    if(arguments.parentArguments)
+        output.printHelp(*arguments.parentArguments, config, helpArgIsPrinted);
+}
+
+private void printHelp(Output)(auto ref Output output, in CommandInfo[] commands, in Config config)
+{
+    import std.algorithm: map, maxElement, min;
+    import std.array: appender, array, join;
+
+    if(commands.length == 0)
+        return;
+
+    output.put("Available commands:\n");
+
+    // pre-compute the output
+    auto cmds = commands
+        .map!((ref _)
+        {
+            struct Result
+            {
+                string invocation, help;
+            }
+
+            //if(_.hideFromHelp)
+            //    return Result.init;
+
+            return Result(_.names.join(","), _.shortDescription);
+        }).array;
+
+    immutable maxInvocationWidth = cmds.map!(_ => _.invocation.length).maxElement;
+    immutable helpPosition = min(maxInvocationWidth + 4, 24);
+
+
+    immutable ident = spaces(helpPosition + 2);
+
+    foreach(const ref cmd; cmds)
+    {
+        if(cmd.invocation.length == 0)
+            continue;
+
+        if(cmd.invocation.length <= helpPosition - 4) // 2=indent, 2=two spaces between invocation and help text
+        {
+            import std.array: appender;
+            import std.string: leftJustify;
+
+            auto invocation = appender!string;
+            invocation ~= "  ";
+            invocation ~= cmd.invocation.leftJustify(helpPosition);
+            output.wrapMutiLine(cmd.help, 80-2, invocation[], ident);
+        }
+        else
+        {
+            // long action name; start on the next line
+            output.put("  ");
+            output.put(cmd.invocation);
+            output.put("\n");
+            output.wrapMutiLine(cmd.help, 80-2, ident, ident);
+        }
+    }
+
+    output.put('\n');
 }
 
 
@@ -3419,6 +3718,9 @@ private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T 
         output.put(cmd.info.description);
         output.put("\n\n");
     }
+
+    // sub commands
+    output.printHelp(cmd.subCommands, config);
 
     output.printHelp(cmd.arguments, config);
 
@@ -3535,6 +3837,50 @@ unittest
         "Required arguments:\n"~
         "  q             \n\n"~
         "Optional arguments:\n"~
+        "  -h, --help    Show this help message and exit\n\n");
+}
+
+unittest
+{
+    import std.sumtype: SumType, match;
+
+    @Command("MYPROG")
+    struct T
+    {
+        @(Command("cmd1").ShortDescription("Perform cmd 1"))
+        struct CMD1
+        {
+            string a;
+        }
+        @(Command("very-long-command-name-2").ShortDescription("Perform cmd 2"))
+        struct CMD2
+        {
+            string b;
+        }
+
+        string c;
+        string d;
+
+        SumType!(CMD1, CMD2) cmd;
+    }
+
+    auto test(alias func)()
+    {
+        import std.array: appender;
+
+        auto a = appender!string;
+        func!T(a, Config.init);
+        return a[];
+    }
+
+    assert(test!printHelp  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
+        "Available commands:\n"~
+        "  cmd1                    Perform cmd 1\n"~
+        "  very-long-command-name-2\n"~
+        "                          Perform cmd 2\n\n"~
+        "Optional arguments:\n"~
+        "  -c C          \n"~
+        "  -d D          \n"~
         "  -h, --help    Show this help message and exit\n\n");
 }
 
