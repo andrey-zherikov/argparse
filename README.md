@@ -586,6 +586,134 @@ assert(parseCLIArgs!T(["-b","b"], (T t) { assert(false); }) != 0);
 
 **Note that parenthesis are required in this UDA to work correctly.**
 
+## Subcommands
+
+Sophisticated command-line tools, like `git`, have many subcommands (e.g., `commit`, `push` etc.), each with its own set
+of arguments. There are few ways to declare subcommands with `argparse`.
+
+### Commands without UDA
+
+All commands can be listed as template parameters to `Main.CLI`. Provided `main` function must be able to handle all
+command types:
+
+```d
+struct sum
+{
+  int[] numbers;  // --numbers argument
+}
+
+struct min
+{
+  int[] numbers;  // --numbers argument
+}
+
+struct max
+{
+  int[] numbers;  // --numbers argument
+}
+
+int main_(max cmd)
+{
+  import std.algorithm: maxElement;
+
+  writeln("max = ", cmd.numbers.maxElement);
+
+  return 0;
+}
+
+int main_(min cmd)
+{
+  import std.algorithm: minElement;
+
+  writeln("min = ", cmd.numbers.minElement);
+
+  return 0;
+}
+
+int main_(sum cmd)
+{
+  import std.algorithm: sum;
+
+  writeln("sum = ", cmd.numbers.sum);
+
+  return 0;
+}
+
+// This mixin defines standard main function that parses command line and calls the provided function:
+mixin CLI!(sum, min, max).main!main_;
+```
+
+### Subcommands with shared common arguments
+
+In some cases command-line tool has arguments that are common across all subcommands. They can be specified as regular
+arguments in a struct that represents the whole program. In this case subcommands must be listed as regular data member
+having `SumType` type that contains types of all subcommands. The main function should accept a parameter for the
+program, not for each subcommand:
+
+```d
+struct sum {}
+struct min {}
+struct max {}
+
+struct Program
+{
+  int[] numbers;  // --numbers argument
+
+  // SumType indicates sub-command
+  // name of the command is the same as a name of the type
+  SumType!(sum, min, max) cmd;
+}
+
+// This mixin defines standard main function that parses command line and calls the provided function:
+mixin CLI!Program.main!((prog)
+{
+  static assert(is(typeof(prog) == Program));
+
+  int result = prog.cmd.match!(
+    (.max)
+    {
+      import std.algorithm: maxElement;
+      return prog.numbers.maxElement;
+    },
+    (.min)
+    {
+      import std.algorithm: minElement;
+      return prog.numbers.minElement;
+    },
+    (.sum)
+    {
+      import std.algorithm: sum;
+      return prog.numbers.sum;
+    }
+  );
+
+  writeln("result = ", result);
+
+  return 0;
+});
+```
+
+### Command name and aliases
+
+Commands may define a name (different to the type that represents the command) and aliases to provide alternate names
+that will be recognized by the parser. Aliases are displayed in the default help output. For example:
+
+```d
+@(Command("maximum", "max")
+.ShortDescription("Print the maximum")
+)
+struct MaxCmd
+{
+    int[] numbers;
+}
+```
+
+Would result in this help fragment:
+
+```
+  maximum,max    Print the maximum
+```
+
 ## Help generation
 
 ### Command
