@@ -1,8 +1,7 @@
 {
 	"license": "BSL-1.0",
-	"name": "getting_started_extended",
+	"name": "getting_started-advanced",
 	"targetType":"executable",
 	"sourcePaths":["."],
-	"targetPath": "..",
 	"dependencies":{ "all:argparse":"*" }
 }
