@@ -586,12 +586,12 @@ assert(parseCLIArgs!T(["-b","b"], (T t) { assert(false); }) != 0);
 
 **Note that parenthesis are required in this UDA to work correctly.**
 
-## Subcommands
+## Commands
 
 Sophisticated command-line tools, like `git`, have many subcommands (e.g., `commit`, `push` etc.), each with its own set
 of arguments. There are few ways to declare subcommands with `argparse`.
 
-### Commands without UDA
+### Subcommands without UDA
 
 All commands can be listed as template parameters to `Main.CLI`. Provided `main` function must be able to handle all
 command types:
@@ -695,8 +695,9 @@ mixin CLI!Program.main!((prog)
 
 ### Command name and aliases
 
-Commands may define a name (different to the type that represents the command) and aliases to provide alternate names
-that will be recognized by the parser. Aliases are displayed in the default help output. For example:
+To define a command name that is not the same as the type that represents this command, one should use `Command` UDA -
+it accepts a name and list of name aliases. All these names are recognized by the parser and are displayed in the help
+text. For example:
 
 ```d
 @(Command("maximum", "max")
@@ -718,14 +719,18 @@ Would result in this help fragment:
 
 ### Command
 
-To customize generated help text one can use `Command` UDA that receives optional parameter of a program name. If this
-parameter is not provided then `Runtime.args[0]` is used. Additional parameters are also available for customization:
+`Command` UDA provides few customizations that affect help text. It can be used for top-level command and subcommands
 
+- Program name (i.e. the name of top-level command) and subcommand name can be provided to `Command` UDA as a parameter. 
+  If program name is not provided then `Runtime.args[0]` is used. If subcommand name is not provided then the name of
+  the type that represents the command is used.
 - `Usage` - allows custom usage text. By default, the parser calculates the usage message from the arguments it contains
   but this can be overridden with `Usage` call. If the custom text contains `%(PROG)` then it will be replaced by the
-  program name.
-- `Description` - used to provide a brief description of what the program does and how it works. In help messages, the
-  description is displayed between the usage string and the list of the arguments.
+  command/program name.
+- `Description` - used to provide a description of what the command/program does and how it works. In help messages, the
+  description is displayed between the usage string and the list of the command arguments.
+- `ShortDescription` - used to provide a brief description of what the command/program does. It is displayed in
+  "Available commands" section on help screen of the parent command.
 - `Epilog` - custom text that is printed after the list of the arguments.
 
 ### Argument
