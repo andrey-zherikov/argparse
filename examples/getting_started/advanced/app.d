@@ -1,6 +1,6 @@
 import argparse;
 
-static struct Extended
+static struct Advanced
 {
     // Positional arguments are required by default
     @PositionalArgument(0)
@@ -23,10 +23,10 @@ static struct Extended
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:
-mixin Main.parseCLIKnownArgs!(Extended, (args, unparsed)
+mixin Main.parseCLIKnownArgs!(Advanced, (args, unparsed)
 {
-    // 'args' has 'Extended' type
-    static assert(is(typeof(args) == Extended));
+    // 'args' has 'Advanced' type
+    static assert(is(typeof(args) == Advanced));
 
     // unparsed arguments has 'string[]' type
     static assert(is(typeof(unparsed) == string[]));
