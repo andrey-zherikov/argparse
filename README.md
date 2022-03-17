@@ -30,6 +30,7 @@ to [releases](https://github.com/andrey-zherikov/argparse/releases) for breaking
 - Parsing of known arguments only (returning not recognized ones).
 - Options terminator (e.g. parsing up to `--` leaving any argument specified after it).
 - Arguments groups.
+- Subcommands.
 - Fully customizable parsing:
     - Raw (`string`) data validation (i.e. before parsing).
     - Custom conversion of argument value (`string` -> any `destination type`).
@@ -693,7 +694,7 @@ mixin CLI!Program.main!((prog)
 });
 ```
 
-### Command name and aliases
+### Subcommand name and aliases
 
 To define a command name that is not the same as the type that represents this command, one should use `Command` UDA -
 it accepts a name and list of name aliases. All these names are recognized by the parser and are displayed in the help
@@ -713,6 +714,15 @@ Would result in this help fragment:
 
 ```
   maximum,max    Print the maximum
+```
+
+### Default subcommand
+
+The default command is a command that is ran when user doesn't specify any command in the command line.
+To mark a command as default, one should use `Default` template:
+
+```d
+  SumType!(sum, min, Default!max) cmd;
 ```
 
 ## Help generation

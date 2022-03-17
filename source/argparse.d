@@ -4,6 +4,8 @@ module argparse;
 import std.typecons: Nullable;
 import std.traits;
 
+private enum DEFAULT_COMMAND = "";
+
 struct Config
 {
     /**
@@ -710,7 +712,10 @@ private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias s
 
         alias parse = (ref COMMAND_TYPE cmdTarget)
         {
-            auto command = CommandArguments!COMMAND_TYPE(parser.config, info, parentArguments);
+            static if(!is(COMMAND_TYPE == Default!TYPE, TYPE))
+                alias TYPE = COMMAND_TYPE;
+
+            auto command = CommandArguments!TYPE(parser.config, info, parentArguments);
 
             return arg.match!(_ => parser.parse(command, cmdTarget, _));
         };
@@ -735,6 +740,13 @@ private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias s
 }
 
 struct SubCommands {}
+
+// Default subcommand
+struct Default(COMMAND)
+{
+    COMMAND command;
+    alias command this;
+}
 
 unittest
 {
@@ -1131,6 +1143,10 @@ private struct Parser
 
             return arg.match!(_ => parse(cmd, receiver, _));
         };
+
+        auto found = cmd.findSubCommand(DEFAULT_COMMAND);
+        if(found.parse !is null)
+            cmdStack ~= (const ref arg) => found.parse(this, arg, receiver);
 
         while(!args.empty)
         {
@@ -1542,6 +1558,24 @@ unittest
     }
 
     assert(["-c","C","cmd2","-b","B"].parseCLIArgs!T.get == T("C",null,typeof(T.cmd)(T.cmd2("B"))));
+}
+
+unittest
+{
+    import std.sumtype: SumType, match;
+
+    struct T
+    {
+        struct cmd1 { string a; }
+        struct cmd2 { string b; }
+
+        string c;
+        string d;
+
+        SumType!(cmd1, Default!cmd2) cmd;
+    }
+
+    assert(["-c","C","-b","B"].parseCLIArgs!T.get == T("C",null,typeof(T.cmd)(Default!(T.cmd2)(T.cmd2("B")))));
 }
 
 struct Main
@@ -3239,13 +3273,21 @@ private struct CommandArguments(RECEIVER)
 
     private void addSubCommands(alias symbol)()
     {
+        import std.sumtype: isSumType;
+
         alias member = __traits(getMember, RECEIVER, symbol);
+
+        static assert(isSumType!(typeof(member)), RECEIVER.stringof~"."~symbol~" must have 'SumType' type");
 
         static assert(getUDAs!(member, SubCommands).length <= 1,
             "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'SubCommands' UDAs");
 
-        static foreach(COMMAND_TYPE; typeof(member).Types)
+        static foreach(TYPE; typeof(member).Types)
         {{
+            enum defaultCommand = is(TYPE == Default!COMMAND_TYPE, COMMAND_TYPE);
+            static if(!defaultCommand)
+                alias COMMAND_TYPE = TYPE;
+
             static assert(getUDAs!(COMMAND_TYPE, CommandInfo).length <= 1);
 
             //static assert(getUDAs!(member, Group).length <= 1,
@@ -3267,13 +3309,19 @@ private struct CommandArguments(RECEIVER)
 
             static foreach(name; info.names)
             {
-                assert(!(name in subCommandsByName), "Duplicated name of sub command: "~name);
+                assert(!(name in subCommandsByName), "Duplicated name of subcommand: "~name);
                 subCommandsByName[arguments.convertCase(name)] = index;
+            }
+
+            static if(defaultCommand)
+            {
+                assert(!(DEFAULT_COMMAND in subCommandsByName), "Multiple default subcommands: "~RECEIVER.stringof~"."~symbol);
+                subCommandsByName[DEFAULT_COMMAND] = index;
             }
 
             subCommands ~= info;
             //group.arguments ~= index;
-            parseSubCommands ~= ParsingSubCommand!(COMMAND_TYPE, info, RECEIVER, symbol)(&this);
+            parseSubCommands ~= ParsingSubCommand!(TYPE, info, RECEIVER, symbol)(&this);
         }}
     }
 

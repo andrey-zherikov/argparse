@@ -1,0 +1,7 @@
+{
+	"license": "BSL-1.0",
+	"name": "sub_commands-default",
+	"targetType":"executable",
+	"sourcePaths":["."],
+	"dependencies":{ "all:argparse":"*" }
+}

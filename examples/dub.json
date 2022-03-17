@@ -7,7 +7,8 @@
 		"all:getting_started-basic":"*",
 		"all:sub_commands-advanced":"*",
 		"all:sub_commands-basic":"*",
-		"all:sub_commands-common_args":"*"
+		"all:sub_commands-common_args":"*",
+		"all:sub_commands-default":"*"
 	},
 	"subPackages": [
 		"..",
@@ -15,6 +16,7 @@
 		"getting_started/basic",
 		"sub_commands/advanced",
 		"sub_commands/basic",
-		"sub_commands/common_args"
+		"sub_commands/common_args",
+		"sub_commands/default"
 	]
 }
