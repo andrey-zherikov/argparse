@@ -90,7 +90,7 @@ static struct Basic
 // This mixin defines standard main function that parses command line and calls the provided function:
 mixin Main.parseCLIArgs!(Basic, (args)
 {
-    // 'args' has 'Baisc' type
+    // 'args' has 'Basic' type
     static assert(is(typeof(args) == Basic));
   
     // do whatever you need
