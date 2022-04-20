@@ -683,8 +683,12 @@ private alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIV
         {
             auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, info, config);
 
-            if(!info.checkValuesCount(config, argName, rawValues.length))
-                return Result.Failure;
+            auto res = info.checkValuesCount(argName, rawValues.length);
+            if(!res)
+            {
+                config.onError(res.errorMsg);
+                return res;
+            }
 
             auto param = RawParam(config, argName, rawValues);
 
@@ -2614,32 +2618,29 @@ private struct ArgumentInfo
     Nullable!ulong minValuesCount;
     Nullable!ulong maxValuesCount;
 
-    private bool checkValuesCount(in Config config, string argName, ulong count) const
+    private auto checkValuesCount(string argName, ulong count) const
     {
         immutable min = minValuesCount.get;
         immutable max = maxValuesCount.get;
 
         // override for boolean flags
         if(allowBooleanNegation && count == 1)
-            return true;
+            return Result.Success;
 
         if(min == max && count != min)
         {
-            config.onError("argument ",argName,": expected ",min,min == 1 ? " value" : " values");
-            return false;
+            return Result.Error("argument ",argName,": expected ",min,min == 1 ? " value" : " values");
         }
         if(count < min)
         {
-            config.onError("argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
-            return false;
+            return Result.Error("argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
         }
         if(count > max)
         {
-            config.onError("argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
-            return false;
+            return Result.Error("argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
         }
 
-        return true;
+        return Result.Success;
     }
 
     private bool allowBooleanNegation = true;
