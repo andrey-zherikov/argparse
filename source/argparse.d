@@ -676,7 +676,7 @@ private struct Arguments
     }
 }
 
-private alias ParsingFunction(alias symbol, alias uda, ArgumentInfo info, RECEIVER) =
+private alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIVER) =
     delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
     {
         try
@@ -3268,7 +3268,7 @@ private struct CommandArguments(RECEIVER)
         else
             arguments.addArgument!(info, restrictions);
 
-        parseFunctions ~= ParsingFunction!(symbol, uda, info, RECEIVER);
+        parseFunctions ~= ParsingArgument!(symbol, uda, info, RECEIVER);
     }
 
     private void addSubCommands(alias symbol)()
@@ -3301,7 +3301,7 @@ private struct CommandArguments(RECEIVER)
             static assert(info.names.length > 0 && info.names[0].length > 0);
 
             //static if(getUDAs!(member, Group).length > 0)
-            //    args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingFunction!(symbol, uda, info, RECEIVER));
+            //    args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingArgument!(symbol, uda, info, RECEIVER));
             //else
             //arguments.addSubCommand!(info);
 
