@@ -10,35 +10,38 @@ to [releases](https://github.com/andrey-zherikov/argparse/releases) for breaking
 
 ## Features
 
-- Positional arguments:
+- [Positional arguments](#positional-arguments):
     - Automatic type conversion of the value.
     - Required by default, can be marked as optional.
-- Named arguments:
+- [Named arguments](#named-arguments):
     - Multiple names are supported including short (`-v`) and long (`--verbose`) ones.
-    - Case-sensitive/-insensitive parsing.
-    - Bundling of short names (`-vvv` is same as `-v -v -v`).
-    - Equals sign is accepted (`-v=debug`, `--verbose=debug`).
+    - [Case-sensitive/-insensitive parsing.](#case-sensitivity)
+    - [Bundling of short names](#bundling-of-single-letter-arguments) (`-vvv` is same as `-v -v -v`).
+    - [Equals sign is accepted](#assign-character) (`-v=debug`, `--verbose=debug`).
     - Automatic type conversion of the value.
     - Optional by default, can be marked as required.
-- Support different types of destination data member:
+- [Support different types of destination data member](#supported-types):
     - Scalar (e.g. `int`, `float`, `bool`).
     - String arguments.
     - Enum arguments.
     - Array arguments.
     - Hash (associative array) arguments.
     - Callbacks.
-- Parsing of known arguments only (returning not recognized ones).
-- Options terminator (e.g. parsing up to `--` leaving any argument specified after it).
-- Arguments groups.
-- Subcommands.
-- Fully customizable parsing:
+- [Different use cases are supported](#calling-the-parser):
+    - Mixin to inject standard `main` function.
+    - Parsing of known arguments only (returning not recognized ones).
+    - Enforcing that there are no unknown arguments provided.
+- [Options terminator](#trailing-arguments) (e.g. parsing up to `--` leaving any argument specified after it).
+- [Arguments groups](#argument-dependencies).
+- [Subcommands](#commands).
+- [Fully customizable parsing](#argument-parsing-customization):
     - Raw (`string`) data validation (i.e. before parsing).
     - Custom conversion of argument value (`string` -> any `destination type`).
     - Validation of parsed data (i.e. after conversion to `destination type`).
     - Custom action on parsed data (doing something different from storing the parsed value in a member of destination
       object).
-- Built-in reporting of error happened during argument parsing.
-- Built-in help generation
+- [Built-in reporting of error happened during argument parsing](#error-handling).
+- [Built-in help generation](#help-generation).
 
 ## Getting started
 
@@ -326,7 +329,7 @@ Valid argument values are: apple,pear,banana
 Note that if the type of destination variable is `enum` then the allowed values are automatically limited to those
 listed in the `enum`.
 
-## How to call the parser
+## Calling the parser
 
 ### Wrappers for main function
 
@@ -1063,7 +1066,7 @@ static struct T
 static assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
 ```
 
-## Parsing customization
+## Argument parsing customization
 
 Some time the functionality provided out of the box is not enough and it needs to be tuned.
 
