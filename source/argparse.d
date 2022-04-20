@@ -913,6 +913,8 @@ struct Result
     private enum Status { failure, success, unknownArgument };
     private Status status;
 
+    private string errorMsg;
+
     bool opCast(type)() const if (is(type == bool))
     {
         return status == Status.success;
@@ -921,6 +923,14 @@ struct Result
     private static enum Failure = Result(1, Status.failure);
     private static enum Success = Result(0, Status.success);
     private static enum UnknownArgument = Result(0, Status.unknownArgument);
+
+    private static auto Error(A...)(A args) nothrow
+    {
+        import std.conv: text;
+        import std.stdio: stderr, writeln;
+
+        return Result(1, Status.failure, text!A(args));
+    }
 }
 
 private struct Parser
