@@ -1634,6 +1634,79 @@ template CLI(Config config, COMMANDS...)
 
 template CLI(Config config, COMMAND)
 {
+    static Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
+    {
+        auto parser = Parser(config, args);
+
+        auto command = CommandArguments!COMMAND(config);
+        auto res = parser.parseAll(command, receiver);
+        if(!res)
+            return res;
+
+        unrecognizedArgs = parser.unrecognizedArgs;
+
+        return Result.Success;
+    }
+
+    static Result parseKnownArgs(ref COMMAND receiver, ref string[] args)
+    {
+        string[] unrecognizedArgs;
+
+        auto res = parseKnownArgs(receiver, args, unrecognizedArgs);
+        if(res)
+            args = unrecognizedArgs;
+
+        return res;
+    }
+
+    static Result parseArgs(ref COMMAND receiver, string[] args)
+    {
+        auto res = parseKnownArgs(receiver, args);
+        if(res && args.length > 0)
+        {
+            config.onError("Unrecognized arguments: ", args);
+            return Result.Failure;
+        }
+
+        return res;
+    }
+
+    static int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)
+        if(__traits(compiles, { newMain(COMMAND.init); }))
+    {
+        alias value = initialValue;
+
+        auto res = parseArgs(value, args);
+        if(!res)
+            return res.resultCode;
+
+        static if(__traits(compiles, { int a = cast(int) newMain(value); }))
+            return cast(int) newMain(value);
+        else
+        {
+            newMain(value);
+            return 0;
+        }
+    }
+
+    static int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)
+        if(__traits(compiles, { newMain(COMMAND.init, string[].init); }))
+    {
+        alias value = initialValue;
+
+        auto res = parseKnownArgs(value, args);
+        if(!res)
+            return res.resultCode;
+
+        static if(__traits(compiles, { int a = cast(int) newMain(value, args); }))
+            return cast(int) newMain(value, args);
+        else
+        {
+            newMain(value, args);
+            return 0;
+        }
+    }
+
     mixin template main(alias newMain)
     {
         int main(string[] argv)
