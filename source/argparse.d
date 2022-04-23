@@ -1206,16 +1206,26 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
     return Result.Success;
 }
 
+deprecated("Use CLI!(config, COMMAND).parseKnownArgs")
 Result parseCLIKnownArgs(T)(ref T receiver,
                             string[] args,
                             out string[] unrecognizedArgs,
-                            in Config config = Config.init)
+                            in Config config)
 {
     auto command = CommandArguments!T(config);
     return parseCLIKnownArgs(receiver, args, unrecognizedArgs, command, config);
 }
 
-auto parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)
+deprecated("Use CLI!COMMAND.parseKnownArgs")
+Result parseCLIKnownArgs(T)(ref T receiver,
+                            string[] args,
+                            out string[] unrecognizedArgs)
+{
+    return CLI!T.parseKnownArgs(receiver, args, unrecognizedArgs);
+}
+
+deprecated("Use CLI!(config, COMMAND).parseKnownArgs")
+auto parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config)
 {
     string[] unrecognizedArgs;
 
@@ -1226,7 +1236,14 @@ auto parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = 
     return res;
 }
 
-Nullable!T parseCLIKnownArgs(T)(ref string[] args, in Config config = Config.init)
+deprecated("Use CLI!COMMAND.parseKnownArgs")
+auto parseCLIKnownArgs(T)(ref T receiver, ref string[] args)
+{
+    return CLI!T.parseKnownArgs(receiver, args);
+}
+
+deprecated("Use CLI!(config, COMMAND).parseKnownArgs")
+Nullable!T parseCLIKnownArgs(T)(ref string[] args, in Config config)
 {
     import std.typecons : nullable;
 
@@ -1235,7 +1252,18 @@ Nullable!T parseCLIKnownArgs(T)(ref string[] args, in Config config = Config.ini
     return parseCLIKnownArgs(receiver, args, config) ? receiver.nullable : Nullable!T.init;
 }
 
-int parseCLIKnownArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)
+deprecated("Use CLI!COMMAND.parseKnownArgs")
+Nullable!T parseCLIKnownArgs(T)(ref string[] args)
+{
+    import std.typecons : nullable;
+
+    T receiver;
+
+    return CLI!T.parseKnownArgs(receiver, args) ? receiver.nullable : Nullable!T.init;
+}
+
+deprecated("Use CLI!(config, COMMAND).parseArgs")
+int parseCLIKnownArgs(T, FUNC)(string[] args, FUNC func, in Config config, T initialValue = T.init)
 if(__traits(compiles, { func(T.init, args); }))
 {
     alias value = initialValue;
@@ -1253,8 +1281,28 @@ if(__traits(compiles, { func(T.init, args); }))
     }
 }
 
+deprecated("Use CLI!COMMAND.parseArgs")
+int parseCLIKnownArgs(T, FUNC)(string[] args, FUNC func)
+if(__traits(compiles, { func(T.init, args); }))
+{
+    T value;
 
-auto parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)
+    auto res = CLI!T.parseKnownArgs(value, args);
+    if(!res)
+        return res.resultCode;
+
+    static if(__traits(compiles, { int a = cast(int) func(value, args); }))
+        return cast(int) func(value, args);
+    else
+    {
+        func(value, args);
+        return 0;
+    }
+}
+
+
+deprecated("Use CLI!(config, COMMAND).parseArgs")
+auto parseCLIArgs(T)(ref T receiver, string[] args, in Config config)
 {
     string[] unrecognizedArgs;
 
@@ -1269,7 +1317,14 @@ auto parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.in
     return res;
 }
 
-Nullable!T parseCLIArgs(T)(string[] args, in Config config = Config.init)
+deprecated("Use CLI!COMMAND.parseArgs")
+auto parseCLIArgs(T)(ref T receiver, string[] args)
+{
+    return CLI!T.parseArgs(receiver, args);
+}
+
+deprecated("Use CLI!(config, COMMAND).parseArgs")
+Nullable!T parseCLIArgs(T)(string[] args, in Config config)
 {
     import std.typecons : nullable;
 
@@ -1278,12 +1333,42 @@ Nullable!T parseCLIArgs(T)(string[] args, in Config config = Config.init)
     return parseCLIArgs(receiver, args, config) ? receiver.nullable : Nullable!T.init;
 }
 
-int parseCLIArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)
+deprecated("Use CLI!COMMAND.parseArgs")
+Nullable!T parseCLIArgs(T)(string[] args)
+{
+    import std.typecons : nullable;
+
+    T receiver;
+
+    return CLI!T.parseArgs(receiver, args) ? receiver.nullable : Nullable!T.init;
+}
+
+deprecated("Use CLI!(config, COMMAND).parseArgs")
+int parseCLIArgs(T, FUNC)(string[] args, FUNC func, in Config config, T initialValue = T.init)
 if(__traits(compiles, { func(T.init); }))
 {
     alias value = initialValue;
 
     auto res = parseCLIArgs(value, args, config);
+    if(!res)
+        return res.resultCode;
+
+    static if(__traits(compiles, { int a = cast(int) func(value); }))
+        return cast(int) func(value);
+    else
+    {
+        func(value);
+        return 0;
+    }
+}
+
+deprecated("Use CLI!COMMAND.parseArgs")
+int parseCLIArgs(T, FUNC)(string[] args, FUNC func)
+if(__traits(compiles, { func(T.init); }))
+{
+    T value;
+
+    auto res = CLI!T.parseArgs(value, args);
     if(!res)
         return res.resultCode;
 
