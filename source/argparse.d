@@ -1719,14 +1719,12 @@ template CLI(Config config, COMMAND)
     }
 }
 
+deprecated("Use CLI!(Config, COMMAND) or CLI!(COMMAND)")
 template CLI(Config config)
 {
     mixin template main(COMMAND, alias newMain)
     {
-        int main(string[] argv)
-        {
-            return parseCLIArgs!COMMAND(argv[1..$], (COMMAND cmd) => newMain(cmd), config);
-        }
+        mixin CLI!(config, COMMAND).main!newMain;
     }
 }
 
