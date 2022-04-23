@@ -2646,6 +2646,35 @@ private struct ArgumentInfo
     private bool allowBooleanNegation = true;
 }
 
+unittest
+{
+    ArgumentInfo info;
+    info.allowBooleanNegation = false;
+    info.minValuesCount = 2;
+    info.maxValuesCount = 4;
+
+    alias isError = (Result res) => !res && res.errorMsg.length > 0;
+
+    assert( isError(info.checkValuesCount("", 1)));
+    assert(!isError(info.checkValuesCount("", 2)));
+    assert(!isError(info.checkValuesCount("", 3)));
+    assert(!isError(info.checkValuesCount("", 4)));
+    assert( isError(info.checkValuesCount("", 5)));
+}
+
+unittest
+{
+    ArgumentInfo info;
+    info.allowBooleanNegation = false;
+    info.minValuesCount = 2;
+    info.maxValuesCount = 2;
+
+    alias isError = (Result res) => !res && res.errorMsg.length > 0;
+
+    assert( isError(info.checkValuesCount("", 1)));
+    assert(!isError(info.checkValuesCount("", 2)));
+    assert( isError(info.checkValuesCount("", 3)));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
