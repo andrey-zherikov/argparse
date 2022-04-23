@@ -926,6 +926,7 @@ struct Result
 private struct Parser
 {
     struct Unknown {}
+    struct EndOfArgs {}
     struct Positional {}
     struct NamedShort {
         string name;
@@ -939,7 +940,7 @@ private struct Parser
     }
 
     import std.sumtype: SumType;
-    alias Argument = SumType!(Unknown, Positional, NamedShort, NamedLong);
+    alias Argument = SumType!(Unknown, EndOfArgs, Positional, NamedShort, NamedLong);
 
     immutable Config config;
 
@@ -960,6 +961,9 @@ private struct Parser
         if(arg.length == 0)
             return Argument.init;
 
+        if(arg == config.endOfArgs)
+            return Argument(EndOfArgs.init);
+
         if(arg[0] != config.namedArgChar)
             return Argument(Positional.init);
 
@@ -974,23 +978,6 @@ private struct Parser
         return arg[1] == config.namedArgChar
         ? Argument(NamedLong (nameWithDash[2..$], nameWithDash, value))
         : Argument(NamedShort(nameWithDash[1..$], nameWithDash, value));
-    }
-
-    void parseEndOfArgs(T)(const ref CommandArguments!T cmd, ref T receiver)
-    {
-        if(config.endOfArgs.length == 0)
-            return;
-
-        foreach(i, arg; args)
-            if(arg == config.endOfArgs)
-            {
-                static if(is(typeof(cmd.setTrailingArgs)))
-                    cmd.setTrailingArgs(receiver, args[i+1..$]);
-                else
-                    unrecognizedArgs ~= args[i+1..$];
-
-                args = args[0..i];
-            }
     }
 
     auto parseArgument(T, PARSE)(PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
@@ -1025,6 +1012,18 @@ private struct Parser
     auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Unknown)
     {
         return Result.UnknownArgument;
+    }
+
+    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, EndOfArgs)
+    {
+        static if(is(typeof(cmd.setTrailingArgs)))
+            cmd.setTrailingArgs(receiver, args[1..$]);
+        else
+            unrecognizedArgs ~= args[1..$];
+
+        args = [];
+
+        return Result.Success;
     }
 
     auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Positional)
@@ -1134,9 +1133,6 @@ private struct Parser
     {
         import std.range: empty, front;
 
-        // Process trailing args first
-        parseEndOfArgs(cmd, receiver);
-
         cmdStack ~= (const ref arg)
         {
             import std.sumtype: match;
@@ -1166,7 +1162,7 @@ unittest
 {
     assert(Parser.init.splitArgumentNameValue("") == Parser.Argument(Parser.Unknown.init));
     assert(Parser.init.splitArgumentNameValue("-") == Parser.Argument(Parser.Unknown.init));
-    assert(Parser.init.splitArgumentNameValue("--") == Parser.Argument(Parser.Unknown.init));
+    assert(Parser.init.splitArgumentNameValue("--") == Parser.Argument(Parser.EndOfArgs.init));
     assert(Parser.init.splitArgumentNameValue("abc=4") == Parser.Argument(Parser.Positional.init));
     assert(Parser.init.splitArgumentNameValue("-abc") == Parser.Argument(Parser.NamedShort("abc", "-abc", null)));
     assert(Parser.init.splitArgumentNameValue("--abc") == Parser.Argument(Parser.NamedLong("abc", "--abc", null)));
@@ -1549,7 +1545,13 @@ unittest
     struct T
     {
         struct cmd1 { string a; }
-        struct cmd2 { string b; }
+        struct cmd2
+        {
+            string b;
+
+            @TrailingArguments
+            string[] args;
+        }
 
         string c;
         string d;
@@ -1558,6 +1560,7 @@ unittest
     }
 
     assert(["-c","C","cmd2","-b","B"].parseCLIArgs!T.get == T("C",null,typeof(T.cmd)(T.cmd2("B"))));
+    assert(["-c","C","cmd2","--","-b","B"].parseCLIArgs!T.get == T("C",null,typeof(T.cmd)(T.cmd2("",["-b","B"]))));
 }
 
 unittest
