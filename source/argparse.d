@@ -1595,22 +1595,17 @@ unittest
     assert(["-c","C","-b","B"].parseCLIArgs!T.get == T("C",null,typeof(T.cmd)(Default!(T.cmd2)(T.cmd2("B")))));
 }
 
+deprecated("Use CLI!(Config, COMMAND).main or CLI!(COMMAND).main")
 struct Main
 {
     mixin template parseCLIKnownArgs(TYPE, alias newMain, Config config = Config.init)
     {
-        int main(string[] argv)
-        {
-            return parseCLIKnownArgs!TYPE(argv[1..$], (TYPE values, string[] args) => newMain(values, args), config);
-        }
+        mixin CLI!(config, TYPE).main!newMain;
     }
 
     mixin template parseCLIArgs(TYPE, alias newMain, Config config = Config.init)
     {
-        int main(string[] argv)
-        {
-            return parseCLIArgs!TYPE(argv[1..$], (TYPE values) => newMain(values), config);
-        }
+        mixin CLI!(config, TYPE).main!newMain;
     }
 }
 
@@ -1714,7 +1709,7 @@ template CLI(Config config, COMMAND)
     {
         int main(string[] argv)
         {
-            return parseCLIArgs!COMMAND(argv[1..$], (COMMAND cmd) => newMain(cmd), config);
+            return CLI!(config, COMMAND).parseArgs!(newMain)(argv[1..$]);
         }
     }
 }
@@ -1738,8 +1733,8 @@ unittest
         int a;
     }
 
-    static assert(__traits(compiles, { mixin Main.parseCLIArgs!(T, (params) => 0); }));
-    static assert(__traits(compiles, { mixin Main.parseCLIKnownArgs!(T, (params, args) => 0); }));
+    static assert(__traits(compiles, { mixin CLI!T.main!((params) => 0); }));
+    static assert(__traits(compiles, { mixin CLI!T.main!((params, args) => 0); }));
 }
 
 

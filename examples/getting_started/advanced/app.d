@@ -23,7 +23,7 @@ static struct Advanced
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:
-mixin Main.parseCLIKnownArgs!(Advanced, (args, unparsed)
+mixin CLI!Advanced.main!((args, unparsed)
 {
     // 'args' has 'Advanced' type
     static assert(is(typeof(args) == Advanced));
