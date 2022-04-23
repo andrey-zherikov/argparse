@@ -1618,17 +1618,20 @@ template CLI(Config config, COMMANDS...)
 {
     mixin template main(alias newMain)
     {
-        int main(string[] argv)
+        import std.sumtype: SumType, match;
+
+        private struct Program
         {
-            import std.sumtype: SumType, match;
-
-            struct Program
-            {
-                SumType!COMMANDS cmd;   // Sub-commands
-            }
-
-            return parseCLIArgs!Program(argv[1..$], (Program prog) => prog.cmd.match!newMain, config);
+            SumType!COMMANDS cmd;   // Sub-commands
         }
+
+        private auto forwardMain(Args...)(Program prog, auto ref Args args)
+        {
+            import core.lifetime: forward;
+            return prog.cmd.match!(_ => newMain(_, forward!args));
+        }
+
+        mixin CLI!(config, Program).main!forwardMain;
     }
 }
 
