@@ -41,7 +41,7 @@ static struct Basic
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:
-mixin Main.parseCLIArgs!(Basic, (args)
+mixin CLI!Basic.main!((args)
 {
     // 'args' has 'Baisc' type
     static assert(is(typeof(args) == Basic));
@@ -53,16 +53,21 @@ mixin Main.parseCLIArgs!(Basic, (args)
 });
 
 // Parser can even work at compile time
-enum values = ([
-    "--boolean",
-    "--number","100",
-    "--name","Jake",
-    "--array","1","2","3",
-    "--choice","foo",
-    "--callback",
-    "--callback1","cb-value",
-    "--callback2","cb-v1","cb-v2",
-].parseCLIArgs!Basic).get;
+enum values = {
+    Basic values;
+    assert(CLI!Basic.parseArgs(values,
+        [
+        "--boolean",
+        "--number","100",
+        "--name","Jake",
+        "--array","1","2","3",
+        "--choice","foo",
+        "--callback",
+        "--callback1","cb-value",
+        "--callback2","cb-v1","cb-v2",
+        ]));
+    return values;
+}();
 
 static assert(values.name     == "Jake");
 static assert(values.unused   == Basic.init.unused);
