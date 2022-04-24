@@ -91,7 +91,7 @@ static struct Basic
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:
-mixin Main.parseCLIArgs!(Basic, (args)
+mixin CLI!Basic.main!((args)
 {
     // 'args' has 'Basic' type
     static assert(is(typeof(args) == Basic));
@@ -127,16 +127,21 @@ Optional arguments:
 Parser can even work at compile time, so you can do something like this:
 
 ```d
-enum values = ([
-  "--boolean",
-  "--number","100",
-  "--name","Jake",
-  "--array","1","2","3",
-  "--choice","foo",
-  "--callback",
-  "--callback1","cb-value",
-  "--callback2","cb-v1","cb-v2",
-].parseCLIArgs!Basic).get;
+enum values = {
+    Basic values;
+    assert(CLI!Basic.parseArgs(values,
+        [
+        "--boolean",
+        "--number","100",
+        "--name","Jake",
+        "--array","1","2","3",
+        "--choice","foo",
+        "--callback",
+        "--callback1","cb-value",
+        "--callback2","cb-v1","cb-v2",
+        ]));
+    return values;
+}();
 
 static assert(values.name     == "Jake");
 static assert(values.unused   == Basic.init.unused);
@@ -149,13 +154,13 @@ static assert(values.array    == [1,2,3]);
 For more sophisticated CLI usage, `argparse` provides few UDAs:
 
 ```d
-static struct Extended
+static struct Advanced
 {
     // Positional arguments are required by default
     @PositionalArgument(0)
     string name;
 
-    // Named arguments can be attributed in bulk
+    // Named arguments can be attributed in bulk (parentheses can be omitted)
     @NamedArgument
     {
         string unused = "some default value";
@@ -172,14 +177,14 @@ static struct Extended
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:
-mixin Main.parseCLIKnownArgs!(Extended, (args, unparsed)
+mixin CLI!Advanced.main!((args, unparsed)
 {
-    // 'args' has 'Extended' type
-    static assert(is(typeof(args) == Extended));
-    
+    // 'args' has 'Advanced' type
+    static assert(is(typeof(args) == Advanced));
+
     // unparsed arguments has 'string[]' type
     static assert(is(typeof(unparsed) == string[]));
-    
+
     // do whatever you need
     import std.stdio: writeln;
     args.writeln;
@@ -275,13 +280,13 @@ type `string[]` with `TrailingArguments` UDA:
 ```d
 struct T
 {
-    @NamedArgument  string a;
-    @NamedArgument  string b;
+    string a;
+    string b;
 
     @TrailingArguments string[] args;
 }
 
-static assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
+assert(CLI!T.parseArgs!((T t) { assert(t == T("A","",["-b","B"])); })(["-a","A","--","-b","B"]) == 0);
 ```
 
 Note that any other character sequence can be used instead of `--` - see [Parser customization](#parser-customization) for details.
@@ -301,7 +306,7 @@ struct T
     int b;
 }
 
-static assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
+assert(CLI!T.parseArgs!((T t) { assert(t == T("not set", 4)); })(["-b", "4"]) == 0);
 ```
 
 ### Limit the allowed values
@@ -315,8 +320,8 @@ struct T
     string fruit;
 }
 
-static assert(["--fruit", "apple"].parseCLIArgs!T.get == T("apple"));
-static assert(["--fruit", "kiwi"].parseCLIArgs!T.isNull);              // "kiwi" is not allowed
+assert(CLI!T.parseArgs!((T t) { assert(t == T("apple")); })(["--fruit", "apple"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["--fruit", "kiwi"]) != 0);    // "kiwi" is not allowed
 ```
 
 For the value that is not in the allowed list, this error will be printed:
@@ -331,17 +336,33 @@ listed in the `enum`.
 
 ## Calling the parser
 
+`argparse` provides `CLI` template to call the parser covering different use cases. It has the following signatures:
+- `template CLI(Config config, COMMAND)` - this is main template that provides multiple API (see below) for all
+  supported use cases.
+- `template CLI(Config config, COMMANDS...)` - convenience wrapper of the previous template that provides `main`
+  template mixin only for the simplest use case with subcommands. See corresponding [section](#commands) for details
+  about subcommands.
+- `alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS)` - alias provided for convenience that allows using default
+  `Config`, i.e. `config = Config.init`.
+
 ### Wrappers for main function
 
-The recommended and most convenient way to use `argparse` is through the `Main` wrapper. It provides the standard
-`main` function that parses command line arguments and calls provided function with an object that contains parsed
-arguments.
+The recommended and most convenient way to use `argparse` is through `CLI!(...).main(alias newMain)` mixin template.
+It declares the standard `main` function that parses command line arguments and calls provided `newMain` function with
+an object that contains parsed arguments.
 
-There are following mixins available:
-
-- `Main.parseCLIArgs(TYPE, alias newMain, Config config = Config.init)` - parses arguments and ensures that there are no
-  unknown arguments are provided.
-- `Main.parseCLIKnownArgs(TYPE, alias newMain, Config config = Config.init)` - parses known arguments only.
+`newMain` function must satisfy these requirements:
+- It must accept `COMMAND` type as a first parameter if `CLI` template is used with one `COMMAND`.
+- It must accept all `COMMANDS` types as a first parameter if `CLI` template is used with multiple `COMMANDS...`.
+  `argparse` uses `std.sumtype.match` for matching. Possible implementation of such `newMain` function would be a
+  function that is overridden for every command type from `COMMANDS`. Another example would be a lambda that does
+  compile-time checking of the type of the first parameter (see examples for details).
+- Optionally `newMain` function can take a `string[]` parameter as a second argument. Providing such a function will
+  mean that `argparse` will parse known arguments only and all unknown ones will be passed as a second parameter to
+  `newMain` function. If `newMain` function doesn't have such parameter then `argparse` will error out if the is an
+  unknown argument provided in command line.
+- Optionally `newMain` can return a result that can be cast to `int`. In this case, this result will be returned from
+  standard `main` function.
 
 **Usage examples:**
 
@@ -352,7 +373,7 @@ struct T
     string b;
 }
 
-mixin Main.parseCLIArgs!(T, (args)
+mixin CLI!T.main!((args)
 {
     // 'args' has 'T' type
     static assert(is(typeof(args) == T));
@@ -363,6 +384,52 @@ mixin Main.parseCLIArgs!(T, (args)
     return 0;
 });
 ```
+
+```d
+struct cmd1
+{
+    string a;
+}
+
+struct cmd2
+{
+    string b;
+}
+
+mixin CLI!(cmd1, cmd2).main!((args, unparsed)
+{
+    // 'args' has either 'cmd1' or 'cmd2' type
+    static if(is(typeof(args) == cmd1))
+        writeln("cmd1: ", args);
+    else static if(is(typeof(args) == cmd2))
+        writeln("cmd2: ", args);
+    else 
+        static assert(false); // this would never happen
+    
+    // unparsed arguments has 'string[]' type
+    static assert(is(typeof(unparsed) == string[]));
+
+    return 0;
+});
+```
+
+### Complete argument parsing
+
+`CLI` template provides `parseArgs` function that parses the command line and ensures that there are no unknown
+arguments specified in command line. It has the following signature:
+
+`Result parseArgs(ref COMMAND receiver, string[] args))`
+
+**Parameters:**
+
+- `receiver` - the object that's populated with parsed values.
+- `args` - raw command line arguments.
+
+**Return value:**
+
+An object that can be cast to `bool` to check whether the parsing was successful or not.
+
+**Usage example:**
 
 ```d
 struct T
@@ -371,87 +438,77 @@ struct T
     string b;
 }
 
-mixin Main.parseCLIKnownArgs!(T, (args, unparsed)
-{
-    // 'args' has 'T' type
-    static assert(is(typeof(args) == T));
-
-    // unparsed arguments has 'string[]' type
-    static assert(is(typeof(unparsed) == string[]));
-
-    // do whatever you need
-    import std.stdio: writeln;
-    args.writeln;
-    writeln("Unparsed args: ", unparsed);
-    return 0;
-});
+assert(CLI!T.parseArgs!((T t) { assert(t == T("A","B")); })(["-a", "A", "-b", "B"]) == 0);
 ```
 
-### Complete argument parsing
 
-There is a top-level function `parseCLIArgs` that parses the command line. It has the following signatures:
+### Partial argument parsing
 
-- `Result parseCLIArgs(T)(ref T receiver, string[] args, in Config config = Config.init)`
+Sometimes a program may only parse a few of the command-line arguments, processing the remaining arguments in different
+way. In these cases, `CLI!(...).parseKnownArgs` function can be used. It works much like `CLI!(...).parseArgs` except
+that it does not produce an error when extra arguments are present. It has the following signatures:
+
+- `Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)`
 
   **Parameters:**
 
     - `receiver` - the object that's populated with parsed values.
     - `args` - raw command line arguments.
-    - `config` - settings that are used for parsing.
+    - `unrecognizedArgs` - raw command line arguments that were not parsed.
 
   **Return value:**
 
   An object that can be cast to `bool` to check whether the parsing was successful or not.
 
-- `Nullable!T parseCLIArgs(T)(string[] args, in Config config = Config.init)`
+- `Result parseKnownArgs(ref COMMAND receiver, ref string[] args)`
 
   **Parameters:**
 
-    - `args` - raw command line arguments.
-    - `config` - settings that are used for parsing.
+    - `receiver` - the object that's populated with parsed values.
+    - `args` - raw command line arguments that are modified to have parsed arguments removed.
 
   **Return value:**
 
-  If there is an error happened during the parsing then `null` is returned. Otherwise, an object of type `T` filled with
-  values from the command line.
-
-- `int parseCLIArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)`
-
-  **Parameters:**
-
-    - `args` - raw command line arguments.
-    - `func` - function that's called with object of type `T` filled with data parsed from command line.
-    - `config` - settings that are used for parsing.
-    - `initialValue` - initial value for the object passed to `func`.
-
-  **Return value:**
-
-  If there is an error happened during the parsing then `int.max` is returned. In other case if
-  `func` returns a value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
+  An object that can be cast to `bool` to check whether the parsing was successful or not.
 
 **Usage example:**
 
 ```d
 struct T
 {
-    @NamedArgument string a;
-    @NamedArgument string b;
+    string a;
 }
 
-enum result1 = parseCLIArgs!T([ "-a", "A", "-b", "B"]);
-assert(result1.get == T("A","B"));
+auto args = [ "-a", "A", "-c", "C" ];
+
+T result;
+assert(CLI!T.parseKnownArgs!(result, args));
+assert(result == T("A"));
+assert(args == ["-c", "C"]);
 ```
 
-If you want to parse multiple command lines into single object then you can do this easily:
 
-```d
-T result2;
-result2.parseCLIArgs([ "-a", "A" ]);
-result2.parseCLIArgs([ "-b", "B" ]);
-assert(result2 == T("A","B"));
-```
+### Calling a function after parsing
 
-You can even write your own `main` function that accepts
+Sometimes it's useful to call some function with an object that has all command line arguments parsed. For this usage,
+`argparse` provides `CLI!(...).parseArgs` template function that has the following signature:
+
+`int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)`
+
+**Parameters:**
+
+- `newMain` - function that's called with object of type `COMMAND` as a first parmeter filled with the data parsed from
+  command line; optionally it can take `string[]` as a second parameter which will contain unknown arguments
+  (`parseKnownArgs` function will be used underneath in this case).
+- `args` - raw command line arguments.
+- `initialValue` - initial value for the object passed to `func`.
+
+**Return value:**
+
+If there is an error happened during the parsing then non-zero value is returned. If `newMain` function returns a
+value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
+
+**Usage example:**
 
 ```d
 int my_main(T command)
@@ -462,81 +519,10 @@ int my_main(T command)
 
 int main(string[] args)
 {
-    return args.parseCLIArgs!T(&my_main);
+    return CLI!T.parseArgs!my_main(args);
 }
 ```
 
-### Partial argument parsing
-
-Sometimes a program may only parse a few of the command-line arguments, passing the remaining arguments on to another
-program. In these cases, `parseCLIKnownArgs` function can be used. It works much like `parseCLIArgs` except that it does
-not produce an error when extra arguments are present. It has the following signatures:
-
-- `Result parseCLIKnownArgs(T)(ref T receiver, string[] args, out string[] unrecognizedArgs, in Config config = Config.init)`
-
-  **Parameters:**
-
-    - `receiver` - the object that's populated with parsed values.
-    - `args` - raw command line arguments.
-    - `unrecognizedArgs` - raw command line arguments that were not parsed.
-    - `config` - settings that are used for parsing.
-
-  **Return value:**
-
-  An object that can be cast to `bool` to check whether the parsing was successful or not.
-
-- `Result parseCLIKnownArgs(T)(ref T receiver, ref string[] args, in Config config = Config.init)`
-
-  **Parameters:**
-
-    - `receiver` - the object that's populated with parsed values.
-    - `args` - raw command line arguments that are modified to have parsed arguments removed.
-    - `config` - settings that are used for parsing.
-
-  **Return value:**
-
-  An object that can be cast to `bool` to check whether the parsing was successful or not.
-
-- `Nullable!T parseCLIKnownArgs(T)(ref string[] args, in Config config = Config.init)`
-
-  **Parameters:**
-
-    - `args` - raw command line arguments that are modified to have parsed arguments removed.
-    - `config` - settings that are used for parsing.
-
-  **Return value:**
-
-  If there is an error happened during the parsing then `null` is returned. Otherwise, an object of type `T` filled with
-  values from the command line.
-
-- `int parseCLIKnownArgs(T, FUNC)(string[] args, FUNC func, in Config config = Config.init, T initialValue = T.init)`
-
-  **Parameters:**
-
-    - `args` - raw command line arguments.
-    - `func` - function that's called with object of type `T` filled with data parsed from command line and the
-      unrecognized arguments having the type of `string[]`.
-    - `config` - settings that are used for parsing.
-    - `initialValue` - initial value for the object passed to `func`.
-
-  **Return value:**
-
-  If there is an error happened during the parsing then `int.max` is returned. In other case if
-  `func` returns a value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
-
-**Usage example:**
-
-```d
-struct T
-{
-    @NamedArgument string a;
-}
-
-auto args = [ "-a", "A", "-c", "C" ];
-
-assert(parseCLIKnownArgs!T(args).get == T("A"));
-assert(args == ["-c", "C"]);
-```
 
 ## Argument dependencies
 
@@ -555,12 +541,12 @@ struct T
 }
 
 // Either or no argument is allowed
-assert(parseCLIArgs!T(["-a","a"], (T t) {}) == 0);
-assert(parseCLIArgs!T(["-b","b"], (T t) {}) == 0);
-assert(parseCLIArgs!T([], (T t) {}) == 0);
+assert(CLI!T.parseArgs!((T t) {})(["-a","a"]) == 0);
+assert(CLI!T.parseArgs!((T t) {})(["-b","b"]) == 0);
+assert(CLI!T.parseArgs!((T t) {})([]) == 0);
 
 // Both arguments are not allowed
-assert(parseCLIArgs!T(["-a","a","-b","b"], (T t) { assert(false); }) != 0);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a","-b","b"]) != 0);
 ```
 
 **Note that parenthesis are required in this UDA to work correctly.**
@@ -580,12 +566,12 @@ struct T
 }
 
 // Both or no argument is allowed
-assert(parseCLIArgs!T(["-a","a","-b","b"], (T t) {}) == 0);
-assert(parseCLIArgs!T([], (T t) {}) == 0);
+assert(CLI!T.parseArgs!((T t) {})(["-a","a","-b","b"]) == 0);
+assert(CLI!T.parseArgs!((T t) {})([]) == 0);
 
 // Only one argument is not allowed
-assert(parseCLIArgs!T(["-a","a"], (T t) { assert(false); }) != 0);
-assert(parseCLIArgs!T(["-b","b"], (T t) { assert(false); }) != 0);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a"]) != 0);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","b"]) != 0);
 ```
 
 **Note that parenthesis are required in this UDA to work correctly.**
@@ -725,7 +711,7 @@ The default command is a command that is ran when user doesn't specify any comma
 To mark a command as default, one should use `Default` template:
 
 ```d
-  SumType!(sum, min, Default!max) cmd;
+SumType!(sum, min, Default!max) cmd;
 ```
 
 ## Help generation
@@ -782,7 +768,7 @@ struct T
   @TrailingArguments string[] args;
 }
 
-parseCLIArgs!T(["-h"]);
+CLI!T.parseArgs!((T t) {})(["-h"]);
 ```
 
 This example will print the following help message:
@@ -879,11 +865,11 @@ struct T
     @NamedArgument bool b;
 }
 
-static assert(["-b"]        .parseCLIArgs!T.get == T(true));
-static assert(["-b","true"] .parseCLIArgs!T.get == T(true));
-static assert(["-b","false"].parseCLIArgs!T.get == T(false));
-static assert(["-b=true"]   .parseCLIArgs!T.get == T(true));
-static assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
+assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b","true"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b=true"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["-b","false"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["-b=false"]) == 0);
 ```
 
 ### Numeric
@@ -898,7 +884,7 @@ struct T
     @NamedArgument  double d;
 }
 
-static assert(["-i","-5","-u","8","-d","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
+assert(CLI!T.parseArgs!((T t) { assert(t == T(-5,8,12.345)); })(["-i","-5","-u","8","-d","12.345"]) == 0);
 ```
 
 ### String
@@ -911,7 +897,7 @@ struct T
     @NamedArgument  string a;
 }
 
-static assert(["-a","foo"].parseCLIArgs!T.get == T("foo"));
+assert(CLI!T.parseArgs!((T t) { assert(t == T("foo")); })(["-a","foo"]) == 0);
 ```
 
 ### Enum
@@ -927,8 +913,8 @@ struct T
     @NamedArgument Fruit a;
 }
 
-static assert(["-a","apple"].parseCLIArgs!T.get == T(T.Fruit.apple));
-static assert(["-a=pear"].parseCLIArgs!T.get == T(T.Fruit.pear));
+assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.apple)); })(["-a","apple"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.pear)); })(["-a=pear"]) == 0);
 ```
 
 ### Counter
@@ -941,7 +927,7 @@ struct T
     @(NamedArgument.Counter()) int a;
 }
 
-static assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
+assert(CLI!T.parseArgs!((T t) { assert(t == T(3)); })(["-a","-a","-a"]) == 0);
 ```
 
 ### Array
@@ -957,8 +943,8 @@ struct T
     @NamedArgument int[][] b;
 }
 
-static assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
-static assert(["-b","1","2","3","-b","4","5"].parseCLIArgs!T.get.b == [[1,2,3],[4,5]]);
+assert(CLI!T.parseArgs!((T t) { assert(t.a == [1,2,3,4,5]); })(["-a","1","2","3","-a","4","5"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t.b == [[1,2,3],[4,5]]); })(["-b","1","2","3","-b","4","5"]) == 0);
 ```
 
 Alternatively you can set `Config.arraySep` to allow multiple elements in one parameter:
@@ -969,10 +955,13 @@ struct T
     @NamedArgument int[] a;
 }
 
-Config cfg;
-cfg.arraySep = ',';
+enum cfg = {
+    Config cfg;
+    cfg.arraySep = ',';
+    return cfg;
+}();
 
-assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T(cfg).get == T([1,2,3,4,5]));
+assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T([1,2,3,4,5])); })(["-a","1,2,3","-a","4","5"]) == 0);
 ```
 
 #### Specifying number of values
@@ -995,8 +984,8 @@ struct T
   int[] b;
 }
 
-assert(["-a","1","2","3","-b","4","5"].parseCLIArgs!T.get == T([1,2,3],[4,5]));
-assert(["-a","1","-b","4","5"].parseCLIArgs!T.get == T([1],[4,5]));
+assert(CLI!T.parseArgs!((T t) { assert(t == T([1,2,3],[4,5])); })(["-a","1","2","3","-b","4","5"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T([1],[4,5])); })(["-a","1","-b","4","5"]) == 0);
 ```
 
 ### Associative array
@@ -1010,7 +999,7 @@ struct T
     @NamedArgument int[string] a;
 }
 
-static assert(["-a=foo=3","-a","boo=7"].parseCLIArgs!T.get.a == ["foo":3,"boo":7]);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); })(["-a=foo=3","-a","boo=7"]) == 0);
 ```
 
 Alternatively you can set `Config.arraySep` to allow multiple elements in one parameter:
@@ -1021,11 +1010,14 @@ struct T
     @NamedArgument int[string] a;
 }
 
-Config cfg;
-cfg.arraySep = ',';
+enum cfg = {
+    Config cfg;
+    cfg.arraySep = ',';
+    return cfg;
+}();
 
-assert(["-a=foo=3,boo=7"].parseCLIArgs!T(cfg).get.a == ["foo":3,"boo":7]);
-assert(["-a","foo=3,boo=7"].parseCLIArgs!T(cfg).get.a == ["foo":3,"boo":7]);
+assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); })(["-a=foo=3,boo=7"]) == 0);
+assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); })(["-a","foo=3,boo=7"]) == 0);
 ```
 
 In general, the keys and values can be of any parsable types.
@@ -1063,7 +1055,7 @@ static struct T
     @(NamedArgument("a")) void foo() { a++; }
 }
 
-static assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(4)); })(["-a","-a","-a","-a"]) == 0);
 ```
 
 ## Argument parsing customization
@@ -1166,16 +1158,16 @@ Both `AllowNoValue` and `RequireNoValue` modifiers accept a value that should be
 command line. The difference between them can be seen in this example:
 
 ```d
-    struct T
-    {
-        @(NamedArgument.AllowNoValue  !10) int a;
-        @(NamedArgument.RequireNoValue!20) int b;
-    }
+struct T
+{
+    @(NamedArgument.AllowNoValue  !10) int a;
+    @(NamedArgument.RequireNoValue!20) int b;
+}
 
-    assert(["-a"].parseCLIArgs!T.get.a == 10);       // use value from UDA
-    assert(["-b"].parseCLIArgs!T.get.b == 20);       // use value from UDA
-    assert(["-a", "30"].parseCLIArgs!T.get.a == 30); // providing value is allowed
-    assert(["-b", "30"].parseCLIArgs!T.isNull);      // providing value is not allowed
+assert(CLI!T.parseArgs!((T t) { assert(t.a == 10); })(["-a"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t.b == 20); })(["-b"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t.a == 30); })(["-a","30"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","30"]) != 0);
 ```
 
 ### Usage example
@@ -1183,18 +1175,18 @@ command line. The difference between them can be seen in this example:
 All the above modifiers can be combined in any way:
 
 ```d
-    struct T
-    {
-        @(NamedArgument
-         .PreValidation!((string s) { return s.length > 1 && s[0] == '!'; })
-         .Parse        !((string s) { return s[1]; })
-         .Validation   !((char v) { return v >= '0' && v <= '9'; })
-         .Action       !((ref int a, char v) { a = v - '0'; })
-        )
-        int a;
-    }
+struct T
+{
+    @(NamedArgument
+     .PreValidation!((string s) { return s.length > 1 && s[0] == '!'; })
+     .Parse        !((string s) { return s[1]; })
+     .Validation   !((char v) { return v >= '0' && v <= '9'; })
+     .Action       !((ref int a, char v) { a = v - '0'; })
+    )
+    int a;
+}
 
-    static assert(["-a","!4"].parseCLIArgs!T.get.a == 4);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(4)); })(["-a","!4"]) == 0);
 ```
 
 ## Parser customization
@@ -1223,12 +1215,15 @@ struct T
     @NamedArgument string[] a;
 }
 
-assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T.get == T(["1,2,3","4","5"]));
+assert(CLI!T.parseArgs!((T t) { assert(t == T(["1,2,3","4","5"])); })(["-a","1,2,3","-a","4","5"]) == 0);
 
-Config cfg;
-cfg.arraySep = ',';
+enum cfg = {
+    Config cfg;
+    cfg.arraySep = ',';
+    return cfg;
+}();
 
-assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T(cfg).get == T(["1","2","3","4","5"]));
+assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T(["1","2","3","4","5"])); })(["-a","1,2,3","-a","4","5"]) == 0);
 ```
 
 ### Named argument character
@@ -1259,12 +1254,10 @@ Default is `false`.
 
 ### Adding help generation
 
-       Add a -h/--help option to the parser.
-       Defaults to true.
-
 `Config.addHelp` - when it is set to `true` then `-h` and `--help` arguments are added to the parser. In case if the
 command line has one of these arguments then the corresponding help text is printed and the parsing will be stopped.
-If `parseCLIKnownArgs` or `parseCLIArgs` is called with function parameter then this callback will not be called.
+If `CLI!(...).parseArgs(alias newMain)` or `CLI!(...).main(alias newMain)` is used then provided `newMain` function will
+not be called.
 
 Default is `true`.
 
