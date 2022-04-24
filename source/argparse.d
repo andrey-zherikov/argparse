@@ -1575,6 +1575,7 @@ unittest
         int b;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t == T("not set", 4)); })(["-b", "4"]) == 0);
     static assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
     assert(["-b", "4"].parseCLIArgs!T.get == T("not set", 4));
 }
@@ -1629,6 +1630,9 @@ unittest
         bool b;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b"]) == 0);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b=true"]) == 0);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["-b=false"]) == 0);
     static assert(["-b"]        .parseCLIArgs!T.get == T(true));
     static assert(["-b=true"]   .parseCLIArgs!T.get == T(true));
     static assert(["-b=false"]  .parseCLIArgs!T.get == T(false));
@@ -2944,6 +2948,8 @@ unittest
         int[] b;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t == T([1,2,3],[4,5])); })(["-a","1","2","3","-b","4","5"]) == 0);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T([1],[4,5])); })(["-a","1","-b","4","5"]) == 0);
     assert(["-a","1","2","3","-b","4","5"].parseCLIArgs!T.get == T([1,2,3],[4,5]));
     assert(["-a","1","-b","4","5"].parseCLIArgs!T.get == T([1],[4,5]));
 }
@@ -3021,6 +3027,7 @@ unittest
         @(NamedArgument.Counter()) int a;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(3)); })(["-a","-a","-a"]) == 0);
     static assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
     assert(["-a","-a","-a"].parseCLIArgs!T.get == T(3));
 }
@@ -3059,6 +3066,8 @@ unittest
         string fruit;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t == T("apple")); })(["--fruit", "apple"]) == 0);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["--fruit", "kiwi"]) != 0);    // "kiwi" is not allowed
     static assert(["--fruit", "apple"].parseCLIArgs!T.get == T("apple"));
     assert(["--fruit", "kiwi"].parseCLIArgs!T.isNull);
 }
@@ -3114,6 +3123,7 @@ unittest
         @TrailingArguments string[] args;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t == T("A","",["-b","B"])); })(["-a","A","--","-b","B"]) == 0);
     static assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
     assert(["-a","A","--","-b","B"].parseCLIArgs!T.get == T("A","",["-b","B"]));
 }
@@ -3126,6 +3136,9 @@ unittest
         @NamedArgument(["u","u1"])  uint u;
         @NamedArgument("d","d1")  double d;
     }
+
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(-5,8,12.345)); })(["-i","-5","-u","8","-d","12.345"]) == 0);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(-5,8,12.345)); })(["-i","-5","-u1","8","-d1","12.345"]) == 0);
 
     static assert(["-i","-5","-u","8","-d","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
     static assert(["-i","-5","-u1","8","-d1","12.345"].parseCLIArgs!T.get == T(-5,8,12.345));
@@ -3141,6 +3154,9 @@ unittest
         @NamedArgument int[][] b;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t.a == [1,2,3,4,5]); })(["-a","1","2","3","-a","4","5"]) == 0);
+    assert(CLI!T.parseArgs!((T t) { assert(t.b == [[1,2,3],[4,5]]); })(["-b","1","2","3","-b","4","5"]) == 0);
+
     static assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
     static assert(["-b","1","2","3","-b","4","5"].parseCLIArgs!T.get.b == [[1,2,3],[4,5]]);
     assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
@@ -3154,9 +3170,13 @@ unittest
         @NamedArgument int[] a;
     }
 
-    Config cfg;
-    cfg.arraySep = ',';
+    enum cfg = {
+        Config cfg;
+        cfg.arraySep = ',';
+        return cfg;
+    }();
 
+    assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T([1,2,3,4,5])); })(["-a","1,2,3","-a","4","5"]) == 0);
     assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T(cfg).get == T([1,2,3,4,5]));
 }
 
@@ -3167,6 +3187,7 @@ unittest
         @NamedArgument int[string] a;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); })(["-a=foo=3","-a","boo=7"]) == 0);
     static assert(["-a=foo=3","-a","boo=7"].parseCLIArgs!T.get.a == ["foo":3,"boo":7]);
     assert(["-a=foo=3","-a","boo=7"].parseCLIArgs!T.get.a == ["foo":3,"boo":7]);
 }
@@ -3178,9 +3199,14 @@ unittest
         @NamedArgument int[string] a;
     }
 
-    Config cfg;
-    cfg.arraySep = ',';
+    enum cfg = {
+        Config cfg;
+        cfg.arraySep = ',';
+        return cfg;
+    }();
 
+    assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); })(["-a=foo=3,boo=7"]) == 0);
+    assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); })(["-a","foo=3,boo=7"]) == 0);
     assert(["-a=foo=3,boo=7"].parseCLIArgs!T(cfg).get.a == ["foo":3,"boo":7]);
     assert(["-a","foo=3,boo=7"].parseCLIArgs!T(cfg).get.a == ["foo":3,"boo":7]);
 }
@@ -3194,6 +3220,8 @@ unittest
         @NamedArgument Fruit a;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.apple)); })(["-a","apple"]) == 0);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.pear)); })(["-a=pear"]) == 0);
     static assert(["-a","apple"].parseCLIArgs!T.get == T(T.Fruit.apple));
     static assert(["-a=pear"].parseCLIArgs!T.get == T(T.Fruit.pear));
     assert(["-a","apple"].parseCLIArgs!T.get == T(T.Fruit.apple));
@@ -3207,11 +3235,16 @@ unittest
         @NamedArgument string[] a;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(["1,2,3","4","5"])); })(["-a","1,2,3","-a","4","5"]) == 0);
     assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T.get == T(["1,2,3","4","5"]));
 
-    Config cfg;
-    cfg.arraySep = ',';
+    enum cfg = {
+        Config cfg;
+        cfg.arraySep = ',';
+        return cfg;
+    }();
 
+    assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T(["1","2","3","4","5"])); })(["-a","1,2,3","-a","4","5"]) == 0);
     assert(["-a","1,2,3","-a","4","5"].parseCLIArgs!T(cfg).get == T(["1","2","3","4","5"]));
 }
 
@@ -3223,6 +3256,10 @@ unittest
         @(NamedArgument.RequireNoValue!20) int b;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t.a == 10); })(["-a"]) == 0);
+    assert(CLI!T.parseArgs!((T t) { assert(t.b == 20); })(["-b"]) == 0);
+    assert(CLI!T.parseArgs!((T t) { assert(t.a == 30); })(["-a","30"]) == 0);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","30"]) != 0);
     static assert(["-a"].parseCLIArgs!T.get.a == 10);
     static assert(["-b"].parseCLIArgs!T.get.b == 20);
     static assert(["-a", "30"].parseCLIArgs!T.get.a == 30);
@@ -3245,6 +3282,7 @@ unittest
         int a;
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(4)); })(["-a","!4"]) == 0);
     static assert(["-a","!4"].parseCLIArgs!T.get.a == 4);
     assert(["-a","!4"].parseCLIArgs!T.get.a == 4);
 }
@@ -3258,6 +3296,7 @@ unittest
         @(NamedArgument("a")) void foo() { a++; }
     }
 
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(4)); })(["-a","-a","-a","-a"]) == 0);
     static assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
     assert(["-a","-a","-a","-a"].parseCLIArgs!T.get.a == 4);
 }
@@ -4168,6 +4207,15 @@ unittest
             string b;
         }
     }
+
+    // Either or no argument is allowed
+    assert(CLI!T.parseArgs!((T t) {})(["-a","a"]) == 0);
+    assert(CLI!T.parseArgs!((T t) {})(["-b","b"]) == 0);
+    assert(CLI!T.parseArgs!((T t) {})([]) == 0);
+
+    // Both arguments are not allowed
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a","-b","b"]) != 0);
+
     assert(parseCLIArgs!T(["-a","a","-b","b"], (T t) { assert(false); }) != 0);
     assert(parseCLIArgs!T(["-a","a"], (T t) {}) == 0);
     assert(parseCLIArgs!T(["-b","b"], (T t) {}) == 0);
@@ -4185,6 +4233,15 @@ unittest
             string b;
         }
     }
+
+    // Both or no argument is allowed
+    assert(CLI!T.parseArgs!((T t) {})(["-a","a","-b","b"]) == 0);
+    assert(CLI!T.parseArgs!((T t) {})([]) == 0);
+
+    // Only one argument is not allowed
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a"]) != 0);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","b"]) != 0);
+
     assert(parseCLIArgs!T(["-a","a","-b","b"], (T t) {}) == 0);
     assert(parseCLIArgs!T(["-a","a"], (T t) { assert(false); }) != 0);
     assert(parseCLIArgs!T(["-b","b"], (T t) { assert(false); }) != 0);
