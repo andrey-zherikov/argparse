@@ -756,17 +756,17 @@ unittest
 {
     struct T
     {
-        @(NamedArgument)
+        @NamedArgument
         int a;
         @(NamedArgument.Optional())
         int b;
         @(NamedArgument.Required())
         int c;
-        @(NamedArgument)
+        @NamedArgument
         int d;
         @(NamedArgument.Required())
         int e;
-        @(NamedArgument)
+        @NamedArgument
         int f;
     }
 
@@ -3137,8 +3137,8 @@ unittest
 {
     struct T
     {
-        @(NamedArgument) int[]   a;
-        @(NamedArgument) int[][] b;
+        @NamedArgument int[]   a;
+        @NamedArgument int[][] b;
     }
 
     static assert(["-a","1","2","3","-a","4","5"].parseCLIArgs!T.get.a == [1,2,3,4,5]);
