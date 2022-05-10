@@ -2,6 +2,7 @@ module argparse;
 
 
 import std.typecons: Nullable;
+import std.sumtype: SumType, match;
 import std.traits;
 
 private enum DEFAULT_COMMAND = "";
@@ -427,7 +428,7 @@ private alias Restriction = bool delegate(in Config config, in bool[size_t] cliA
 
 // Have to do this magic because closures are not supported in CFTE
 // DMD v2.098.0 prints "Error: closures are not yet supported in CTFE"
-auto partiallyApply(alias fun,C...)(C context)
+private auto partiallyApply(alias fun,C...)(C context)
 {
     import std.traits: ParameterTypeTuple;
     import core.lifetime: move, forward;
@@ -710,8 +711,6 @@ private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias s
 {
     return delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver)
     {
-        import std.sumtype: match;
-
         auto target = &__traits(getMember, receiver, symbol);
 
         alias parse = (ref COMMAND_TYPE cmdTarget)
@@ -953,7 +952,6 @@ private struct Parser
         string value = null;  // null when there is no value
     }
 
-    import std.sumtype: SumType;
     alias Argument = SumType!(Unknown, EndOfArgs, Positional, NamedShort, NamedLong);
 
     immutable Config config;
@@ -996,7 +994,7 @@ private struct Parser
 
     auto parseArgument(T, PARSE)(PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
     {
-        immutable res = parse(config, nameWithDash, receiver, value, args);
+        auto res = parse(config, nameWithDash, receiver, value, args);
         if(!res)
             return res;
 
@@ -1046,7 +1044,7 @@ private struct Parser
         if(foundArg.arg is null)
             return parseSubCommand(cmd, receiver);
 
-        immutable res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, null, foundArg.arg.names[0], foundArg.index);
+        auto res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, null, foundArg.arg.names[0], foundArg.index);
         if(!res)
             return res;
 
@@ -1116,7 +1114,7 @@ private struct Parser
                 arg.name = "";
             }
 
-            immutable res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, value, "-"~name, foundArg.index);
+            auto res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, value, "-"~name, foundArg.index);
             if(!res)
                 return res;
         }
@@ -1160,7 +1158,7 @@ private struct Parser
 
         while(!args.empty)
         {
-            immutable res = parse(splitArgumentNameValue(args.front));
+            auto res = parse(splitArgumentNameValue(args.front));
             if(!res)
                 return res;
         }
@@ -1197,7 +1195,7 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
 {
     auto parser = Parser(config, args);
 
-    immutable res = parser.parseAll(cmd, receiver);
+    auto res = parser.parseAll(cmd, receiver);
     if(!res)
         return res;
 
@@ -1643,8 +1641,6 @@ unittest
 
 unittest
 {
-    import std.sumtype: SumType, match;
-
     struct T
     {
         struct cmd1 { string a; }
@@ -1668,8 +1664,6 @@ unittest
 
 unittest
 {
-    import std.sumtype: SumType, match;
-
     struct T
     {
         struct cmd1 { string a; }
@@ -1702,8 +1696,6 @@ template CLI(Config config, COMMANDS...)
 {
     mixin template main(alias newMain)
     {
-        import std.sumtype: SumType, match;
-
         private struct Program
         {
             SumType!COMMANDS cmd;   // Sub-commands
@@ -3635,8 +3627,12 @@ unittest
 
 private string getArgumentName(string name, in Config config)
 {
-    name = config.namedArgChar ~ name;
-    return name.length > 2 ? config.namedArgChar ~ name : name;
+    import std.conv: to;
+
+    immutable dash = config.namedArgChar.to!string;
+
+    name = dash ~ name;
+    return name.length > 2 ? dash ~ name : name;
 }
 
 unittest
@@ -4126,8 +4122,6 @@ unittest
 
 unittest
 {
-    import std.sumtype: SumType, match;
-
     @Command("MYPROG")
     struct T
     {
