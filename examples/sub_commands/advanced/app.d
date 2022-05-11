@@ -26,7 +26,6 @@ auto filter(R)(R numbers, Filter filt)
 @(Command("sum")
 .Usage("%(PROG) [<number>...]")
 .Description("Print sum of the numbers")
-.ShortDescription("Print the sum")
 )
 struct SumCmd
 {
