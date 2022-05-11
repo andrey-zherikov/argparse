@@ -3954,7 +3954,7 @@ private void printHelp(Output)(auto ref Output output, in CommandInfo[] commands
             //if(_.hideFromHelp)
             //    return Result.init;
 
-            return Result(_.names.join(","), _.shortDescription);
+            return Result(_.names.join(","), _.shortDescription.length > 0 ? _.shortDescription : _.description);
         }).array;
 
     immutable maxInvocationWidth = cmds.map!(_ => _.invocation.length).maxElement;
