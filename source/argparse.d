@@ -1750,6 +1750,118 @@ struct Main
     }
 }
 
+private template defaultCommandName(COMMAND)
+{
+    static if(getUDAs!(COMMAND, CommandInfo).length > 0)
+        enum defaultCommandName = getUDAs!(COMMAND, CommandInfo)[0].names[0];
+    else
+        enum defaultCommandName = COMMAND.stringof;
+}
+
+private struct Complete(COMMAND)
+{
+    @(Command("init")
+    .Description("Print initialization script for shell completion.")
+    .ShortDescription("Print initialization script.")
+    )
+    struct Init
+    {
+        @(NamedArgument.Description("Provide completion for bash."))
+        bool bash;
+
+        @(NamedArgument.Description("Path to completer. Default value: path to this executable."))
+        string completerPath; // path to this binary
+
+        @(NamedArgument.Description("Path to completer. Default value: "~defaultCommandName!COMMAND~"."))
+        string commandName = defaultCommandName!COMMAND;   // command to complete
+
+        void execute(Config config)()
+        {
+            import std.stdio: writeln;
+
+            if(completerPath.length == 0)
+            {
+                import std.file: thisExePath;
+                completerPath = thisExePath();
+            }
+
+            if(bash)
+            {
+                writeln("# Add this into .bashrc:");
+                if(commandName != defaultCommandName!COMMAND)
+                    writeln("#       source <(", completerPath, " init --bash --commandName ", commandName, ")");
+                else
+                    writeln("#       source <(", completerPath, " init --bash)");
+                // 'eval' is used to properly get arguments with spaces. For example, in case of "1 2" argument,
+                // we will get "1 2" as is, compare to "\"1", "2\"" without 'eval'.
+                writeln("complete -C 'eval ", completerPath, " --bash -- $COMP_LINE ---' ", commandName);
+            }
+        }
+    }
+
+    @(Command("complete")
+    .Description("Print completion.")
+    )
+    struct Complete
+    {
+        @(NamedArgument.Description("Provide completion for bash."))
+        bool bash;
+
+        @TrailingArguments
+        string[] args;
+
+        void execute(Config config)()
+        {
+            import std.stdio: writeln;
+            import std.algorithm: each;
+
+            if(bash)
+            {
+                // According to bash documentation:
+                //   When the function or command is invoked, the first argument ($1) is the name of the command whose
+                //   arguments are being completed, the second` argument ($2) is the word being completed, and the third
+                //   argument ($3) is the word preceding the word being completed on the current command line.
+                //
+                // So depending on when <tab> is pressed, $2 can be empty:
+                //   command 1 2 3<tab>
+                //      $1 = "command"
+                //      $2 = "3"
+                //      $3 = "2"
+                //   command 1 2 3 <tab>
+                //      $1 = "command"
+                //      $2 = ""
+                //      $3 = "3"
+                //
+                // But the consequence of using 'eval' is that empty $2 in the second case dissapears so received
+                // arguments are ["command", "3"] actually. To handle this case correctly we should count number of
+                // arguments after "---": if there are less than 3 then we need to add empty string to args so completer
+                // can provide correct result.
+
+                // We don't use these arguments so we just remove those after "---"
+                int count;
+                while(args.length > 0 && args[$-1] != "---")
+                {
+                    args = args[0..$-1];
+                    count++;
+                }
+
+                // Remove "---"
+                if(args.length > 0 && args[$-1] == "---")
+                    args = args[0..$-1];
+
+                // Add empty argument if needed
+                if(count < 3)
+                    args ~= "";
+            }
+
+            CLI!(config, COMMAND).complete(args).each!writeln;
+        }
+    }
+
+    @SubCommands
+    SumType!(Init, Default!Complete) cmd;
+}
+
 template CLI(Config config, COMMANDS...)
 {
     mixin template main(alias newMain)
@@ -1860,6 +1972,33 @@ template CLI(Config config, COMMAND)
         auto res = parser.parseAll!true(command, dummy);
 
         return res ? res.suggestions.dup.sort.uniq.array : [];
+    }
+
+    int mainComplete(string[] args)
+    {
+        // dmd fails with core.exception.OutOfMemoryError@core\lifetime.d(137): Memory allocation failed
+        // if we call anything from CLI!(config, Complete!COMMAND) so we have to directly call parser here
+
+        Complete!COMMAND receiver;
+
+        string[] unrecognizedArgs;
+
+        auto parser = Parser(config, args);
+
+        auto command = CommandArguments!(Complete!COMMAND)(config);
+        auto res = parser.parseAll!false(command, receiver);
+        if(!res)
+            return 1;
+
+        if(res && unrecognizedArgs.length > 0)
+        {
+            config.onError("Unrecognized arguments: ", unrecognizedArgs);
+            return 1;
+        }
+
+        receiver.cmd.match!(_ => _.execute!config());
+
+        return 0;
     }
 
     mixin template main(alias newMain)
