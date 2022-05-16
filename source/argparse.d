@@ -1766,8 +1766,13 @@ private struct Complete(COMMAND)
     )
     struct Init
     {
-        @(NamedArgument.Description("Provide completion for bash."))
-        bool bash;
+        @MutuallyExclusive
+        {
+            @(NamedArgument.Description("Provide completion for bash."))
+            bool bash;
+            @(NamedArgument.Description("Provide completion for zsh."))
+            bool zsh;
+        }
 
         @(NamedArgument.Description("Path to completer. Default value: path to this executable."))
         string completerPath; // path to this binary
@@ -1785,15 +1790,33 @@ private struct Complete(COMMAND)
                 completerPath = thisExePath();
             }
 
+            string commandNameArg;
+            if(commandName != defaultCommandName!COMMAND)
+                commandNameArg = " --commandName "~commandName;
+
             if(bash)
             {
+                // According to bash documentation:
+                //   When the function or command is invoked, the first argument ($1) is the name of the command whose
+                //   arguments are being completed, the second` argument ($2) is the word being completed, and the third
+                //   argument ($3) is the word preceding the word being completed on the current command line.
+                //
+                // So we add "---" argument to distinguish between the end of actual parameters and those that were added by bash
+
                 writeln("# Add this into .bashrc:");
-                if(commandName != defaultCommandName!COMMAND)
-                    writeln("#       source <(", completerPath, " init --bash --commandName ", commandName, ")");
-                else
-                    writeln("#       source <(", completerPath, " init --bash)");
+                writeln("#       source <(", completerPath, " init --bash", commandNameArg, ")");
                 // 'eval' is used to properly get arguments with spaces. For example, in case of "1 2" argument,
                 // we will get "1 2" as is, compare to "\"1", "2\"" without 'eval'.
+                writeln("complete -C 'eval ", completerPath, " --bash -- $COMP_LINE ---' ", commandName);
+            }
+            else if(zsh)
+            {
+                // We use bash completion for zsh
+                writeln("# Ensure that you called compinit and bashcompinit like below in your .zshrc:");
+                writeln("#       autoload -Uz compinit && compinit");
+                writeln("#       autoload -Uz bashcompinit && bashcompinit");
+                writeln("# And then add this afther them into your .zshrc:");
+                writeln("#       source <(", completerPath, " init --zsh", commandNameArg, ")");
                 writeln("complete -C 'eval ", completerPath, " --bash -- $COMP_LINE ---' ", commandName);
             }
         }
@@ -1812,6 +1835,7 @@ private struct Complete(COMMAND)
 
         void execute(Config config)()
         {
+            import std.process: environment;
             import std.stdio: writeln;
             import std.algorithm: each;
 
@@ -1822,35 +1846,18 @@ private struct Complete(COMMAND)
                 //   arguments are being completed, the second` argument ($2) is the word being completed, and the third
                 //   argument ($3) is the word preceding the word being completed on the current command line.
                 //
-                // So depending on when <tab> is pressed, $2 can be empty:
-                //   command 1 2 3<tab>
-                //      $1 = "command"
-                //      $2 = "3"
-                //      $3 = "2"
-                //   command 1 2 3 <tab>
-                //      $1 = "command"
-                //      $2 = ""
-                //      $3 = "3"
-                //
-                // But the consequence of using 'eval' is that empty $2 in the second case dissapears so received
-                // arguments are ["command", "3"] actually. To handle this case correctly we should count number of
-                // arguments after "---": if there are less than 3 then we need to add empty string to args so completer
-                // can provide correct result.
-
-                // We don't use these arguments so we just remove those after "---"
-                int count;
+                // We don't use these arguments so we just remove those after "---" including itself
                 while(args.length > 0 && args[$-1] != "---")
-                {
                     args = args[0..$-1];
-                    count++;
-                }
 
                 // Remove "---"
                 if(args.length > 0 && args[$-1] == "---")
                     args = args[0..$-1];
 
-                // Add empty argument if needed
-                if(count < 3)
+                // COMP_LINE environment variable contains current command line so if it ends with space ' ' then we
+                // should provide all available arguments. To do so, we add an empty argument
+                auto cmdLine = environment.get("COMP_LINE", "");
+                if(cmdLine.length > 0 && cmdLine[$-1] == ' ')
                     args ~= "";
             }
 
