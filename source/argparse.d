@@ -1067,7 +1067,7 @@ private struct Parser
         if(foundArg.arg is null)
             return parseSubCommand(cmd, receiver);
 
-        auto res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, null, foundArg.arg.names[0], foundArg.index);
+        auto res = parseArgument(cmd.parseArguments[foundArg.index], receiver, null, foundArg.arg.names[0], foundArg.index);
         if(!res)
             return res;
 
@@ -1096,7 +1096,7 @@ private struct Parser
             return Result.UnknownArgument;
 
         args.popFront();
-        return parseArgument(cmd.parseFunctions[foundArg.index], receiver, arg.value, arg.nameWithDash, foundArg.index);
+        return parseArgument(cmd.parseArguments[foundArg.index], receiver, arg.value, arg.nameWithDash, foundArg.index);
     }
 
     auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, ref T receiver, NamedShort arg)
@@ -1107,7 +1107,7 @@ private struct Parser
         if(foundArg.arg !is null)
         {
             args.popFront();
-            return parseArgument(cmd.parseFunctions[foundArg.index], receiver, arg.value, arg.nameWithDash, foundArg.index);
+            return parseArgument(cmd.parseArguments[foundArg.index], receiver, arg.value, arg.nameWithDash, foundArg.index);
         }
 
         // Try to parse "-ABC..." where "A","B","C" are different single-letter arguments
@@ -1137,7 +1137,7 @@ private struct Parser
                 arg.name = "";
             }
 
-            auto res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, value, "-"~name, foundArg.index);
+            auto res = parseArgument(cmd.parseArguments[foundArg.index], receiver, value, "-"~name, foundArg.index);
             if(!res)
                 return res;
         }
@@ -3667,7 +3667,7 @@ private struct CommandArguments(RECEIVER)
 
     Arguments arguments;
 
-    ParseFunction!RECEIVER[] parseFunctions;
+    ParseFunction!RECEIVER[] parseArguments;
 
     uint level; // (sub-)command level, 0 = top level
 
@@ -3720,7 +3720,7 @@ private struct CommandArguments(RECEIVER)
         if(config.addHelp)
         {
             arguments.addArgument!helpArgument;
-            parseFunctions ~= delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
+            parseArguments ~= delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
             {
                 import std.stdio: stdout;
 
@@ -3800,7 +3800,7 @@ private struct CommandArguments(RECEIVER)
         else
             arguments.addArgument!(info, restrictions);
 
-        parseFunctions ~= ParsingArgument!(symbol, uda, info, RECEIVER);
+        parseArguments ~= ParsingArgument!(symbol, uda, info, RECEIVER);
     }
 
     private void addSubCommands(alias symbol)()
