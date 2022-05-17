@@ -1772,6 +1772,8 @@ private struct Complete(COMMAND)
             bool bash;
             @(NamedArgument.Description("Provide completion for zsh."))
             bool zsh;
+            @(NamedArgument.Description("Provide completion for tcsh."))
+            bool tcsh;
         }
 
         @(NamedArgument.Description("Path to completer. Default value: path to this executable."))
@@ -1819,6 +1821,13 @@ private struct Complete(COMMAND)
                 writeln("#       source <(", completerPath, " init --zsh", commandNameArg, ")");
                 writeln("complete -C 'eval ", completerPath, " --bash -- $COMP_LINE ---' ", commandName);
             }
+            else if(tcsh)
+            {
+                // Comments start with ":" in tsch
+                writeln(": Add this into .tcshrc:   ;");
+                writeln(":       eval `", completerPath, " init --tcsh", commandNameArg, "`     ;");
+                writeln("complete ", commandName, " 'p,*,`", completerPath, " --tcsh -- $COMMAND_LINE`,'");
+            }
         }
     }
 
@@ -1827,8 +1836,13 @@ private struct Complete(COMMAND)
     )
     struct Complete
     {
-        @(NamedArgument.Description("Provide completion for bash."))
-        bool bash;
+        @MutuallyExclusive
+        {
+            @(NamedArgument.Description("Provide completion for bash."))
+            bool bash;
+            @(NamedArgument.Description("Provide completion for tcsh."))
+            bool tcsh;
+        }
 
         @TrailingArguments
         string[] args;
@@ -1857,6 +1871,14 @@ private struct Complete(COMMAND)
                 // COMP_LINE environment variable contains current command line so if it ends with space ' ' then we
                 // should provide all available arguments. To do so, we add an empty argument
                 auto cmdLine = environment.get("COMP_LINE", "");
+                if(cmdLine.length > 0 && cmdLine[$-1] == ' ')
+                    args ~= "";
+            }
+            else if(tcsh)
+            {
+                // COMMAND_LINE environment variable contains current command line so if it ends with space ' ' then we
+                // should provide all available arguments. To do so, we add an empty argument
+                auto cmdLine = environment.get("COMMAND_LINE", "");
                 if(cmdLine.length > 0 && cmdLine[$-1] == ' ')
                     args ~= "";
             }
