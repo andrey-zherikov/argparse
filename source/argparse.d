@@ -677,33 +677,43 @@ private struct Arguments
     }
 }
 
-private alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIVER) =
+private alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIVER, bool completionMode) =
     delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
     {
-        try
+        static if(completionMode)
         {
-            auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, info, config);
+            if(rawValue is null)
+                consumeValuesFromCLI(rawArgs, info, config);
 
-            auto res = info.checkValuesCount(argName, rawValues.length);
-            if(!res)
-            {
-                config.onError(res.errorMsg);
-                return res;
-            }
-
-            auto param = RawParam(config, argName, rawValues);
-
-            auto target = &__traits(getMember, receiver, symbol);
-
-            static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                return uda.parsingFunc.parse(target, param) ? Result.Success : Result.Failure;
-            else
-                return uda.parsingFunc.parse(*target, param) ? Result.Success : Result.Failure;
+            return Result.Success;
         }
-        catch(Exception e)
+        else
         {
-            config.onError(argName, ": ", e.msg);
-            return Result.Failure;
+            try
+            {
+                auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, info, config);
+
+                auto res = info.checkValuesCount(argName, rawValues.length);
+                if(!res)
+                {
+                    config.onError(res.errorMsg);
+                    return res;
+                }
+
+                auto param = RawParam(config, argName, rawValues);
+
+                auto target = &__traits(getMember, receiver, symbol);
+
+                static if(is(typeof(target) == function) || is(typeof(target) == delegate))
+                    return uda.parsingFunc.parse(target, param) ? Result.Success : Result.Failure;
+                else
+                    return uda.parsingFunc.parse(*target, param) ? Result.Success : Result.Failure;
+            }
+            catch(Exception e)
+            {
+                config.onError(argName, ": ", e.msg);
+                return Result.Failure;
+            }
         }
     };
 
@@ -1067,7 +1077,7 @@ private struct Parser
         if(foundArg.arg is null)
             return parseSubCommand(cmd, receiver);
 
-        auto res = parseArgument(cmd.parseArguments[foundArg.index], receiver, null, foundArg.arg.names[0], foundArg.index);
+        auto res = parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, null, foundArg.arg.names[0], foundArg.index);
         if(!res)
             return res;
 
@@ -1096,7 +1106,7 @@ private struct Parser
             return Result.UnknownArgument;
 
         args.popFront();
-        return parseArgument(cmd.parseArguments[foundArg.index], receiver, arg.value, arg.nameWithDash, foundArg.index);
+        return parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
     }
 
     auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, ref T receiver, NamedShort arg)
@@ -1107,7 +1117,7 @@ private struct Parser
         if(foundArg.arg !is null)
         {
             args.popFront();
-            return parseArgument(cmd.parseArguments[foundArg.index], receiver, arg.value, arg.nameWithDash, foundArg.index);
+            return parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
         }
 
         // Try to parse "-ABC..." where "A","B","C" are different single-letter arguments
@@ -1137,7 +1147,7 @@ private struct Parser
                 arg.name = "";
             }
 
-            auto res = parseArgument(cmd.parseArguments[foundArg.index], receiver, value, "-"~name, foundArg.index);
+            auto res = parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, value, "-"~name, foundArg.index);
             if(!res)
                 return res;
         }
@@ -1484,6 +1494,8 @@ unittest
     static assert(p.findNamedArgument("boo").arg !is null);
     static assert(p.findPositionalArgument(0).arg !is null);
     static assert(p.findPositionalArgument(1).arg is null);
+    static assert(p.getParseFunction!false(p.findNamedArgument("b").index) !is null);
+    static assert(p.getParseFunction!true(p.findNamedArgument("b").index) !is null);
 }
 
 unittest
@@ -3668,6 +3680,7 @@ private struct CommandArguments(RECEIVER)
     Arguments arguments;
 
     ParseFunction!RECEIVER[] parseArguments;
+    ParseFunction!RECEIVER[] completeArguments;
 
     uint level; // (sub-)command level, 0 = top level
 
@@ -3727,6 +3740,10 @@ private struct CommandArguments(RECEIVER)
                 printHelp(stdout.lockingTextWriter(), this, config);
 
                 return Result(0);
+            };
+            completeArguments ~= delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
+            {
+                return Result.Success;
             };
         }
 
@@ -3800,7 +3817,8 @@ private struct CommandArguments(RECEIVER)
         else
             arguments.addArgument!(info, restrictions);
 
-        parseArguments ~= ParsingArgument!(symbol, uda, info, RECEIVER);
+        parseArguments    ~= ParsingArgument!(symbol, uda, info, RECEIVER, false);
+        completeArguments ~= ParsingArgument!(symbol, uda, info, RECEIVER, true);
     }
 
     private void addSubCommands(alias symbol)()
@@ -3853,9 +3871,17 @@ private struct CommandArguments(RECEIVER)
 
             subCommands ~= info;
             //group.arguments ~= index;
-            parseSubCommands ~= ParsingSubCommand!(TYPE, info, RECEIVER, symbol, false)(&this);
+            parseSubCommands    ~= ParsingSubCommand!(TYPE, info, RECEIVER, symbol, false)(&this);
             completeSubCommands ~= ParsingSubCommand!(TYPE, info, RECEIVER, symbol, true)(&this);
         }}
+    }
+
+    auto getParseFunction(bool completionMode)(size_t index) const
+    {
+        static if(completionMode)
+            return completeArguments[index];
+        else
+            return parseArguments[index];
     }
 
     auto findSubCommand(string name) const
