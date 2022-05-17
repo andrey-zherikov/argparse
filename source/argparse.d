@@ -1774,6 +1774,8 @@ private struct Complete(COMMAND)
             bool zsh;
             @(NamedArgument.Description("Provide completion for tcsh."))
             bool tcsh;
+            @(NamedArgument.Description("Provide completion for fish."))
+            bool fish;
         }
 
         @(NamedArgument.Description("Path to completer. Default value: path to this executable."))
@@ -1805,7 +1807,7 @@ private struct Complete(COMMAND)
                 //
                 // So we add "---" argument to distinguish between the end of actual parameters and those that were added by bash
 
-                writeln("# Add this into .bashrc:");
+                writeln("# Add this source command into .bashrc:");
                 writeln("#       source <(", completerPath, " init --bash", commandNameArg, ")");
                 // 'eval' is used to properly get arguments with spaces. For example, in case of "1 2" argument,
                 // we will get "1 2" as is, compare to "\"1", "2\"" without 'eval'.
@@ -1817,16 +1819,22 @@ private struct Complete(COMMAND)
                 writeln("# Ensure that you called compinit and bashcompinit like below in your .zshrc:");
                 writeln("#       autoload -Uz compinit && compinit");
                 writeln("#       autoload -Uz bashcompinit && bashcompinit");
-                writeln("# And then add this afther them into your .zshrc:");
+                writeln("# And then add this source command after them into your .zshrc:");
                 writeln("#       source <(", completerPath, " init --zsh", commandNameArg, ")");
                 writeln("complete -C 'eval ", completerPath, " --bash -- $COMP_LINE ---' ", commandName);
             }
             else if(tcsh)
             {
                 // Comments start with ":" in tsch
-                writeln(": Add this into .tcshrc:   ;");
+                writeln(": Add this eval command into .tcshrc:   ;");
                 writeln(":       eval `", completerPath, " init --tcsh", commandNameArg, "`     ;");
                 writeln("complete ", commandName, " 'p,*,`", completerPath, " --tcsh -- $COMMAND_LINE`,'");
+            }
+            else if(fish)
+            {
+                writeln("# Add this source command into ~/.config/fish/config.fish:");
+                writeln("#       ", completerPath, " init --fish", commandNameArg, " | source");
+                writeln("complete -c ", commandName, " -a '(COMMAND_LINE=(commandline -p) ", completerPath, " --fish -- (commandline -op))' --no-files");
             }
         }
     }
@@ -1842,6 +1850,8 @@ private struct Complete(COMMAND)
             bool bash;
             @(NamedArgument.Description("Provide completion for tcsh."))
             bool tcsh;
+            @(NamedArgument.Description("Provide completion for fish."))
+            bool fish;
         }
 
         @TrailingArguments
@@ -1874,7 +1884,7 @@ private struct Complete(COMMAND)
                 if(cmdLine.length > 0 && cmdLine[$-1] == ' ')
                     args ~= "";
             }
-            else if(tcsh)
+            else if(tcsh || fish)
             {
                 // COMMAND_LINE environment variable contains current command line so if it ends with space ' ' then we
                 // should provide all available arguments. To do so, we add an empty argument
