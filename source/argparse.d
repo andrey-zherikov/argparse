@@ -1905,7 +1905,7 @@ private struct Complete(COMMAND)
                     args ~= "";
             }
 
-            CLI!(config, COMMAND).complete(args).each!writeln;
+            CLI!(config, COMMAND).completeArgs(args).each!writeln;
         }
     }
 
@@ -2009,7 +2009,7 @@ template CLI(Config config, COMMAND)
         }
     }
 
-    string[] complete(string[] args)
+    string[] completeArgs(string[] args)
     {
         import std.algorithm: sort, uniq;
         import std.array: array;
@@ -2025,7 +2025,7 @@ template CLI(Config config, COMMAND)
         return res ? res.suggestions.dup.sort.uniq.array : [];
     }
 
-    int mainComplete(string[] args)
+    int complete(string[] args)
     {
         // dmd fails with core.exception.OutOfMemoryError@core\lifetime.d(137): Memory allocation failed
         // if we call anything from CLI!(config, Complete!COMMAND) so we have to directly call parser here
@@ -2052,11 +2052,26 @@ template CLI(Config config, COMMAND)
         return 0;
     }
 
-    mixin template main(alias newMain)
+    mixin template mainComplete()
     {
         int main(string[] argv)
         {
-            return CLI!(config, COMMAND).parseArgs!(newMain)(argv[1..$]);
+            return CLI!(config, COMMAND).complete(argv[1..$]);
+        }
+    }
+
+    mixin template main(alias newMain)
+    {
+        version(argparse_completion)
+        {
+            mixin CLI!(config, COMMAND).mainComplete;
+        }
+        else
+        {
+            int main(string[] argv)
+            {
+                return CLI!(config, COMMAND).parseArgs!(newMain)(argv[1..$]);
+            }
         }
     }
 }
@@ -2099,13 +2114,13 @@ unittest
         SumType!(cmd1, cmd2) cmd;
     }
 
-    assert(CLI!T.complete([]) == ["--apple","--help","-a","-b","-h","-s","cmd1","cmd2"]);
-    assert(CLI!T.complete([""]) == ["--apple","--help","-a","-b","-h","-s","cmd1","cmd2"]);
-    assert(CLI!T.complete(["-a"]) == ["-a"]);
-    assert(CLI!T.complete(["c"]) == ["cmd1","cmd2"]);
-    assert(CLI!T.complete(["cmd1"]) == ["cmd1"]);
-    assert(CLI!T.complete(["cmd1",""]) == ["--apple","--bar","--baz","--foo","--help","-a","-b","-h","-s","cmd1","cmd2"]);
-    assert(CLI!T.complete(["-a","val-a",""]) == ["--apple","--help","-a","-b","-h","-s","cmd1","cmd2"]);
+    assert(CLI!T.completeArgs([]) == ["--apple","--help","-a","-b","-h","-s","cmd1","cmd2"]);
+    assert(CLI!T.completeArgs([""]) == ["--apple","--help","-a","-b","-h","-s","cmd1","cmd2"]);
+    assert(CLI!T.completeArgs(["-a"]) == ["-a"]);
+    assert(CLI!T.completeArgs(["c"]) == ["cmd1","cmd2"]);
+    assert(CLI!T.completeArgs(["cmd1"]) == ["cmd1"]);
+    assert(CLI!T.completeArgs(["cmd1",""]) == ["--apple","--bar","--baz","--foo","--help","-a","-b","-h","-s","cmd1","cmd2"]);
+    assert(CLI!T.completeArgs(["-a","val-a",""]) == ["--apple","--help","-a","-b","-h","-s","cmd1","cmd2"]);
 }
 
 
