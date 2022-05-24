@@ -1793,7 +1793,7 @@ private struct Complete(COMMAND)
         @(NamedArgument.Description("Path to completer. Default value: path to this executable."))
         string completerPath; // path to this binary
 
-        @(NamedArgument.Description("Path to completer. Default value: "~defaultCommandName!COMMAND~"."))
+        @(NamedArgument.Description("Command name. Default value: "~defaultCommandName!COMMAND~"."))
         string commandName = defaultCommandName!COMMAND;   // command to complete
 
         void execute(Config config)()
