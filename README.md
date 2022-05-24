@@ -43,6 +43,7 @@ to [releases](https://github.com/andrey-zherikov/argparse/releases) for breaking
 - [Built-in reporting of error happened during argument parsing](#error-handling).
 - [Built-in help generation](#help-generation).
 
+
 ## Getting started
 
 Here is the simple example showing the usage of `argparse` utility. It uses the basic approach when all members are
@@ -211,6 +212,286 @@ Optional arguments:
   -h, --help              Show this help message and exit
 ```
 
+
+## Calling the parser
+
+`argparse` provides `CLI` template to call the parser covering different use cases. It has the following signatures:
+- `template CLI(Config config, COMMAND)` - this is main template that provides multiple API (see below) for all
+  supported use cases.
+- `template CLI(Config config, COMMANDS...)` - convenience wrapper of the previous template that provides `main`
+  template mixin only for the simplest use case with subcommands. See corresponding [section](#commands) for details
+  about subcommands.
+- `alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS)` - alias provided for convenience that allows using default
+  `Config`, i.e. `config = Config.init`.
+
+### Wrapper for main function
+
+The recommended and most convenient way to use `argparse` is through `CLI!(...).main(alias newMain)` mixin template.
+It declares the standard `main` function that parses command line arguments and calls provided `newMain` function with
+an object that contains parsed arguments.
+
+`newMain` function must satisfy these requirements:
+- It must accept `COMMAND` type as a first parameter if `CLI` template is used with one `COMMAND`.
+- It must accept all `COMMANDS` types as a first parameter if `CLI` template is used with multiple `COMMANDS...`.
+  `argparse` uses `std.sumtype.match` for matching. Possible implementation of such `newMain` function would be a
+  function that is overridden for every command type from `COMMANDS`. Another example would be a lambda that does
+  compile-time checking of the type of the first parameter (see examples for details).
+- Optionally `newMain` function can take a `string[]` parameter as a second argument. Providing such a function will
+  mean that `argparse` will parse known arguments only and all unknown ones will be passed as a second parameter to
+  `newMain` function. If `newMain` function doesn't have such parameter then `argparse` will error out if the is an
+  unknown argument provided in command line.
+- Optionally `newMain` can return a result that can be cast to `int`. In this case, this result will be returned from
+  standard `main` function.
+
+**Usage examples:**
+
+```d
+struct T
+{
+    string a;
+    string b;
+}
+
+mixin CLI!T.main!((args)
+{
+    // 'args' has 'T' type
+    static assert(is(typeof(args) == T));
+
+    // do whatever you need
+    import std.stdio: writeln;
+    args.writeln;
+    return 0;
+});
+```
+
+```d
+struct cmd1
+{
+    string a;
+}
+
+struct cmd2
+{
+    string b;
+}
+
+mixin CLI!(cmd1, cmd2).main!((args, unparsed)
+{
+    // 'args' has either 'cmd1' or 'cmd2' type
+    static if(is(typeof(args) == cmd1))
+        writeln("cmd1: ", args);
+    else static if(is(typeof(args) == cmd2))
+        writeln("cmd2: ", args);
+    else 
+        static assert(false); // this would never happen
+    
+    // unparsed arguments has 'string[]' type
+    static assert(is(typeof(unparsed) == string[]));
+
+    return 0;
+});
+```
+
+### Complete argument parsing
+
+`CLI` template provides `parseArgs` function that parses the command line and ensures that there are no unknown
+arguments specified in command line. It has the following signature:
+
+`Result parseArgs(ref COMMAND receiver, string[] args))`
+
+**Parameters:**
+
+- `receiver` - the object that's populated with parsed values.
+- `args` - raw command line arguments.
+
+**Return value:**
+
+An object that can be cast to `bool` to check whether the parsing was successful or not.
+
+**Usage example:**
+
+```d
+struct T
+{
+    string a;
+    string b;
+}
+
+assert(CLI!T.parseArgs!((T t) { assert(t == T("A","B")); })(["-a", "A", "-b", "B"]) == 0);
+```
+
+
+### Partial argument parsing
+
+Sometimes a program may only parse a few of the command-line arguments, processing the remaining arguments in different
+way. In these cases, `CLI!(...).parseKnownArgs` function can be used. It works much like `CLI!(...).parseArgs` except
+that it does not produce an error when extra arguments are present. It has the following signatures:
+
+- `Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)`
+
+  **Parameters:**
+
+  - `receiver` - the object that's populated with parsed values.
+  - `args` - raw command line arguments.
+  - `unrecognizedArgs` - raw command line arguments that were not parsed.
+
+  **Return value:**
+
+  An object that can be cast to `bool` to check whether the parsing was successful or not.
+
+- `Result parseKnownArgs(ref COMMAND receiver, ref string[] args)`
+
+  **Parameters:**
+
+  - `receiver` - the object that's populated with parsed values.
+  - `args` - raw command line arguments that are modified to have parsed arguments removed.
+
+  **Return value:**
+
+  An object that can be cast to `bool` to check whether the parsing was successful or not.
+
+**Usage example:**
+
+```d
+struct T
+{
+    string a;
+}
+
+auto args = [ "-a", "A", "-c", "C" ];
+
+T result;
+assert(CLI!T.parseKnownArgs!(result, args));
+assert(result == T("A"));
+assert(args == ["-c", "C"]);
+```
+
+
+### Calling another `main` function after parsing
+
+Sometimes it's useful to call some function with an object that has all command line arguments parsed. For this usage,
+`argparse` provides `CLI!(...).parseArgs` template function that has the following signature:
+
+`int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)`
+
+**Parameters:**
+
+- `newMain` - function that's called with object of type `COMMAND` as a first parmeter filled with the data parsed from
+  command line; optionally it can take `string[]` as a second parameter which will contain unknown arguments
+  (`parseKnownArgs` function will be used underneath in this case).
+- `args` - raw command line arguments.
+- `initialValue` - initial value for the object passed to `func`.
+
+**Return value:**
+
+If there is an error happened during the parsing then non-zero value is returned. If `newMain` function returns a
+value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
+
+**Usage example:**
+
+```d
+int my_main(T command)
+{
+    // do something
+    return 0;
+}
+
+int main(string[] args)
+{
+    return CLI!T.parseArgs!my_main(args);
+}
+```
+
+## Shell completion
+
+`argparse` supports tab completion of last argument for certain shells (see below). However this support is limited to the names of arguments and
+subcommands.
+
+### Wrappers for main function
+
+If you are using `CLI!(...).main(alias newMain)` mixin template in your code then you can easily build a completer
+(program that provides completion) by defining `argparse_completion` version (`-version=argparse_completion` option of
+`dmd`). Don't forget to use different file name for completer than your main program (`-of` option in `dmd`). No other
+changes are necessary to generate completer but you should consider minimizing the set of imported modules when
+`argparse_completion` version is defined. For example, you can put all imports into your main function that is passed to
+`CLI!(...).main(alias newMain)` - `newMain` parameter is not used in completer.
+
+If you prefer having separate main module for completer then you can use `CLI!(...).completeMain` mixin template:
+```d
+mixin CLI!(...).completeMain;
+```
+
+In case if you prefer to have your own `main` function and would like to call completer by yourself, you can use
+`int CLI!(...).complete(string[] args)` function. This function executes the completer by parsing provided `args` (note
+that you should remove the first argument from `argv` passed to `main` function). The returned value is meant to be
+returned from `main` function having zero value in case of success.
+
+### Low level completion
+
+In case if none of the above methods is suitable, `argparse` provides `string[] CLI!(...).completeArgs(string[] args)`
+function. It takes arguments that should be completed and returns all possible completions.
+
+`completeArgs` function expects to receive all command line arguments (excluding `argv[0]` - first command line argument in `main`
+function) in order to provide completions correctly (set of available arguments depends on subcommand). This function
+supports two workflows:
+- If the last argument in `args` is empty and it's not supposed to be a value for a command line argument, then all
+  available arguments and subcommands (if any) are returned.
+- If the last argument in `args` is not empty and it's not supposed to be a value for a command line argument, then only
+  those arguments and subcommands (if any) are returned that starts with the same text as the last argument in `args`.
+
+For example, if there are `--foo`, `--bar` and `--baz` arguments available, then:
+- Completion for `args=[""]` will be `["--foo", "--bar", "--baz"]`.
+- Completion for `args=["--b"]` will be `["--bar", "--baz"]`.
+
+### Using the completer
+
+Completer that is provided by `argparse` supports the following shells:
+- bash
+- zsh
+- tcsh
+- fish
+
+Its usage consists of two steps: completion setup and completing of the command line. Both are implemented as
+subcommands (`init` and `complete` accordingly).
+
+#### Completion setup
+
+Before using completion, completer should be added to the shell. This can be achieved by using `init` subcommand. It
+accepts the following arguments (you can get them by running `<completer> init --help`):
+- `--bash`: provide completion for bash.
+- `--zsh`: provide completion for zsh. Note: zsh completion is done through bash completion so you should execute `bashcompinit` first.
+- `--tcsh`: provide completion for tcsh.
+- `--fish`: provide completion for fish.
+- `--completerPath <path>`: path to completer. By default, the path to itself is used.
+- `--commandName <name>`: command name that should be completed. By default, the first name of your main command is used.
+
+Either `--bash`, `--zsh`, `--tcsh` or `--fish` is expected.
+
+As a result, completer prints the script to setup completion for requested shell into standard output (`stdout`)
+which should be executed. To make this more streamlined, you can execute the output inside the current shell or to do
+this during shell initialization (e.g. in `.bashrc` for bash). To help doing so, completer also prints sourcing
+recommendation to standard output as a comment.
+
+Example of completer output for `<completer> init --bash --commandName mytool --completerPath /path/to/completer` arguments:
+```
+# Add this source command into .bashrc:
+#       source <(/path/to/completer init --bash --commandName mytool)
+complete -C 'eval /path/to/completer --bash -- $COMP_LINE ---' mytool
+```
+
+Recommended workflow is to install completer into a system according to your installation policy and update shell
+initialization/config file to source the output of `init` command.
+
+#### Completing of the command line
+
+Argument completion is done by `complete` subcommand (it's default one). It accepts the following arguments (you can get them by running `<completer> complete --help`):
+- `--bash`: provide completion for bash.
+- `--tcsh`: provide completion for tcsh.
+- `--fish`: provide completion for fish.
+
+As a result, completer prints all available completions, one per line assuming that it's called according to the output
+of `init` command.
+
 ## Argument declaration
 
 ### Positional arguments
@@ -333,195 +614,6 @@ Valid argument values are: apple,pear,banana
 
 Note that if the type of destination variable is `enum` then the allowed values are automatically limited to those
 listed in the `enum`.
-
-## Calling the parser
-
-`argparse` provides `CLI` template to call the parser covering different use cases. It has the following signatures:
-- `template CLI(Config config, COMMAND)` - this is main template that provides multiple API (see below) for all
-  supported use cases.
-- `template CLI(Config config, COMMANDS...)` - convenience wrapper of the previous template that provides `main`
-  template mixin only for the simplest use case with subcommands. See corresponding [section](#commands) for details
-  about subcommands.
-- `alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS)` - alias provided for convenience that allows using default
-  `Config`, i.e. `config = Config.init`.
-
-### Wrappers for main function
-
-The recommended and most convenient way to use `argparse` is through `CLI!(...).main(alias newMain)` mixin template.
-It declares the standard `main` function that parses command line arguments and calls provided `newMain` function with
-an object that contains parsed arguments.
-
-`newMain` function must satisfy these requirements:
-- It must accept `COMMAND` type as a first parameter if `CLI` template is used with one `COMMAND`.
-- It must accept all `COMMANDS` types as a first parameter if `CLI` template is used with multiple `COMMANDS...`.
-  `argparse` uses `std.sumtype.match` for matching. Possible implementation of such `newMain` function would be a
-  function that is overridden for every command type from `COMMANDS`. Another example would be a lambda that does
-  compile-time checking of the type of the first parameter (see examples for details).
-- Optionally `newMain` function can take a `string[]` parameter as a second argument. Providing such a function will
-  mean that `argparse` will parse known arguments only and all unknown ones will be passed as a second parameter to
-  `newMain` function. If `newMain` function doesn't have such parameter then `argparse` will error out if the is an
-  unknown argument provided in command line.
-- Optionally `newMain` can return a result that can be cast to `int`. In this case, this result will be returned from
-  standard `main` function.
-
-**Usage examples:**
-
-```d
-struct T
-{
-    string a;
-    string b;
-}
-
-mixin CLI!T.main!((args)
-{
-    // 'args' has 'T' type
-    static assert(is(typeof(args) == T));
-
-    // do whatever you need
-    import std.stdio: writeln;
-    args.writeln;
-    return 0;
-});
-```
-
-```d
-struct cmd1
-{
-    string a;
-}
-
-struct cmd2
-{
-    string b;
-}
-
-mixin CLI!(cmd1, cmd2).main!((args, unparsed)
-{
-    // 'args' has either 'cmd1' or 'cmd2' type
-    static if(is(typeof(args) == cmd1))
-        writeln("cmd1: ", args);
-    else static if(is(typeof(args) == cmd2))
-        writeln("cmd2: ", args);
-    else 
-        static assert(false); // this would never happen
-    
-    // unparsed arguments has 'string[]' type
-    static assert(is(typeof(unparsed) == string[]));
-
-    return 0;
-});
-```
-
-### Complete argument parsing
-
-`CLI` template provides `parseArgs` function that parses the command line and ensures that there are no unknown
-arguments specified in command line. It has the following signature:
-
-`Result parseArgs(ref COMMAND receiver, string[] args))`
-
-**Parameters:**
-
-- `receiver` - the object that's populated with parsed values.
-- `args` - raw command line arguments.
-
-**Return value:**
-
-An object that can be cast to `bool` to check whether the parsing was successful or not.
-
-**Usage example:**
-
-```d
-struct T
-{
-    string a;
-    string b;
-}
-
-assert(CLI!T.parseArgs!((T t) { assert(t == T("A","B")); })(["-a", "A", "-b", "B"]) == 0);
-```
-
-
-### Partial argument parsing
-
-Sometimes a program may only parse a few of the command-line arguments, processing the remaining arguments in different
-way. In these cases, `CLI!(...).parseKnownArgs` function can be used. It works much like `CLI!(...).parseArgs` except
-that it does not produce an error when extra arguments are present. It has the following signatures:
-
-- `Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)`
-
-  **Parameters:**
-
-    - `receiver` - the object that's populated with parsed values.
-    - `args` - raw command line arguments.
-    - `unrecognizedArgs` - raw command line arguments that were not parsed.
-
-  **Return value:**
-
-  An object that can be cast to `bool` to check whether the parsing was successful or not.
-
-- `Result parseKnownArgs(ref COMMAND receiver, ref string[] args)`
-
-  **Parameters:**
-
-    - `receiver` - the object that's populated with parsed values.
-    - `args` - raw command line arguments that are modified to have parsed arguments removed.
-
-  **Return value:**
-
-  An object that can be cast to `bool` to check whether the parsing was successful or not.
-
-**Usage example:**
-
-```d
-struct T
-{
-    string a;
-}
-
-auto args = [ "-a", "A", "-c", "C" ];
-
-T result;
-assert(CLI!T.parseKnownArgs!(result, args));
-assert(result == T("A"));
-assert(args == ["-c", "C"]);
-```
-
-
-### Calling a function after parsing
-
-Sometimes it's useful to call some function with an object that has all command line arguments parsed. For this usage,
-`argparse` provides `CLI!(...).parseArgs` template function that has the following signature:
-
-`int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)`
-
-**Parameters:**
-
-- `newMain` - function that's called with object of type `COMMAND` as a first parmeter filled with the data parsed from
-  command line; optionally it can take `string[]` as a second parameter which will contain unknown arguments
-  (`parseKnownArgs` function will be used underneath in this case).
-- `args` - raw command line arguments.
-- `initialValue` - initial value for the object passed to `func`.
-
-**Return value:**
-
-If there is an error happened during the parsing then non-zero value is returned. If `newMain` function returns a
-value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
-
-**Usage example:**
-
-```d
-int my_main(T command)
-{
-    // do something
-    return 0;
-}
-
-int main(string[] args)
-{
-    return CLI!T.parseArgs!my_main(args);
-}
-```
 
 
 ## Argument dependencies
