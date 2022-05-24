@@ -3350,7 +3350,7 @@ private struct CommandInfo
 
 auto Command(string[] name...)
 {
-    return CommandInfo(name);
+    return CommandInfo(name.dup);
 }
 
 unittest
