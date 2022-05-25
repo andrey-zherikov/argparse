@@ -1,0 +1,7 @@
+{
+	"license": "BSL-1.0",
+	"name": "completion-separate_main-completer",
+	"targetType":"executable",
+	"sourcePaths":[".", "../source"],
+	"dependencies":{ "all:argparse":"*" }
+}

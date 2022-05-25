@@ -2,6 +2,7 @@ module argparse;
 
 
 import std.typecons: Nullable;
+import std.sumtype: SumType, match;
 import std.traits;
 
 private enum DEFAULT_COMMAND = "";
@@ -427,7 +428,7 @@ private alias Restriction = bool delegate(in Config config, in bool[size_t] cliA
 
 // Have to do this magic because closures are not supported in CFTE
 // DMD v2.098.0 prints "Error: closures are not yet supported in CTFE"
-auto partiallyApply(alias fun,C...)(C context)
+private auto partiallyApply(alias fun,C...)(C context)
 {
     import std.traits: ParameterTypeTuple;
     import core.lifetime: move, forward;
@@ -676,42 +677,50 @@ private struct Arguments
     }
 }
 
-private alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIVER) =
+private alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIVER, bool completionMode) =
     delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
     {
-        try
+        static if(completionMode)
         {
-            auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, info, config);
+            if(rawValue is null)
+                consumeValuesFromCLI(rawArgs, info, config);
 
-            auto res = info.checkValuesCount(argName, rawValues.length);
-            if(!res)
-            {
-                config.onError(res.errorMsg);
-                return res;
-            }
-
-            auto param = RawParam(config, argName, rawValues);
-
-            auto target = &__traits(getMember, receiver, symbol);
-
-            static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                return uda.parsingFunc.parse(target, param) ? Result.Success : Result.Failure;
-            else
-                return uda.parsingFunc.parse(*target, param) ? Result.Success : Result.Failure;
+            return Result.Success;
         }
-        catch(Exception e)
+        else
         {
-            config.onError(argName, ": ", e.msg);
-            return Result.Failure;
+            try
+            {
+                auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, info, config);
+
+                auto res = info.checkValuesCount(argName, rawValues.length);
+                if(!res)
+                {
+                    config.onError(res.errorMsg);
+                    return res;
+                }
+
+                auto param = RawParam(config, argName, rawValues);
+
+                auto target = &__traits(getMember, receiver, symbol);
+
+                static if(is(typeof(target) == function) || is(typeof(target) == delegate))
+                    return uda.parsingFunc.parse(target, param) ? Result.Success : Result.Failure;
+                else
+                    return uda.parsingFunc.parse(*target, param) ? Result.Success : Result.Failure;
+            }
+            catch(Exception e)
+            {
+                config.onError(argName, ": ", e.msg);
+                return Result.Failure;
+            }
         }
     };
 
-private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol)(const CommandArguments!RECEIVER* parentArguments)
+private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(const CommandArguments!RECEIVER* parentArguments)
 {
     return delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver)
     {
-        import std.sumtype: match;
-
         auto target = &__traits(getMember, receiver, symbol);
 
         alias parse = (ref COMMAND_TYPE cmdTarget)
@@ -721,7 +730,7 @@ private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias s
 
             auto command = CommandArguments!TYPE(parser.config, info, parentArguments);
 
-            return arg.match!(_ => parser.parse(command, cmdTarget, _));
+            return parser.parse!completionMode(command, cmdTarget, arg);
         };
 
 
@@ -919,6 +928,8 @@ struct Result
 
     private string errorMsg;
 
+    private const(string)[] suggestions;
+
     bool opCast(type)() const if (is(type == bool))
     {
         return status == Status.success;
@@ -953,7 +964,6 @@ private struct Parser
         string value = null;  // null when there is no value
     }
 
-    import std.sumtype: SumType;
     alias Argument = SumType!(Unknown, EndOfArgs, Positional, NamedShort, NamedLong);
 
     immutable Config config;
@@ -964,8 +974,12 @@ private struct Parser
     bool[size_t] idxParsedArgs;
     size_t idxNextPositional = 0;
 
-    private alias CmdParser = Result delegate(const ref Argument);
-
+    struct CmdParser
+    {
+        Result delegate(const ref Argument) parse;
+        Result delegate(const ref Argument) complete;
+        const(string)[] completeSuggestion;
+    }
     CmdParser[] cmdStack;
 
     Argument splitArgumentNameValue(string arg)
@@ -996,7 +1010,7 @@ private struct Parser
 
     auto parseArgument(T, PARSE)(PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
     {
-        immutable res = parse(config, nameWithDash, receiver, value, args);
+        auto res = parse(config, nameWithDash, receiver, value, args);
         if(!res)
             return res;
 
@@ -1016,37 +1030,54 @@ private struct Parser
         if(found.level < cmdStack.length)
             cmdStack.length = found.level;
 
-        cmdStack ~= (const ref arg) => found.parse(this, arg, receiver);
+        cmdStack ~= CmdParser((const ref arg) => found.parse(this, arg, receiver), (const ref arg) => found.complete(this, arg, receiver));
 
         args.popFront();
 
         return Result.Success;
     }
 
-    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Unknown)
+    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, ref T receiver, Unknown)
     {
+        static if(completionMode)
+        {
+            import std.range: front, popFront;
+            import std.algorithm: filter;
+            import std.string:startsWith;
+            import std.array:array;
+            if(args.length == 1)
+            {
+                // last arg means we need to provide args and subcommands
+                auto A = args[0] == "" ? cmd.completeSuggestion : cmd.completeSuggestion.filter!(_ => _.startsWith(args[0])).array;
+                return Result(0, Result.Status.success, "", A);
+            }
+        }
+
         return Result.UnknownArgument;
     }
 
-    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, EndOfArgs)
+    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, ref T receiver, EndOfArgs)
     {
-        static if(is(typeof(cmd.setTrailingArgs)))
-            cmd.setTrailingArgs(receiver, args[1..$]);
-        else
-            unrecognizedArgs ~= args[1..$];
+        static if(!completionMode)
+        {
+            static if (is(typeof(cmd.setTrailingArgs)))
+                cmd.setTrailingArgs(receiver, args[1..$]);
+            else
+                unrecognizedArgs ~= args[1..$];
+        }
 
         args = [];
 
         return Result.Success;
     }
 
-    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, Positional)
+    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, ref T receiver, Positional)
     {
         auto foundArg = cmd.findPositionalArgument(idxNextPositional);
         if(foundArg.arg is null)
             return parseSubCommand(cmd, receiver);
 
-        immutable res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, null, foundArg.arg.names[0], foundArg.index);
+        auto res = parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, null, foundArg.arg.names[0], foundArg.index);
         if(!res)
             return res;
 
@@ -1055,7 +1086,7 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, NamedLong arg)
+    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, ref T receiver, NamedLong arg)
     {
         import std.algorithm : startsWith;
         import std.range: popFront;
@@ -1075,10 +1106,10 @@ private struct Parser
             return Result.UnknownArgument;
 
         args.popFront();
-        return parseArgument(cmd.parseFunctions[foundArg.index], receiver, arg.value, arg.nameWithDash, foundArg.index);
+        return parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
     }
 
-    auto parse(T)(const ref CommandArguments!T cmd, ref T receiver, NamedShort arg)
+    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, ref T receiver, NamedShort arg)
     {
         import std.range: popFront;
 
@@ -1086,7 +1117,7 @@ private struct Parser
         if(foundArg.arg !is null)
         {
             args.popFront();
-            return parseArgument(cmd.parseFunctions[foundArg.index], receiver, arg.value, arg.nameWithDash, foundArg.index);
+            return parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
         }
 
         // Try to parse "-ABC..." where "A","B","C" are different single-letter arguments
@@ -1116,7 +1147,7 @@ private struct Parser
                 arg.name = "";
             }
 
-            immutable res = parseArgument(cmd.parseFunctions[foundArg.index], receiver, value, "-"~name, foundArg.index);
+            auto res = parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, value, "-"~name, foundArg.index);
             if(!res)
                 return res;
         }
@@ -1126,43 +1157,78 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parse(Argument arg)
+    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, ref T receiver, Argument arg)
+    {
+        return arg.match!(_ => parse!completionMode(cmd, receiver, _));
+    }
+
+    auto parse(bool completionMode)(Argument arg)
     {
         import std.range: front, popFront;
 
+        auto result = Result.Success;
+
+        const argsCount = args.length;
+
         foreach_reverse(cmdParser; cmdStack)
         {
-            immutable res = cmdParser(arg);
-            if(res.status != Result.Status.unknownArgument)
-                return res;
+            static if(completionMode)
+            {
+                auto res = cmdParser.complete(arg);
+                if(res)
+                    result.suggestions ~= res.suggestions;
+            }
+            else
+            {
+                auto res = cmdParser.parse(arg);
+
+                if(res.status != Result.Status.unknownArgument)
+                    return res;
+            }
         }
 
-        unrecognizedArgs ~= args.front;
-        args.popFront();
+        if(args.length > 0 && argsCount == args.length)
+        {
+            unrecognizedArgs ~= args.front;
+            args.popFront();
+        }
 
-        return Result.Success;
+        return result;
     }
 
-    auto parseAll(T)(const ref CommandArguments!T cmd, ref T receiver)
+    auto parseAll(bool completionMode, T)(const ref CommandArguments!T cmd, ref T receiver)
     {
         import std.range: empty, front;
 
-        cmdStack ~= (const ref arg)
+        cmdStack ~= CmdParser(
+        (const ref arg)
         {
-            import std.sumtype: match;
-
-            return arg.match!(_ => parse(cmd, receiver, _));
-        };
+            return parse!completionMode(cmd, receiver, arg);
+        },
+        (const ref arg)
+        {
+            return parse!completionMode(cmd, receiver, arg);
+        },
+        cmd.completeSuggestion);
 
         auto found = cmd.findSubCommand(DEFAULT_COMMAND);
         if(found.parse !is null)
-            cmdStack ~= (const ref arg) => found.parse(this, arg, receiver);
+        {
+            cmdStack ~= CmdParser((const ref arg) => found.parse(this, arg, receiver));
+        }
 
         while(!args.empty)
         {
-            immutable res = parse(splitArgumentNameValue(args.front));
+            static if(completionMode)
+                auto res = parse!completionMode(args.length > 1 ? splitArgumentNameValue(args.front) : Argument.init);
+            else
+                auto res = parse!completionMode(splitArgumentNameValue(args.front));
             if(!res)
                 return res;
+
+            static if(completionMode)
+                if(args.empty)
+                    return res;
         }
 
         if(!cmd.checkRestrictions(idxParsedArgs, config))
@@ -1197,7 +1263,7 @@ private Result parseCLIKnownArgs(T)(ref T receiver,
 {
     auto parser = Parser(config, args);
 
-    immutable res = parser.parseAll(cmd, receiver);
+    auto res = parser.parseAll!false(cmd, receiver);
     if(!res)
         return res;
 
@@ -1428,6 +1494,8 @@ unittest
     static assert(p.findNamedArgument("boo").arg !is null);
     static assert(p.findPositionalArgument(0).arg !is null);
     static assert(p.findPositionalArgument(1).arg is null);
+    static assert(p.getParseFunction!false(p.findNamedArgument("b").index) !is null);
+    static assert(p.getParseFunction!true(p.findNamedArgument("b").index) !is null);
 }
 
 unittest
@@ -1643,8 +1711,6 @@ unittest
 
 unittest
 {
-    import std.sumtype: SumType, match;
-
     struct T
     {
         struct cmd1 { string a; }
@@ -1668,8 +1734,6 @@ unittest
 
 unittest
 {
-    import std.sumtype: SumType, match;
-
     struct T
     {
         struct cmd1 { string a; }
@@ -1696,6 +1760,157 @@ struct Main
     {
         mixin CLI!(config, TYPE).main!newMain;
     }
+}
+
+private template defaultCommandName(COMMAND)
+{
+    static if(getUDAs!(COMMAND, CommandInfo).length > 0)
+        enum defaultCommandName = getUDAs!(COMMAND, CommandInfo)[0].names[0];
+    else
+        enum defaultCommandName = COMMAND.stringof;
+}
+
+private struct Complete(COMMAND)
+{
+    @(Command("init")
+    .Description("Print initialization script for shell completion.")
+    .ShortDescription("Print initialization script.")
+    )
+    struct Init
+    {
+        @MutuallyExclusive
+        {
+            @(NamedArgument.Description("Provide completion for bash."))
+            bool bash;
+            @(NamedArgument.Description("Provide completion for zsh."))
+            bool zsh;
+            @(NamedArgument.Description("Provide completion for tcsh."))
+            bool tcsh;
+            @(NamedArgument.Description("Provide completion for fish."))
+            bool fish;
+        }
+
+        @(NamedArgument.Description("Path to completer. Default value: path to this executable."))
+        string completerPath; // path to this binary
+
+        @(NamedArgument.Description("Command name. Default value: "~defaultCommandName!COMMAND~"."))
+        string commandName = defaultCommandName!COMMAND;   // command to complete
+
+        void execute(Config config)()
+        {
+            import std.stdio: writeln;
+
+            if(completerPath.length == 0)
+            {
+                import std.file: thisExePath;
+                completerPath = thisExePath();
+            }
+
+            string commandNameArg;
+            if(commandName != defaultCommandName!COMMAND)
+                commandNameArg = " --commandName "~commandName;
+
+            if(bash)
+            {
+                // According to bash documentation:
+                //   When the function or command is invoked, the first argument ($1) is the name of the command whose
+                //   arguments are being completed, the second` argument ($2) is the word being completed, and the third
+                //   argument ($3) is the word preceding the word being completed on the current command line.
+                //
+                // So we add "---" argument to distinguish between the end of actual parameters and those that were added by bash
+
+                writeln("# Add this source command into .bashrc:");
+                writeln("#       source <(", completerPath, " init --bash", commandNameArg, ")");
+                // 'eval' is used to properly get arguments with spaces. For example, in case of "1 2" argument,
+                // we will get "1 2" as is, compare to "\"1", "2\"" without 'eval'.
+                writeln("complete -C 'eval ", completerPath, " --bash -- $COMP_LINE ---' ", commandName);
+            }
+            else if(zsh)
+            {
+                // We use bash completion for zsh
+                writeln("# Ensure that you called compinit and bashcompinit like below in your .zshrc:");
+                writeln("#       autoload -Uz compinit && compinit");
+                writeln("#       autoload -Uz bashcompinit && bashcompinit");
+                writeln("# And then add this source command after them into your .zshrc:");
+                writeln("#       source <(", completerPath, " init --zsh", commandNameArg, ")");
+                writeln("complete -C 'eval ", completerPath, " --bash -- $COMP_LINE ---' ", commandName);
+            }
+            else if(tcsh)
+            {
+                // Comments start with ":" in tsch
+                writeln(": Add this eval command into .tcshrc:   ;");
+                writeln(":       eval `", completerPath, " init --tcsh", commandNameArg, "`     ;");
+                writeln("complete ", commandName, " 'p,*,`", completerPath, " --tcsh -- $COMMAND_LINE`,'");
+            }
+            else if(fish)
+            {
+                writeln("# Add this source command into ~/.config/fish/config.fish:");
+                writeln("#       ", completerPath, " init --fish", commandNameArg, " | source");
+                writeln("complete -c ", commandName, " -a '(COMMAND_LINE=(commandline -p) ", completerPath, " --fish -- (commandline -op))' --no-files");
+            }
+        }
+    }
+
+    @(Command("complete")
+    .Description("Print completion.")
+    )
+    struct Complete
+    {
+        @MutuallyExclusive
+        {
+            @(NamedArgument.Description("Provide completion for bash."))
+            bool bash;
+            @(NamedArgument.Description("Provide completion for tcsh."))
+            bool tcsh;
+            @(NamedArgument.Description("Provide completion for fish."))
+            bool fish;
+        }
+
+        @TrailingArguments
+        string[] args;
+
+        void execute(Config config)()
+        {
+            import std.process: environment;
+            import std.stdio: writeln;
+            import std.algorithm: each;
+
+            if(bash)
+            {
+                // According to bash documentation:
+                //   When the function or command is invoked, the first argument ($1) is the name of the command whose
+                //   arguments are being completed, the second` argument ($2) is the word being completed, and the third
+                //   argument ($3) is the word preceding the word being completed on the current command line.
+                //
+                // We don't use these arguments so we just remove those after "---" including itself
+                while(args.length > 0 && args[$-1] != "---")
+                    args = args[0..$-1];
+
+                // Remove "---"
+                if(args.length > 0 && args[$-1] == "---")
+                    args = args[0..$-1];
+
+                // COMP_LINE environment variable contains current command line so if it ends with space ' ' then we
+                // should provide all available arguments. To do so, we add an empty argument
+                auto cmdLine = environment.get("COMP_LINE", "");
+                if(cmdLine.length > 0 && cmdLine[$-1] == ' ')
+                    args ~= "";
+            }
+            else if(tcsh || fish)
+            {
+                // COMMAND_LINE environment variable contains current command line so if it ends with space ' ' then we
+                // should provide all available arguments. To do so, we add an empty argument
+                auto cmdLine = environment.get("COMMAND_LINE", "");
+                if(cmdLine.length > 0 && cmdLine[$-1] == ' ')
+                    args ~= "";
+            }
+
+            CLI!(config, COMMAND).completeArgs(args).each!writeln;
+        }
+    }
+
+    @SubCommands
+    SumType!(Init, Default!Complete) cmd;
 }
 
 template CLI(Config config, COMMANDS...)
@@ -1726,7 +1941,7 @@ template CLI(Config config, COMMAND)
         auto parser = Parser(config, args);
 
         auto command = CommandArguments!COMMAND(config);
-        auto res = parser.parseAll(command, receiver);
+        auto res = parser.parseAll!false(command, receiver);
         if(!res)
             return res;
 
@@ -1794,11 +2009,67 @@ template CLI(Config config, COMMAND)
         }
     }
 
-    mixin template main(alias newMain)
+    string[] completeArgs(string[] args)
+    {
+        import std.algorithm: sort, uniq;
+        import std.array: array;
+
+        auto command = CommandArguments!COMMAND(config);
+
+        auto parser = Parser(config, args.length == 0 ? [""] : args);
+
+        COMMAND dummy;
+
+        auto res = parser.parseAll!true(command, dummy);
+
+        return res ? res.suggestions.dup.sort.uniq.array : [];
+    }
+
+    int complete(string[] args)
+    {
+        // dmd fails with core.exception.OutOfMemoryError@core\lifetime.d(137): Memory allocation failed
+        // if we call anything from CLI!(config, Complete!COMMAND) so we have to directly call parser here
+
+        Complete!COMMAND receiver;
+
+        auto parser = Parser(config, args);
+
+        auto command = CommandArguments!(Complete!COMMAND)(config);
+        auto res = parser.parseAll!false(command, receiver);
+        if(!res)
+            return 1;
+
+        if(res && parser.unrecognizedArgs.length > 0)
+        {
+            config.onError("Unrecognized arguments: ", parser.unrecognizedArgs);
+            return 1;
+        }
+
+        receiver.cmd.match!(_ => _.execute!config());
+
+        return 0;
+    }
+
+    mixin template mainComplete()
     {
         int main(string[] argv)
         {
-            return CLI!(config, COMMAND).parseArgs!(newMain)(argv[1..$]);
+            return CLI!(config, COMMAND).complete(argv[1..$]);
+        }
+    }
+
+    mixin template main(alias newMain)
+    {
+        version(argparse_completion)
+        {
+            mixin CLI!(config, COMMAND).mainComplete;
+        }
+        else
+        {
+            int main(string[] argv)
+            {
+                return CLI!(config, COMMAND).parseArgs!(newMain)(argv[1..$]);
+            }
         }
     }
 }
@@ -1813,6 +2084,69 @@ template CLI(Config config)
 }
 
 alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS);
+
+
+unittest
+{
+    struct T
+    {
+        struct cmd1
+        {
+            string foo;
+            string bar;
+            string baz;
+        }
+        struct cmd2
+        {
+            string cat,can,dog;
+        }
+
+        @NamedArgument("apple","a")
+        string a = "dummyA";
+        @NamedArgument
+        string s = "dummyS";
+        @NamedArgument
+        string b = "dummyB";
+
+        @SubCommands
+        SumType!(cmd1, cmd2) cmd;
+    }
+
+    assert(CLI!T.completeArgs([]) == ["--apple","--help","-a","-b","-h","-s","cmd1","cmd2"]);
+    assert(CLI!T.completeArgs([""]) == ["--apple","--help","-a","-b","-h","-s","cmd1","cmd2"]);
+    assert(CLI!T.completeArgs(["-a"]) == ["-a"]);
+    assert(CLI!T.completeArgs(["c"]) == ["cmd1","cmd2"]);
+    assert(CLI!T.completeArgs(["cmd1"]) == ["cmd1"]);
+    assert(CLI!T.completeArgs(["cmd1",""]) == ["--apple","--bar","--baz","--foo","--help","-a","-b","-h","-s","cmd1","cmd2"]);
+    assert(CLI!T.completeArgs(["-a","val-a",""]) == ["--apple","--help","-a","-b","-h","-s","cmd1","cmd2"]);
+
+    assert(!CLI!T.complete(["init","--bash","--commandName","mytool"]));
+    assert(!CLI!T.complete(["init","--zsh"]));
+    assert(!CLI!T.complete(["init","--tcsh"]));
+    assert(!CLI!T.complete(["init","--fish"]));
+
+    assert(CLI!T.complete(["init","--unknown"]));
+
+    import std.process: environment;
+    {
+        environment["COMP_LINE"] = "mytool ";
+        assert(!CLI!T.complete(["--bash","--","---","foo","foo"]));
+
+        environment["COMP_LINE"] = "mytool c";
+        assert(!CLI!T.complete(["--bash","--","c","---"]));
+
+        environment.remove("COMP_LINE");
+    }
+    {
+        environment["COMMAND_LINE"] = "mytool ";
+        assert(!CLI!T.complete(["--tcsh","--"]));
+
+        environment["COMMAND_LINE"] = "mytool c";
+        assert(!CLI!T.complete(["--fish","--","c"]));
+
+        environment.remove("COMMAND_LINE");
+    }
+}
 
 
 unittest
@@ -3385,7 +3719,8 @@ private struct CommandArguments(RECEIVER)
 
     Arguments arguments;
 
-    ParseFunction!RECEIVER[] parseFunctions;
+    ParseFunction!RECEIVER[] parseArguments;
+    ParseFunction!RECEIVER[] completeArguments;
 
     uint level; // (sub-)command level, 0 = top level
 
@@ -3393,6 +3728,11 @@ private struct CommandArguments(RECEIVER)
     size_t[string] subCommandsByName;
     CommandInfo[] subCommands;
     ParseSubCommandFunction!RECEIVER[] parseSubCommands;
+    ParseSubCommandFunction!RECEIVER[] completeSubCommands;
+
+    // completion
+    string[] completeSuggestion;
+
 
     mixin ForwardMemberFunction!"arguments.findPositionalArgument";
     mixin ForwardMemberFunction!"arguments.findNamedArgument";
@@ -3433,7 +3773,7 @@ private struct CommandArguments(RECEIVER)
         if(config.addHelp)
         {
             arguments.addArgument!helpArgument;
-            parseFunctions ~= delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
+            parseArguments ~= delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
             {
                 import std.stdio: stdout;
 
@@ -3441,7 +3781,20 @@ private struct CommandArguments(RECEIVER)
 
                 return Result(0);
             };
+            completeArguments ~= delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
+            {
+                return Result.Success;
+            };
         }
+
+
+        import std.algorithm: sort, map;
+        import std.range: join;
+        import std.array: array;
+
+        completeSuggestion = arguments.argsNamed.keys.map!(_ => getArgumentName(_, config)).array;
+        completeSuggestion ~= subCommandsByName.keys.array;
+        completeSuggestion.sort;
     }
 
     private void fillArguments()
@@ -3504,7 +3857,8 @@ private struct CommandArguments(RECEIVER)
         else
             arguments.addArgument!(info, restrictions);
 
-        parseFunctions ~= ParsingArgument!(symbol, uda, info, RECEIVER);
+        parseArguments    ~= ParsingArgument!(symbol, uda, info, RECEIVER, false);
+        completeArguments ~= ParsingArgument!(symbol, uda, info, RECEIVER, true);
     }
 
     private void addSubCommands(alias symbol)()
@@ -3557,8 +3911,17 @@ private struct CommandArguments(RECEIVER)
 
             subCommands ~= info;
             //group.arguments ~= index;
-            parseSubCommands ~= ParsingSubCommand!(TYPE, info, RECEIVER, symbol)(&this);
+            parseSubCommands    ~= ParsingSubCommand!(TYPE, info, RECEIVER, symbol, false)(&this);
+            completeSubCommands ~= ParsingSubCommand!(TYPE, info, RECEIVER, symbol, true)(&this);
         }}
+    }
+
+    auto getParseFunction(bool completionMode)(size_t index) const
+    {
+        static if(completionMode)
+            return completeArguments[index];
+        else
+            return parseArguments[index];
     }
 
     auto findSubCommand(string name) const
@@ -3567,10 +3930,11 @@ private struct CommandArguments(RECEIVER)
         {
             uint level = uint.max;
             ParseSubCommandFunction!RECEIVER parse;
+            ParseSubCommandFunction!RECEIVER complete;
         }
 
         auto p = arguments.convertCase(name) in subCommandsByName;
-        return !p ? Result.init : Result(level+1, parseSubCommands[*p]);
+        return !p ? Result.init : Result(level+1, parseSubCommands[*p], completeSubCommands[*p]);
     }
 
     static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
@@ -3635,8 +3999,12 @@ unittest
 
 private string getArgumentName(string name, in Config config)
 {
-    name = config.namedArgChar ~ name;
-    return name.length > 2 ? config.namedArgChar ~ name : name;
+    import std.conv: to;
+
+    immutable dash = config.namedArgChar.to!string;
+
+    name = dash ~ name;
+    return name.length > 2 ? dash ~ name : name;
 }
 
 unittest
@@ -4126,8 +4494,6 @@ unittest
 
 unittest
 {
-    import std.sumtype: SumType, match;
-
     @Command("MYPROG")
     struct T
     {

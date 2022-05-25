@@ -1,0 +1,7 @@
+{
+	"license": "BSL-1.0",
+	"name": "completion-single_main-app",
+	"targetType":"executable",
+	"sourcePaths":["../source"],
+	"dependencies":{ "all:argparse":"*" }
+}

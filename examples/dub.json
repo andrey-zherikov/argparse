@@ -3,6 +3,10 @@
 	"name": "all",
 	"targetType":"none",
 	"dependencies":{
+		"all:completion-separate_main-app":"*",
+		"all:completion-separate_main-completer":"*",
+		"all:completion-single_main-app":"*",
+		"all:completion-single_main-completer":"*",
 		"all:getting_started-advanced":"*",
 		"all:getting_started-basic":"*",
 		"all:sub_commands-advanced":"*",
@@ -12,6 +16,10 @@
 	},
 	"subPackages": [
 		"..",
+		"completion/separate_main/app",
+		"completion/separate_main/completer",
+		"completion/single_main/app",
+		"completion/single_main/completer",
 		"getting_started/advanced",
 		"getting_started/basic",
 		"sub_commands/advanced",
