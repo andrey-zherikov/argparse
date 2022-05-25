@@ -2032,8 +2032,6 @@ template CLI(Config config, COMMAND)
 
         Complete!COMMAND receiver;
 
-        string[] unrecognizedArgs;
-
         auto parser = Parser(config, args);
 
         auto command = CommandArguments!(Complete!COMMAND)(config);
@@ -2041,9 +2039,9 @@ template CLI(Config config, COMMAND)
         if(!res)
             return 1;
 
-        if(res && unrecognizedArgs.length > 0)
+        if(res && parser.unrecognizedArgs.length > 0)
         {
-            config.onError("Unrecognized arguments: ", unrecognizedArgs);
+            config.onError("Unrecognized arguments: ", parser.unrecognizedArgs);
             return 1;
         }
 
@@ -2121,6 +2119,33 @@ unittest
     assert(CLI!T.completeArgs(["cmd1"]) == ["cmd1"]);
     assert(CLI!T.completeArgs(["cmd1",""]) == ["--apple","--bar","--baz","--foo","--help","-a","-b","-h","-s","cmd1","cmd2"]);
     assert(CLI!T.completeArgs(["-a","val-a",""]) == ["--apple","--help","-a","-b","-h","-s","cmd1","cmd2"]);
+
+    assert(!CLI!T.complete(["init","--bash","--commandName","mytool"]));
+    assert(!CLI!T.complete(["init","--zsh"]));
+    assert(!CLI!T.complete(["init","--tcsh"]));
+    assert(!CLI!T.complete(["init","--fish"]));
+
+    assert(CLI!T.complete(["init","--unknown"]));
+
+    import std.process: environment;
+    {
+        environment["COMP_LINE"] = "mytool ";
+        assert(!CLI!T.complete(["--bash","--","---","foo","foo"]));
+
+        environment["COMP_LINE"] = "mytool c";
+        assert(!CLI!T.complete(["--bash","--","c","---"]));
+
+        environment.remove("COMP_LINE");
+    }
+    {
+        environment["COMMAND_LINE"] = "mytool ";
+        assert(!CLI!T.complete(["--tcsh","--"]));
+
+        environment["COMMAND_LINE"] = "mytool c";
+        assert(!CLI!T.complete(["--fish","--","c"]));
+
+        environment.remove("COMMAND_LINE");
+    }
 }
 
 
