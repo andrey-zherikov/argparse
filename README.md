@@ -27,10 +27,11 @@ to [releases](https://github.com/andrey-zherikov/argparse/releases) for breaking
     - Array arguments.
     - Hash (associative array) arguments.
     - Callbacks.
-- [Different use cases are supported](#calling-the-parser):
+- [Different workflows are supported](#calling-the-parser):
     - Mixin to inject standard `main` function.
     - Parsing of known arguments only (returning not recognized ones).
     - Enforcing that there are no unknown arguments provided.
+- [Shell completion](#shell-completion)
 - [Options terminator](#trailing-arguments) (e.g. parsing up to `--` leaving any argument specified after it).
 - [Arguments groups](#argument-dependencies).
 - [Subcommands](#commands).
