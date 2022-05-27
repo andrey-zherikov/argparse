@@ -424,6 +424,7 @@ unittest
 
 private alias ParseFunction(RECEIVER) = Result delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
 private alias ParseSubCommandFunction(RECEIVER) = Result delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver);
+private alias InitSubCommandFunction(RECEIVER) = Result delegate(ref RECEIVER receiver);
 private alias Restriction = bool delegate(in Config config, in bool[size_t] cliArgs);
 
 // Have to do this magic because closures are not supported in CFTE
@@ -717,7 +718,7 @@ private alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIV
         }
     };
 
-private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(const CommandArguments!RECEIVER* parentArguments)
+private auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(const CommandArguments!RECEIVER* parentArguments)
 {
     return delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver)
     {
@@ -738,9 +739,6 @@ private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias s
             return (*target).match!parse;
         else
         {
-            if((*target).match!((COMMAND_TYPE t) => false, _ => true))
-                *target = COMMAND_TYPE.init;
-
             return (*target).match!(parse,
                 (_)
                 {
@@ -751,6 +749,18 @@ private auto ParsingSubCommand(COMMAND_TYPE, CommandInfo info, RECEIVER, alias s
         }
     };
 }
+
+private alias ParsingSubCommandInit(COMMAND_TYPE, RECEIVER, alias symbol) =
+    delegate(ref RECEIVER receiver)
+    {
+        auto target = &__traits(getMember, receiver, symbol);
+
+        static if(typeof(*target).Types.length > 1)
+            if((*target).match!((COMMAND_TYPE t) => false, _ => true))
+                *target = COMMAND_TYPE.init;
+
+        return Result.Success;
+    };
 
 struct SubCommands {}
 
@@ -1032,6 +1042,7 @@ private struct Parser
 
         cmdStack ~= CmdParser((const ref arg) => found.parse(this, arg, receiver), (const ref arg) => found.complete(this, arg, receiver));
 
+        found.initialize(receiver);
         args.popFront();
 
         return Result.Success;
@@ -1215,6 +1226,7 @@ private struct Parser
         if(found.parse !is null)
         {
             cmdStack ~= CmdParser((const ref arg) => found.parse(this, arg, receiver));
+            found.initialize(receiver);
         }
 
         while(!args.empty)
@@ -1730,6 +1742,20 @@ unittest
 
     assert(["-c","C","cmd2","-b","B"].parseCLIArgs!T.get == T("C",null,typeof(T.cmd)(T.cmd2("B"))));
     assert(["-c","C","cmd2","--","-b","B"].parseCLIArgs!T.get == T("C",null,typeof(T.cmd)(T.cmd2("",["-b","B"]))));
+}
+
+unittest
+{
+    struct T
+    {
+        struct cmd1 {}
+        struct cmd2 {}
+
+        SumType!(cmd1, cmd2) cmd;
+    }
+
+    assert(["cmd2"].parseCLIArgs!T.get == T(typeof(T.cmd)(T.cmd2.init)));
+    assert(["cmd1"].parseCLIArgs!T.get == T(typeof(T.cmd)(T.cmd1.init)));
 }
 
 unittest
@@ -3729,6 +3755,7 @@ private struct CommandArguments(RECEIVER)
     CommandInfo[] subCommands;
     ParseSubCommandFunction!RECEIVER[] parseSubCommands;
     ParseSubCommandFunction!RECEIVER[] completeSubCommands;
+    InitSubCommandFunction !RECEIVER[] initSubCommands;
 
     // completion
     string[] completeSuggestion;
@@ -3911,8 +3938,9 @@ private struct CommandArguments(RECEIVER)
 
             subCommands ~= info;
             //group.arguments ~= index;
-            parseSubCommands    ~= ParsingSubCommand!(TYPE, info, RECEIVER, symbol, false)(&this);
-            completeSubCommands ~= ParsingSubCommand!(TYPE, info, RECEIVER, symbol, true)(&this);
+            parseSubCommands    ~= ParsingSubCommandArgument!(TYPE, info, RECEIVER, symbol, false)(&this);
+            completeSubCommands ~= ParsingSubCommandArgument!(TYPE, info, RECEIVER, symbol, true)(&this);
+            initSubCommands     ~= ParsingSubCommandInit!(TYPE, RECEIVER, symbol);
         }}
     }
 
@@ -3931,10 +3959,11 @@ private struct CommandArguments(RECEIVER)
             uint level = uint.max;
             ParseSubCommandFunction!RECEIVER parse;
             ParseSubCommandFunction!RECEIVER complete;
+            InitSubCommandFunction !RECEIVER initialize;
         }
 
         auto p = arguments.convertCase(name) in subCommandsByName;
-        return !p ? Result.init : Result(level+1, parseSubCommands[*p], completeSubCommands[*p]);
+        return !p ? Result.init : Result(level+1, parseSubCommands[*p], completeSubCommands[*p], initSubCommands[*p]);
     }
 
     static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)

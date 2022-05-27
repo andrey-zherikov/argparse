@@ -25,12 +25,12 @@ mixin CLI!Program.main!((prog)
         (.max)
         {
             import std.algorithm: maxElement;
-            return prog.numbers.maxElement;
+            return prog.numbers.maxElement(0);
         },
         (.min)
         {
             import std.algorithm: minElement;
-            return prog.numbers.minElement;
+            return prog.numbers.minElement(0);
         },
         (.sum)
         {
