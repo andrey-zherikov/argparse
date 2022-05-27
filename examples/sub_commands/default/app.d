@@ -28,12 +28,12 @@ mixin CLI!Program.main!((prog)
         (.max m)
         {
             import std.algorithm: maxElement;
-            writeln("max = ", prog.numbers.maxElement, " foo = ", m.foo);
+            writeln("max = ", prog.numbers.maxElement(0), " foo = ", m.foo);
         },
         (.min)
         {
             import std.algorithm: minElement;
-            writeln("min = ", prog.numbers.minElement);
+            writeln("min = ", prog.numbers.minElement(0));
         },
         (.sum)
         {
