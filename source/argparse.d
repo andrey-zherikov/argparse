@@ -1090,9 +1090,6 @@ private struct Parser
         if(foundArg.arg is null)
             return parseSubCommand(cmd, receiver);
 
-        if(isDefaultCmd && foundArg.arg.ignoreInDefaultCommand)
-            return Result.UnknownArgument;
-
         auto res = parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, null, foundArg.arg.names[0], foundArg.index);
         if(!res)
             return res;
@@ -1135,6 +1132,9 @@ private struct Parser
         auto foundArg = cmd.findNamedArgument(arg.name);
         if(foundArg.arg !is null)
         {
+            if(isDefaultCmd && foundArg.arg.ignoreInDefaultCommand)
+                return Result.UnknownArgument;
+
             args.popFront();
             return parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
         }
@@ -1145,9 +1145,6 @@ private struct Parser
             auto name = [arg.name[0]];
             foundArg = cmd.findNamedArgument(name);
             if(foundArg.arg is null)
-                return Result.UnknownArgument;
-
-            if(isDefaultCmd && foundArg.arg.ignoreInDefaultCommand)
                 return Result.UnknownArgument;
 
             // In case of bundling there can be no or one argument value
@@ -1236,7 +1233,6 @@ private struct Parser
         auto found = cmd.findSubCommand(DEFAULT_COMMAND);
         if(found.parse !is null)
         {
-            //cmdStack ~= CmdParser((const ref arg) => found.parse(this, arg, false, receiver));
             auto p = CmdParser((const ref arg) => found.parse(this, arg, true, receiver));
             p.isDefault = true;
             cmdStack ~= p;
@@ -1786,6 +1782,8 @@ unittest
     }
 
     assert(["-c","C","-b","B"].parseCLIArgs!T.get == T("C",null,typeof(T.cmd)(Default!(T.cmd2)(T.cmd2("B")))));
+    assert(!CLI!T.parseArgs!((_) {assert(false);})(["-h"]));
+    assert(!CLI!T.parseArgs!((_) {assert(false);})(["--help"]));
 }
 
 deprecated("Use CLI!(Config, COMMAND).main or CLI!(COMMAND).main")
