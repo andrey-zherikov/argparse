@@ -396,6 +396,14 @@ private struct RestrictionGroup
     Type type;
 
     private size_t[] arguments;
+
+    private bool required;
+
+    auto ref Required()
+    {
+        required = true;
+        return this;
+    }
 }
 
 auto RequiredTogether(string file=__FILE__, uint line = __LINE__)()
@@ -516,6 +524,23 @@ private struct Restrictions
             }
 
         return true;
+    }
+
+    static bool RequiredAnyOf(in Config config,
+                              in bool[size_t] cliArgs,
+                              in size_t[] restrictionArgs,
+                              in ArgumentInfo[] allArgs)
+    {
+        import std.algorithm: map;
+        import std.array: join;
+
+        foreach(index; restrictionArgs)
+            if(index in cliArgs)
+                return true;
+
+        config.onError("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].names[0].getArgumentName(config)).join("', '"), "'");
+
+        return false;
     }
 }
 
@@ -640,6 +665,10 @@ private struct Arguments
                 return false;
 
         foreach(restriction; restrictionGroups)
+        {
+            if(restriction.required && !Restrictions.RequiredAnyOf(config, cliArgs, restriction.arguments, arguments))
+                return false;
+
             final switch(restriction.type)
             {
                 case RestrictionGroup.Type.together:
@@ -651,6 +680,7 @@ private struct Arguments
                         return false;
                     break;
             }
+        }
 
         return true;
     }
@@ -4635,6 +4665,32 @@ unittest
     @Command("MYPROG")
     struct T
     {
+        @(MutuallyExclusive().Required())
+        {
+            string a;
+            string b;
+        }
+    }
+
+    // Either argument is allowed
+    assert(CLI!T.parseArgs!((T t) {})(["-a","a"]) == 0);
+    assert(CLI!T.parseArgs!((T t) {})(["-b","b"]) == 0);
+
+    // Both arguments or no argument is not allowed
+    assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a","-b","b"]) != 0);
+
+    assert(parseCLIArgs!T(["-a","a","-b","b"], (T t) { assert(false); }) != 0);
+    assert(parseCLIArgs!T(["-a","a"], (T t) {}) == 0);
+    assert(parseCLIArgs!T(["-b","b"], (T t) {}) == 0);
+    assert(parseCLIArgs!T([], (T t) { assert(false); }) != 0);
+}
+
+unittest
+{
+    @Command("MYPROG")
+    struct T
+    {
         @RequiredTogether()
         {
             string a;
@@ -4646,7 +4702,7 @@ unittest
     assert(CLI!T.parseArgs!((T t) {})(["-a","a","-b","b"]) == 0);
     assert(CLI!T.parseArgs!((T t) {})([]) == 0);
 
-    // Only one argument is not allowed
+    // Single argument is not allowed
     assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a"]) != 0);
     assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","b"]) != 0);
 
@@ -4654,6 +4710,32 @@ unittest
     assert(parseCLIArgs!T(["-a","a"], (T t) { assert(false); }) != 0);
     assert(parseCLIArgs!T(["-b","b"], (T t) { assert(false); }) != 0);
     assert(parseCLIArgs!T([], (T t) {}) == 0);
+}
+
+unittest
+{
+    @Command("MYPROG")
+    struct T
+    {
+        @(RequiredTogether().Required())
+        {
+            string a;
+            string b;
+        }
+    }
+
+    // Both arguments are allowed
+    assert(CLI!T.parseArgs!((T t) {})(["-a","a","-b","b"]) == 0);
+
+    // Single argument or no argument is not allowed
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a"]) != 0);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","b"]) != 0);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
+
+    assert(parseCLIArgs!T(["-a","a","-b","b"], (T t) {}) == 0);
+    assert(parseCLIArgs!T(["-a","a"], (T t) { assert(false); }) != 0);
+    assert(parseCLIArgs!T(["-b","b"], (T t) { assert(false); }) != 0);
+    assert(parseCLIArgs!T([], (T t) { assert(false); }) != 0);
 }
 
 

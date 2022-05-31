@@ -644,6 +644,27 @@ assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a","-b","b"]) != 0);
 
 **Note that parenthesis are required in this UDA to work correctly.**
 
+Set of mutually exclusive arguments can be marked as required in order to require exactly one of the arguments:
+
+```d
+struct T
+{
+    @(MutuallyExclusive().Required())
+    {
+        string a;
+        string b;
+    }
+}
+
+// Either argument is allowed
+assert(CLI!T.parseArgs!((T t) {})(["-a","a"]) == 0);
+assert(CLI!T.parseArgs!((T t) {})(["-b","b"]) == 0);
+
+// Both arguments or no argument is not allowed
+assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a","-b","b"]) != 0);
+```
+
 ### Mutually required arguments
 
 Mutually required arguments (i.e. those that require other arguments) can be declared using `RequiredTogether()` UDA:
@@ -668,6 +689,27 @@ assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","b"]) != 0);
 ```
 
 **Note that parenthesis are required in this UDA to work correctly.**
+
+Set of mutually required arguments can be marked as required in order to require all arguments:
+
+```d
+struct T
+{
+    @(RequiredTogether().Required())
+    {
+        string a;
+        string b;
+    }
+}
+
+// Both arguments are allowed
+assert(CLI!T.parseArgs!((T t) {})(["-a","a","-b","b"]) == 0);
+
+// Single argument or no argument is not allowed
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a"]) != 0);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","b"]) != 0);
+assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
+```
 
 ## Commands
 
