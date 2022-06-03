@@ -2,7 +2,6 @@ module argparse.internal;
 
 import argparse;
 import argparse.help;
-import argparse.utils;
 
 import std.traits;
 import std.sumtype: SumType, match;
@@ -29,6 +28,95 @@ unittest
 {
     assert(getArgumentName("f", Config.init) == "-f");
     assert(getArgumentName("foo", Config.init) == "--foo");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Have to do this magic because closures are not supported in CFTE
+// DMD v2.098.0 prints "Error: closures are not yet supported in CTFE"
+package auto partiallyApply(alias fun,C...)(C context)
+{
+    import std.traits: ParameterTypeTuple;
+    import core.lifetime: move, forward;
+
+    return &new class(move(context))
+    {
+        C context;
+
+        this(C ctx)
+        {
+            foreach(i, ref c; context)
+                c = move(ctx[i]);
+        }
+
+        auto opCall(ParameterTypeTuple!fun[context.length..$] args) const
+        {
+            return fun(context, forward!args);
+        }
+    }.opCall;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package mixin template ForwardMemberFunction(string dest)
+{
+    import std.array: split;
+    mixin("auto "~dest.split('.')[$-1]~"(Args...)(auto ref Args args) inout { import core.lifetime: forward; return "~dest~"(forward!args); }");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package auto consumeValuesFromCLI(ref string[] args, ulong minValuesCount, ulong maxValuesCount, char namedArgChar)
+{
+    import std.range: empty, front, popFront;
+
+    string[] values;
+
+    if(minValuesCount > 0)
+    {
+        if(minValuesCount < args.length)
+        {
+            values = args[0..minValuesCount];
+            args = args[minValuesCount..$];
+        }
+        else
+        {
+            values = args;
+            args = [];
+        }
+    }
+
+    while(!args.empty &&
+    values.length < maxValuesCount &&
+    (args.front.length == 0 || args.front[0] != namedArgChar))
+    {
+        values ~= args.front;
+        args.popFront();
+    }
+
+    return values;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package template EnumMembersAsStrings(E)
+{
+    enum EnumMembersAsStrings = {
+        import std.traits: EnumMembers;
+        alias members = EnumMembers!E;
+
+        typeof(__traits(identifier, members[0]))[] res;
+        static foreach (i, _; members)
+            res ~= __traits(identifier, members[i]);
+
+        return res;
+    }();
+}
+
+unittest
+{
+    enum E { abc, def, ghi }
+    assert(EnumMembersAsStrings!E == ["abc", "def", "ghi"]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -444,7 +532,7 @@ package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIV
         static if(completionMode)
         {
             if(rawValue is null)
-                consumeValuesFromCLI(rawArgs, info, config);
+                consumeValuesFromCLI(rawArgs, info.minValuesCount.get, info.maxValuesCount.get, config.namedArgChar);
 
             return Result.Success;
         }
@@ -452,7 +540,7 @@ package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIV
         {
             try
             {
-                auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, info, config);
+                auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, info.minValuesCount.get, info.maxValuesCount.get, config.namedArgChar);
 
                 auto res = info.checkValuesCount(argName, rawValues.length);
                 if(!res)

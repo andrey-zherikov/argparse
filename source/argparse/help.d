@@ -2,7 +2,6 @@ module argparse.help;
 
 import argparse;
 import argparse.internal;
-import argparse.utils;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Help printing functions
@@ -34,6 +33,97 @@ unittest
     assert(isHelpArgument("help"));
     assert(!isHelpArgument("a"));
     assert(!isHelpArgument("help1"));
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package string getProgramName()
+{
+    import core.runtime: Runtime;
+    import std.path: baseName;
+    return Runtime.args[0].baseName;
+}
+
+unittest
+{
+    assert(getProgramName().length > 0);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package void substituteProg(Output)(auto ref Output output, string text, string prog)
+{
+    import std.array: replaceInto;
+    output.replaceInto(text, "%(PROG)", prog);
+}
+
+unittest
+{
+    import std.array: appender;
+    auto a = appender!string;
+    a.substituteProg("this is some text where %(PROG) is substituted but PROG and prog are not", "-myprog-");
+    assert(a[] == "this is some text where -myprog- is substituted but PROG and prog are not");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package string spaces(ulong num)
+{
+    import std.range: repeat;
+    import std.array: array;
+    return ' '.repeat(num).array;
+}
+
+unittest
+{
+    assert(spaces(0) == "");
+    assert(spaces(1) == " ");
+    assert(spaces(5) == "     ");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package void wrapMutiLine(Output, S)(auto ref Output output,
+S s,
+in size_t columns = 80,
+S firstindent = null,
+S indent = null,
+in size_t tabsize = 8)
+{
+    import std.string: wrap, lineSplitter, join;
+    import std.algorithm: map, copy;
+
+    auto lines = s.lineSplitter;
+    if(lines.empty)
+    {
+        output.put(firstindent);
+        output.put("\n");
+        return;
+    }
+
+    output.put(lines.front.wrap(columns, firstindent, indent, tabsize));
+    lines.popFront;
+
+    lines.map!(s => s.wrap(columns, indent, indent, tabsize)).copy(output);
+}
+
+unittest
+{
+    string test(string s, size_t columns, string firstindent = null, string indent = null)
+    {
+        import std.array: appender;
+        auto a = appender!string;
+        a.wrapMutiLine(s, columns, firstindent, indent);
+        return a[];
+    }
+    assert(test("a short string", 7) == "a short\nstring\n");
+    assert(test("a\nshort string", 7) == "a\nshort\nstring\n");
+
+    // wrap will not break inside of a word, but at the next space
+    assert(test("a short string", 4) == "a\nshort\nstring\n");
+
+    assert(test("a short string", 7, "\t") == "\ta\nshort\nstring\n");
+    assert(test("a short string", 7, "\t", "    ") == "\ta\n    short\n    string\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -213,8 +303,6 @@ private void printUsage(T, Output)(auto ref Output output, in Config config)
 
 unittest
 {
-    import argparse;
-
     @(Command("MYPROG").Usage("custom usage of %(PROG)"))
     struct T
     {
@@ -434,8 +522,6 @@ void printHelp(T, Output)(auto ref Output output, in Config config)
 
 unittest
 {
-    import argparse;
-
     @(Command("MYPROG")
      .Description("custom description")
      .Epilog("custom epilog")
@@ -491,8 +577,6 @@ unittest
 
 unittest
 {
-    import argparse;
-
     @Command("MYPROG")
     struct T
     {
@@ -542,7 +626,6 @@ unittest
 
 unittest
 {
-    import argparse;
     import std.sumtype: SumType;
 
     @Command("MYPROG")
