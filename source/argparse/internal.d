@@ -146,27 +146,27 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package alias Restriction = bool delegate(in Config config, in bool[size_t] cliArgs);
+package alias Restriction = Result delegate(in Config config, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs);
 
 package struct Restrictions
 {
     static Restriction RequiredArg(ArgumentInfo info)(size_t index)
     {
-        return partiallyApply!((size_t index, in Config config, in bool[size_t] cliArgs)
+        return partiallyApply!((size_t index, in Config config, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs)
         {
             if(index in cliArgs)
-                return true;
+                return Result.Success;
 
             config.onError("The following argument is required: ", info.getArgumentName(config));
-            return false;
+            return Result.Failure;
         })(index);
     }
 
-    static bool RequiredTogether(in Config config,
-                                 in bool[size_t] cliArgs,
-                                 in size_t[] restrictionArgs,
-                                 in ArgumentInfo[] allArgs)
-    {
+    static Result RequiredTogether(in Config config,
+                                   in bool[size_t] cliArgs,
+                                   in ArgumentInfo[] allArgs,
+                                   in size_t[] restrictionArgs)
+{
         size_t foundIndex = size_t.max;
         size_t missedIndex = size_t.max;
 
@@ -184,17 +184,17 @@ package struct Restrictions
             {
                 config.onError("Missed argument '", allArgs[missedIndex].getArgumentName(config),
                 "' - it is required by argument '", allArgs[foundIndex].getArgumentName(config),"'");
-                return false;
+                return Result.Failure;
             }
         }
 
-        return true;
+        return Result.Success;
     }
 
-    static bool MutuallyExclusive(in Config config,
-                                  in bool[size_t] cliArgs,
-                                  in size_t[] restrictionArgs,
-                                  in ArgumentInfo[] allArgs)
+    static Result MutuallyExclusive(in Config config,
+                                    in bool[size_t] cliArgs,
+                                    in ArgumentInfo[] allArgs,
+                                    in size_t[] restrictionArgs)
     {
         size_t foundIndex = size_t.max;
 
@@ -207,29 +207,29 @@ package struct Restrictions
                 {
                     config.onError("Argument '", allArgs[foundIndex].getArgumentName(config),
                     "' is not allowed with argument '", allArgs[index].getArgumentName(config),"'");
-                    return false;
+                    return Result.Failure;
                 }
 
             }
 
-        return true;
+        return Result.Success;
     }
 
-    static bool RequiredAnyOf(in Config config,
-                              in bool[size_t] cliArgs,
-                              in size_t[] restrictionArgs,
-                              in ArgumentInfo[] allArgs)
+    static Result RequiredAnyOf(in Config config,
+                               in bool[size_t] cliArgs,
+                                in ArgumentInfo[] allArgs,
+                                in size_t[] restrictionArgs)
     {
         import std.algorithm: map;
         import std.array: join;
 
         foreach(index; restrictionArgs)
             if(index in cliArgs)
-                return true;
+                return Result.Success;
 
         config.onError("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].getArgumentName(config)).join("', '"), "'");
 
-        return false;
+        return Result.Failure;
     }
 }
 
@@ -341,6 +341,21 @@ package struct Arguments
         : {
             auto index = groupsByName[restriction.location] = restrictionGroups.length;
             restrictionGroups ~= restriction;
+
+            static if(restriction.required)
+                restrictions ~= (a,b,c) => Restrictions.RequiredAnyOf(a, b, c, restrictionGroups[index].arguments);
+
+            enum checkFunc =
+            {
+                final switch(restriction.type)
+                {
+                    case RestrictionGroup.Type.together:  return &Restrictions.RequiredTogether;
+                    case RestrictionGroup.Type.exclusive: return &Restrictions.MutuallyExclusive;
+                }
+            }();
+
+            restrictions ~= (a,b,c) => checkFunc(a, b, c, restrictionGroups[index].arguments);
+
             return index;
         }();
 
@@ -348,31 +363,16 @@ package struct Arguments
     }
 
 
-    bool checkRestrictions(in bool[size_t] cliArgs, in Config config) const
+    Result checkRestrictions(in bool[size_t] cliArgs, in Config config) const
     {
         foreach(restriction; restrictions)
-            if(!restriction(config, cliArgs))
-                return false;
-
-        foreach(restriction; restrictionGroups)
         {
-            if(restriction.required && !Restrictions.RequiredAnyOf(config, cliArgs, restriction.arguments, arguments))
-                return false;
-
-            final switch(restriction.type)
-            {
-                case RestrictionGroup.Type.together:
-                if(!Restrictions.RequiredTogether(config, cliArgs, restriction.arguments, arguments))
-                    return false;
-                break;
-                case RestrictionGroup.Type.exclusive:
-                if(!Restrictions.MutuallyExclusive(config, cliArgs, restriction.arguments, arguments))
-                    return false;
-                break;
-            }
+            auto res = restriction(config, cliArgs, arguments);
+            if(!res)
+                return res;
         }
 
-        return true;
+        return Result.Success;
     }
 
 
@@ -1273,10 +1273,7 @@ package struct Parser
                     return res;
         }
 
-        if(!cmd.checkRestrictions(idxParsedArgs, config))
-            return Result.Failure;
-
-        return Result.Success;
+        return cmd.checkRestrictions(idxParsedArgs, config);
     }
 }
 
