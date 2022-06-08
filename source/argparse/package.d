@@ -2,8 +2,8 @@ module argparse;
 
 
 import argparse.internal;
+import argparse.parser: callParser;
 
-import std.typecons: Nullable;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Public API
@@ -160,6 +160,8 @@ struct Result
 
 package struct ArgumentInfo
 {
+    import std.typecons: Nullable;
+
     package:
 
     string[] names;
@@ -892,7 +894,7 @@ template CLI(Config config, COMMAND)
 {
     static Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
     {
-        return callParser!config(receiver, args, unrecognizedArgs);
+        return callParser!(config, false)(receiver, args, unrecognizedArgs);
     }
 
     static Result parseKnownArgs(ref COMMAND receiver, ref string[] args)
@@ -959,13 +961,10 @@ template CLI(Config config, COMMAND)
         import std.algorithm: sort, uniq;
         import std.array: array;
 
-        auto command = CommandArguments!COMMAND(config);
-
-        auto parser = Parser(config, args.length == 0 ? [""] : args);
-
         COMMAND dummy;
+        string[] unrecognizedArgs;
 
-        auto res = parser.parseAll!true(command, dummy);
+        auto res = callParser!(config, true)(dummy, args.length == 0 ? [""] : args, unrecognizedArgs);
 
         return res ? res.suggestions.dup.sort.uniq.array : [];
     }
@@ -981,7 +980,7 @@ template CLI(Config config, COMMAND)
         Complete!COMMAND receiver;
         string[] unrecognizedArgs;
 
-        auto res = callParser!config(receiver, args, unrecognizedArgs);
+        auto res = callParser!(config, false)(receiver, args, unrecognizedArgs);
         if(!res)
             return 1;
 
@@ -1417,10 +1416,6 @@ unittest
     assert(a.names == ["MYPROG"]);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Help-printing functions
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 unittest
