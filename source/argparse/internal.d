@@ -154,11 +154,9 @@ package struct Restrictions
     {
         return partiallyApply!((size_t index, in Config config, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs)
         {
-            if(index in cliArgs)
-                return Result.Success;
-
-            config.onError("The following argument is required: ", info.getArgumentName(config));
-            return Result.Failure;
+            return (index in cliArgs) ?
+                Result.Success :
+                Result.Error("The following argument is required: ", info.getArgumentName(config));
         })(index);
     }
 
@@ -181,11 +179,8 @@ package struct Restrictions
                 missedIndex = index;
 
             if(foundIndex != size_t.max && missedIndex != size_t.max)
-            {
-                config.onError("Missed argument '", allArgs[missedIndex].getArgumentName(config),
-                "' - it is required by argument '", allArgs[foundIndex].getArgumentName(config),"'");
-                return Result.Failure;
-            }
+                return Result.Error("Missed argument '", allArgs[missedIndex].getArgumentName(config),
+                                    "' - it is required by argument '", allArgs[foundIndex].getArgumentName(config),"'");
         }
 
         return Result.Success;
@@ -204,12 +199,8 @@ package struct Restrictions
                 if(foundIndex == size_t.max)
                     foundIndex = index;
                 else
-                {
-                    config.onError("Argument '", allArgs[foundIndex].getArgumentName(config),
-                    "' is not allowed with argument '", allArgs[index].getArgumentName(config),"'");
-                    return Result.Failure;
-                }
-
+                    return Result.Error("Argument '", allArgs[foundIndex].getArgumentName(config),
+                                        "' is not allowed with argument '", allArgs[index].getArgumentName(config),"'");
             }
 
         return Result.Success;
@@ -227,9 +218,7 @@ package struct Restrictions
             if(index in cliArgs)
                 return Result.Success;
 
-        config.onError("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].getArgumentName(config)).join("', '"), "'");
-
-        return Result.Failure;
+        return Result.Error("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].getArgumentName(config)).join("', '"), "'");
     }
 }
 
@@ -569,10 +558,7 @@ package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIV
 
                 auto res = info.checkValuesCount(argName, rawValues.length);
                 if(!res)
-                {
-                    config.onError(res.errorMsg);
                     return res;
-                }
 
                 auto param = RawParam(config, argName, rawValues);
 
@@ -585,8 +571,7 @@ package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIV
             }
             catch(Exception e)
             {
-                config.onError(argName, ": ", e.msg);
-                return Result.Failure;
+                return Result.Error(argName, ": ", e.msg);
             }
         }
     };
@@ -2222,6 +2207,27 @@ unittest
     static assert(test(',', ["a","b","c"]) == ["a","b","c"]);
     static assert(test(',', ["a,b","c","d,e,f"]) == ["a","b","c","d","e","f"]);
     static assert(test(' ', ["a,b","c","d,e,f"]) == ["a,b","c","d,e,f"]);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package static Result callParser(Config config, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
+{
+    auto parser = Parser(config, args);
+
+    auto command = CommandArguments!COMMAND(config);
+    auto res = parser.parseAll!false(command, receiver);
+    if(!res)
+    {
+        if(res.errorMsg.length > 0)
+            config.onError(res.errorMsg);
+
+        return res;
+    }
+
+    unrecognizedArgs = parser.unrecognizedArgs;
+
+    return Result.Success;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

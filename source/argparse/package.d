@@ -6,6 +6,8 @@ import argparse.internal;
 import std.typecons: Nullable;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Public API
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 struct Config
 {
@@ -136,12 +138,21 @@ struct Result
         return status == Status.success;
     }
 
-    package static auto Error(A...)(A args) nothrow
+    package static auto Error(A...)(A args)
     {
         import std.conv: text;
         import std.stdio: stderr, writeln;
 
         return Result(1, Status.failure, text!A(args));
+    }
+
+    version(unittest)
+    {
+        package bool isError(string text)
+        {
+            import std.algorithm: canFind;
+            return (!cast(bool) this) && errorMsg.canFind(text);
+        }
     }
 }
 
@@ -210,32 +221,37 @@ package struct ArgumentInfo
 
 unittest
 {
-    ArgumentInfo info;
-    info.allowBooleanNegation = false;
-    info.minValuesCount = 2;
-    info.maxValuesCount = 4;
+    auto info(int min, int max)
+    {
+        ArgumentInfo info;
+        info.allowBooleanNegation = false;
+        info.minValuesCount = min;
+        info.maxValuesCount = max;
+        return info;
+    }
 
-    alias isError = (Result res) => !res && res.errorMsg.length > 0;
+    assert(info(2,4).checkValuesCount("", 1).isError("expected at least 2 values"));
+    assert(info(2,4).checkValuesCount("", 2));
+    assert(info(2,4).checkValuesCount("", 3));
+    assert(info(2,4).checkValuesCount("", 4));
+    assert(info(2,4).checkValuesCount("", 5).isError("expected at most 4 values"));
 
-    assert( isError(info.checkValuesCount("", 1)));
-    assert(!isError(info.checkValuesCount("", 2)));
-    assert(!isError(info.checkValuesCount("", 3)));
-    assert(!isError(info.checkValuesCount("", 4)));
-    assert( isError(info.checkValuesCount("", 5)));
-}
+    assert(info(2,2).checkValuesCount("", 1).isError("expected 2 values"));
+    assert(info(2,2).checkValuesCount("", 2));
+    assert(info(2,2).checkValuesCount("", 3).isError("expected 2 values"));
 
-unittest
-{
-    ArgumentInfo info;
-    info.allowBooleanNegation = false;
-    info.minValuesCount = 2;
-    info.maxValuesCount = 2;
+    assert(info(1,1).checkValuesCount("", 0).isError("expected 1 value"));
+    assert(info(1,1).checkValuesCount("", 1));
+    assert(info(1,1).checkValuesCount("", 2).isError("expected 1 value"));
 
-    alias isError = (Result res) => !res && res.errorMsg.length > 0;
+    assert(info(0,1).checkValuesCount("", 0));
+    assert(info(0,1).checkValuesCount("", 1));
+    assert(info(0,1).checkValuesCount("", 2).isError("expected at most 1 value"));
 
-    assert( isError(info.checkValuesCount("", 1)));
-    assert(!isError(info.checkValuesCount("", 2)));
-    assert( isError(info.checkValuesCount("", 3)));
+    assert(info(1,2).checkValuesCount("", 0).isError("expected at least 1 value"));
+    assert(info(1,2).checkValuesCount("", 1));
+    assert(info(1,2).checkValuesCount("", 2));
+    assert(info(1,2).checkValuesCount("", 3).isError("expected at most 2 values"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -876,16 +892,7 @@ template CLI(Config config, COMMAND)
 {
     static Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
     {
-        auto parser = Parser(config, args);
-
-        auto command = CommandArguments!COMMAND(config);
-        auto res = parser.parseAll!false(command, receiver);
-        if(!res)
-            return res;
-
-        unrecognizedArgs = parser.unrecognizedArgs;
-
-        return Result.Success;
+        return callParser!config(receiver, args, unrecognizedArgs);
     }
 
     static Result parseKnownArgs(ref COMMAND receiver, ref string[] args)
@@ -904,8 +911,8 @@ template CLI(Config config, COMMAND)
         auto res = parseKnownArgs(receiver, args);
         if(res && args.length > 0)
         {
-            config.onError("Unrecognized arguments: ", args);
-            return Result.Failure;
+            res = Result.Error("Unrecognized arguments: ", args);
+            config.onError(res.errorMsg);
         }
 
         return res;
@@ -972,17 +979,15 @@ template CLI(Config config, COMMAND)
         // if we call anything from CLI!(config, Complete!COMMAND) so we have to directly call parser here
 
         Complete!COMMAND receiver;
+        string[] unrecognizedArgs;
 
-        auto parser = Parser(config, args);
-
-        auto command = CommandArguments!(Complete!COMMAND)(config);
-        auto res = parser.parseAll!false(command, receiver);
+        auto res = callParser!config(receiver, args, unrecognizedArgs);
         if(!res)
             return 1;
 
-        if(res && parser.unrecognizedArgs.length > 0)
+        if(res && unrecognizedArgs.length > 0)
         {
-            config.onError("Unrecognized arguments: ", parser.unrecognizedArgs);
+            config.onError("Unrecognized arguments: ", unrecognizedArgs);
             return 1;
         }
 
