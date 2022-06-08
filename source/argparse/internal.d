@@ -30,6 +30,31 @@ unittest
     assert(getArgumentName("foo", Config.init) == "--foo");
 }
 
+package string getArgumentName(in ArgumentInfo info, in Config config)
+{
+    import std.conv: text;
+    if(info.positional)
+        return info.placeholder;
+    else if(info.names[0].length == 1)
+        return text(config.namedArgChar, info.names[0]);
+    else
+        return text(config.namedArgChar, config.namedArgChar, info.names[0]);
+}
+
+unittest
+{
+    auto info = ArgumentInfo(["f","b"]);
+    info.position = 0;
+    info.placeholder = "FF";
+    assert(getArgumentName(info, Config.init) == "FF");
+}
+
+unittest
+{
+    assert(ArgumentInfo(["f","b"]).getArgumentName(Config.init) == "-f");
+    assert(ArgumentInfo(["foo","boo"]).getArgumentName(Config.init) == "--foo");
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Have to do this magic because closures are not supported in CFTE
@@ -132,7 +157,7 @@ package struct Restrictions
             if(index in cliArgs)
                 return true;
 
-            config.onError("The following argument is required: ", info.names[0].getArgumentName(config));
+            config.onError("The following argument is required: ", info.getArgumentName(config));
             return false;
         })(index);
     }
@@ -157,8 +182,8 @@ package struct Restrictions
 
             if(foundIndex != size_t.max && missedIndex != size_t.max)
             {
-                config.onError("Missed argument '", allArgs[missedIndex].names[0].getArgumentName(config),
-                "' - it is required by argument '", allArgs[foundIndex].names[0].getArgumentName(config),"'");
+                config.onError("Missed argument '", allArgs[missedIndex].getArgumentName(config),
+                "' - it is required by argument '", allArgs[foundIndex].getArgumentName(config),"'");
                 return false;
             }
         }
@@ -180,8 +205,8 @@ package struct Restrictions
                     foundIndex = index;
                 else
                 {
-                    config.onError("Argument '", allArgs[foundIndex].names[0].getArgumentName(config),
-                    "' is not allowed with argument '", allArgs[index].names[0].getArgumentName(config),"'");
+                    config.onError("Argument '", allArgs[foundIndex].getArgumentName(config),
+                    "' is not allowed with argument '", allArgs[index].getArgumentName(config),"'");
                     return false;
                 }
 
@@ -202,7 +227,7 @@ package struct Restrictions
             if(index in cliArgs)
                 return true;
 
-        config.onError("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].names[0].getArgumentName(config)).join("', '"), "'");
+        config.onError("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].getArgumentName(config)).join("', '"), "'");
 
         return false;
     }
