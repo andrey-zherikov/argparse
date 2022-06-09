@@ -5,9 +5,6 @@
 
 `argparse` is a self-contained flexible utility to parse command line arguments that can work at compile-time.
 
-**NOTICE: The API is not finalized yet so there might be backward incompatible changes until 1.0 version. Please refer
-to [releases](https://github.com/andrey-zherikov/argparse/releases) for breaking changes.**
-
 ## Features
 
 - [Positional arguments](#positional-arguments):
@@ -377,7 +374,7 @@ Sometimes it's useful to call some function with an object that has all command 
 
 **Parameters:**
 
-- `newMain` - function that's called with object of type `COMMAND` as a first parmeter filled with the data parsed from
+- `newMain` - function that's called with object of type `COMMAND` as a first parameter filled with the data parsed from
   command line; optionally it can take `string[]` as a second parameter which will contain unknown arguments
   (`parseKnownArgs` function will be used underneath in this case).
 - `args` - raw command line arguments.
@@ -513,10 +510,10 @@ struct Params
 
 Parameters of `PositionalArgument` UDA:
 
-|#|Name|Type|Optional/<br/>Required|Description|
-|---|---|---|---|---|
-|1|`position`|`uint`|required|Zero-based unsigned position of the argument.|
-|2|`name`|`string`|optional|Name of this argument that is shown in help text.<br/>If not provided then the name of data member is used.|
+| #   | Name       | Type     | Optional/<br/>Required | Description                                                                                                 |
+|-----|------------|----------|------------------------|-------------------------------------------------------------------------------------------------------------|
+| 1   | `position` | `uint`   | required               | Zero-based unsigned position of the argument.                                                               |
+| 2   | `name`     | `string` | optional               | Name of this argument that is shown in help text.<br/>If not provided then the name of data member is used. |
 
 ### Named arguments
 
@@ -539,9 +536,9 @@ struct Params
 
 Parameters of `NamedArgument` UDA:
 
-|#|Name|Type|Optional/<br/>Required|Description|
-|---|---|---|---|---|
-|1|`name`|`string` or `string[]`|optional|Name(s) of this argument that can show up in command line.|
+| #   | Name   | Type                   | Optional/<br/>Required | Description                                                |
+|-----|--------|------------------------|------------------------|------------------------------------------------------------|
+| 1   | `name` | `string` or `string[]` | optional               | Name(s) of this argument that can show up in command line. |
 
 Named arguments might have multiple names, so they should be specified either as an array of strings or as a list of
 parameters in `NamedArgument` UDA. Argument names can be either single-letter (called as short options)
@@ -576,7 +573,7 @@ Note that any other character sequence can be used instead of `--` - see [Parser
 ### Optional and required arguments
 
 Arguments can be marked as required or optional by adding `Required()` or `.Optional()` to UDA. If required argument is
-not present parser will error out. Positional agruments are required by default.
+not present parser will error out. Positional arguments are required by default.
 
 ```d
 struct T
