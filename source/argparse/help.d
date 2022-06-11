@@ -83,12 +83,12 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package void wrapMutiLine(Output, S)(auto ref Output output,
-S s,
-in size_t columns = 80,
-S firstindent = null,
-S indent = null,
-in size_t tabsize = 8)
+private void wrapMutiLine(Output, S)(auto ref Output output,
+                                     S s,
+                                     S firstindent = null,
+                                     S indent = null,
+                                     in size_t columns = 80,
+                                     in size_t tabsize = 8)
 {
     import std.string: wrap, lineSplitter, join;
     import std.algorithm: map, copy;
@@ -113,7 +113,7 @@ unittest
     {
         import std.array: appender;
         auto a = appender!string;
-        a.wrapMutiLine(s, columns, firstindent, indent);
+        a.wrapMutiLine(s, firstindent, indent, columns);
         return a[];
     }
     assert(test("a short string", 7) == "a short\nstring\n");
@@ -367,7 +367,7 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
             auto invocation = appender!string;
             invocation ~= "  ";
             invocation ~= arg.invocation.leftJustify(helpPosition);
-            output.wrapMutiLine(arg.help, 80-2, invocation[], ident);
+            output.wrapMutiLine(arg.help, invocation[], ident);
         }
         else
         {
@@ -375,7 +375,7 @@ private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARG
             output.put("  ");
             output.put(arg.invocation);
             output.put("\n");
-            output.wrapMutiLine(arg.help, 80-2, ident, ident);
+            output.wrapMutiLine(arg.help, ident, ident);
         }
     }
 
@@ -476,7 +476,7 @@ private void printHelp(Output)(auto ref Output output, in CommandInfo[] commands
             auto invocation = appender!string;
             invocation ~= "  ";
             invocation ~= cmd.invocation.leftJustify(helpPosition);
-            output.wrapMutiLine(cmd.help, 80-2, invocation[], ident);
+            output.wrapMutiLine(cmd.help, invocation[], ident);
         }
         else
         {
@@ -484,7 +484,7 @@ private void printHelp(Output)(auto ref Output output, in CommandInfo[] commands
             output.put("  ");
             output.put(cmd.invocation);
             output.put("\n");
-            output.wrapMutiLine(cmd.help, 80-2, ident, ident);
+            output.wrapMutiLine(cmd.help, ident, ident);
         }
     }
 
@@ -561,11 +561,11 @@ unittest
         "Required arguments:\n"~
         "  -f {apple,pear}, --fruit {apple,pear}\n"~
         "                          This is a help text for fruit. Very very very very\n"~
-        "                          very very very very very very very very very very\n"~
-        "                          very very very very very long text\n"~
+        "                          very very very very very very very very very very very\n"~
+        "                          very very very very long text\n"~
         "  param0                  This is a help text for param0. Very very very very\n"~
-        "                          very very very very very very very very very very\n"~
-        "                          very very very very very long text\n"~
+        "                          very very very very very very very very very very very\n"~
+        "                          very very very very long text\n"~
         "  {q,a}                   \n\n"~
         "Optional arguments:\n"~
         "  -s S                    \n"~
