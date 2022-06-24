@@ -783,7 +783,8 @@ package struct CommandArguments(RECEIVER)
             {
                 import std.stdio: stdout;
 
-                printHelp(stdout.lockingTextWriter(), this, config);
+                auto output = stdout.lockingTextWriter();
+                printHelp(_ => output.put(_), this, config);
 
                 return Result(0);
             };
