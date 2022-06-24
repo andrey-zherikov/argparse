@@ -1,10 +1,137 @@
 module argparse.help;
 
-import argparse;
+import argparse: ArgumentInfo, Config, ArgumentGroup, Group, CommandInfo, Command, NamedArgument, PositionalArgument, TrailingArguments, AllowedValues;
 import argparse.internal;
+
+import std.sumtype: SumType, match;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Help printing functions
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package struct Item
+{
+    string name;
+    string description;
+}
+
+package struct Section
+{
+    string title;
+    string description;
+    string epilog;
+
+    SumType!(Item[], Section[]) entries;
+
+    @property bool empty() const
+    {
+        return title.length == 0 || entries.match!(_ => _.length) == 0;
+    }
+
+    private ulong maxItemNameLength() const
+    {
+        import std.algorithm: maxElement, map;
+
+        return entries.match!(
+                (const ref Section[] _) => _.map!(_ => _.maxItemNameLength()).maxElement(0),
+                (const ref Item[] _) => _.map!(_ => _.name.length).maxElement(0));
+    }
+}
+
+unittest
+{
+    Section s;
+    assert(s.empty);
+    s.title = "title";
+    assert(s.empty);
+
+    Section s1;
+    s1.entries = [Item.init, Item.init];
+    assert(s1.empty);
+    s1.title = "title";
+    assert(!s1.empty);
+
+    Section s2;
+    s2.entries = [Section.init];
+    assert(s2.empty);
+    s2.title = "title";
+    assert(!s2.empty);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private void print(void delegate(string) sink, const ref Item item, string indent, string descriptionIndent, bool unused = false)
+{
+    if(item.description.length == 0)
+    {
+        sink(indent);
+        sink(item.name);
+        sink("\n");
+    }
+    else if(indent.length + item.name.length + 2 > descriptionIndent.length) // 2 = two spaces between name and description
+    {
+        // long name; start description on the next line
+        sink(indent);
+        sink(item.name);
+        sink("\n");
+        wrapMutiLine(sink, item.description, descriptionIndent, descriptionIndent);
+    }
+    else
+    {
+        import std.conv: text;
+
+        wrapMutiLine(sink,
+                     item.description,
+                     text(indent, item.name, spaces(descriptionIndent.length - indent.length - item.name.length)),
+                     descriptionIndent);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private void print(void delegate(string) sink, const ref Section section, string indent, string descriptionIndent, bool topLevel = true)
+{
+    if(section.empty)
+        return;
+
+    import std.sumtype: match;
+
+    sink(indent);
+    sink(section.title);
+
+    if(topLevel)
+        sink("\n");
+    else
+    {
+        sink(":\n");
+
+        indent ~= "  ";
+    }
+
+    if(section.description.length > 0)
+    {
+        sink(indent);
+        sink(section.description);
+        sink("\n\n");
+    }
+
+    section.entries.match!((const ref entries)
+    {
+        foreach(const ref entry; entries)
+            print(sink, entry, indent, descriptionIndent, false);
+    });
+
+    if(section.epilog.length > 0)
+    {
+        sink(indent);
+        sink(section.epilog);
+        sink("\n");
+    }
+
+    if(!topLevel)
+        sink("\n");
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package enum helpArgument = {
@@ -37,7 +164,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package string getProgramName()
+private string getProgramName()
 {
     import core.runtime: Runtime;
     import std.path: baseName;
@@ -51,23 +178,23 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package void substituteProg(Output)(auto ref Output output, string text, string prog)
+private void substituteProg(void delegate(string) sink, string text, string prog)
 {
     import std.array: replaceInto;
-    output.replaceInto(text, "%(PROG)", prog);
+    replaceInto(sink, text, "%(PROG)", prog);
 }
 
 unittest
 {
     import std.array: appender;
     auto a = appender!string;
-    a.substituteProg("this is some text where %(PROG) is substituted but PROG and prog are not", "-myprog-");
+    substituteProg(_ => a.put(_), "this is some text where %(PROG) is substituted but PROG and prog are not", "-myprog-");
     assert(a[] == "this is some text where -myprog- is substituted but PROG and prog are not");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package string spaces(ulong num)
+private string spaces(ulong num)
 {
     import std.range: repeat;
     import std.array: array;
@@ -83,28 +210,25 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void wrapMutiLine(Output, S)(auto ref Output output,
-                                     S s,
-                                     S firstindent = null,
-                                     S indent = null,
-                                     in size_t columns = 80,
-                                     in size_t tabsize = 8)
+private void wrapMutiLine(void delegate(string) sink,
+                          string s,
+                          string firstindent = null,
+                          string indent = null,
+                          in size_t columns = 80,
+                          in size_t tabsize = 8)
 {
     import std.string: wrap, lineSplitter, join;
-    import std.algorithm: map, copy;
+    import std.algorithm: map, each;
+
+    if(s.length == 0)
+        return;
 
     auto lines = s.lineSplitter;
-    if(lines.empty)
-    {
-        output.put(firstindent);
-        output.put("\n");
-        return;
-    }
 
-    output.put(lines.front.wrap(columns, firstindent, indent, tabsize));
+    sink(lines.front.wrap(columns, firstindent, indent, tabsize));
     lines.popFront;
 
-    lines.map!(s => s.wrap(columns, indent, indent, tabsize)).copy(output);
+    lines.map!(s => s.wrap(columns, indent, indent, tabsize)).each!sink;
 }
 
 unittest
@@ -113,7 +237,7 @@ unittest
     {
         import std.array: appender;
         auto a = appender!string;
-        a.wrapMutiLine(s, firstindent, indent, columns);
+        wrapMutiLine(_ => a.put(_), s, firstindent, indent, columns);
         return a[];
     }
     assert(test("a short string", 7) == "a short\nstring\n");
@@ -128,20 +252,20 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printValue(Output)(auto ref Output output, in ArgumentInfo info)
+private void printValue(void delegate(string) sink, in ArgumentInfo info)
 {
     if(info.maxValuesCount.get == 0)
         return;
 
     if(info.minValuesCount.get == 0)
-        output.put('[');
+        sink("[");
 
-    output.put(info.placeholder);
+    sink(info.placeholder);
     if(info.maxValuesCount.get > 1)
-        output.put(" ...");
+        sink(" ...");
 
     if(info.minValuesCount.get == 0)
-        output.put(']');
+        sink("]");
 }
 
 unittest
@@ -155,7 +279,7 @@ unittest
 
         import std.array: appender;
         auto a = appender!string;
-        a.printValue(info);
+        printValue(_ => a.put(_), info);
         return a[];
     }
 
@@ -170,25 +294,25 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printInvocation(Output)(auto ref Output output, in ArgumentInfo info, in string[] names, in Config config)
+private void printInvocation(void delegate(string) sink, in ArgumentInfo info, in string[] names, in Config config)
 {
     if(info.positional)
-        output.printValue(info);
+        printValue(sink, info);
     else
     {
-        import std.algorithm: each;
+        import std.algorithm: each, map;
 
         names.each!((i, name)
         {
             if(i > 0)
-                output.put(", ");
+                sink(", ");
 
-            output.put(getArgumentName(name, config));
+            sink(getArgumentName(name, config));
 
             if(info.maxValuesCount.get > 0)
             {
-                output.put(' ');
-                output.printValue(info);
+                sink(" ");
+                printValue(sink, info);
             }
         });
     }
@@ -208,7 +332,7 @@ unittest
 
         import std.array: appender;
         auto a = appender!string;
-        a.printInvocation(info.setDefaults!(int, "foo"), ["f","foo"], Config.init);
+        printInvocation(_ => a.put(_), info.setDefaults!(int, "foo"), ["f","foo"], Config.init);
         return a[];
     }
 
@@ -218,15 +342,15 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(Output)(auto ref Output output, in ArgumentInfo info, in Config config)
+private void printUsage(void delegate(string) sink, in ArgumentInfo info, in Config config)
 {
     if(!info.required)
-        output.put('[');
+        sink("[");
 
-    output.printInvocation(info, [info.names[0]], config);
+    printInvocation(sink, info, [info.names[0]], config);
 
     if(!info.required)
-        output.put(']');
+        sink("]");
 }
 
 unittest
@@ -245,7 +369,7 @@ unittest
 
         import std.array: appender;
         auto a = appender!string;
-        a.printUsage(info.setDefaults!(int, "foo"), Config.init);
+        printUsage(_ => a.put(_), info.setDefaults!(int, "foo"), Config.init);
         return a[];
     }
 
@@ -257,17 +381,17 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
+private void printUsage(T)(void delegate(string) sink, in CommandArguments!T cmd, in Config config)
 {
     import std.algorithm: map;
     import std.array: join;
 
     string progName = (cmd.parentNames ~ cmd.info.names[0]).map!(_ => _.length > 0 ? _ : getProgramName()).join(" ");
 
-    output.put("Usage: ");
+    sink("Usage: ");
 
     if(cmd.info.usage.length > 0)
-        substituteProg(output, cmd.info.usage, progName);
+        substituteProg(sink, cmd.info.usage, progName);
     else
     {
         import std.algorithm: filter, each, map;
@@ -276,11 +400,11 @@ private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T
             .filter!((ref _) => !_.hideFromHelp)
             .each!((ref _)
             {
-                output.put(' ');
-                argparse.help.printUsage(output, _, config);
+                sink(" ");
+                printUsage(sink, _, config);
             });
 
-        output.put(progName);
+        sink(progName);
 
         // named args
         print(cmd.arguments.arguments.filter!((ref _) => !_.positional));
@@ -288,236 +412,140 @@ private void printUsage(T, Output)(auto ref Output output, in CommandArguments!T
         print(cmd.arguments.positionalArguments.map!(ref (_) => cmd.arguments.arguments[_]));
         // sub commands
         if(cmd.subCommands.length > 0)
-            output.put(" <command> [<args>]");
+            sink(" <command> [<args>]");
     }
 
-    output.put('\n');
+    sink("\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(T, Output)(auto ref Output output, in Config config)
+private auto getSections(const(Arguments)* arguments, in Config config)
 {
-    printUsage(output, CommandArguments!T(config), config);
-}
-
-unittest
-{
-    @(Command("MYPROG").Usage("custom usage of %(PROG)"))
-    struct T
-    {
-        string s;
-    }
-
-    auto test(string usage)
-    {
-        import std.array: appender;
-
-        auto a = appender!string;
-        a.printUsage!T(Config.init);
-        return a[];
-    }
-
-    enum expected = "Usage: custom usage of MYPROG\n";
-    static assert(test("custom usage of %(PROG)") == expected);
-    assert(test("custom usage of %(PROG)") == expected);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private void printHelp(Output, ARGS)(auto ref Output output, in Group group, ARGS args, int helpPosition)
-{
-    import std.string: leftJustify;
-
-    if(group.arguments.length == 0 || group.name.length == 0)
-        return;
-
-    alias printDescription = {
-        output.put(group.name);
-        output.put(":\n");
-
-        if (group.description.length > 0)
-        {
-            output.put("  ");
-            output.put(group.description);
-            output.put("\n\n");
-        }
-    };
-    bool descriptionIsPrinted = false;
-
-    immutable ident = spaces(helpPosition + 2);
-
-    foreach(idx; group.arguments)
-    {
-        auto arg = &args[idx];
-
-        if(arg.invocation.length == 0)
-            continue;
-
-        if(!descriptionIsPrinted)
-        {
-            printDescription();
-            descriptionIsPrinted = true;
-        }
-
-        if(arg.invocation.length <= helpPosition - 4) // 2=indent, 2=two spaces between invocation and help text
-        {
-            import std.array: appender;
-
-            auto invocation = appender!string;
-            invocation ~= "  ";
-            invocation ~= arg.invocation.leftJustify(helpPosition);
-            output.wrapMutiLine(arg.help, invocation[], ident);
-        }
-        else
-        {
-            // long action name; start on the next line
-            output.put("  ");
-            output.put(arg.invocation);
-            output.put("\n");
-            output.wrapMutiLine(arg.help, ident, ident);
-        }
-    }
-
-    output.put('\n');
-}
-
-
-private void printHelp(Output)(auto ref Output output, in Arguments arguments, in Config config, bool helpArgIsPrinted = false)
-{
-    import std.algorithm: map, maxElement, min;
+    import std.algorithm: filter, map;
     import std.array: appender, array;
+    import std.range: chain;
 
-    // pre-compute the output
-    auto args =
-        arguments.arguments
-        .map!((ref _)
-        {
-            struct Result
-            {
-                string invocation, help;
-            }
+    bool hideHelpArg = false;
 
-            if(_.hideFromHelp)
-                return Result.init;
-
-            if(isHelpArgument(_.names[0]))
-            {
-                if(helpArgIsPrinted)
-                    return Result.init;
-
-                helpArgIsPrinted = true;
-            }
-
-            auto invocation = appender!string;
-            invocation.printInvocation(_, _.names, config);
-
-            return Result(invocation[], _.description);
-        }).array;
-
-    immutable maxInvocationWidth = args.map!(_ => _.invocation.length).maxElement;
-    immutable helpPosition = min(maxInvocationWidth + 4, 24);
-
-    //user-defined groups
-    foreach(ref group; arguments.groups[2..$])
-        output.printHelp(group, args, helpPosition);
-
-    //required args
-    output.printHelp(arguments.requiredGroup, args, helpPosition);
-
-    //optionals args
-    output.printHelp(arguments.optionalGroup, args, helpPosition);
-
-    if(arguments.parentArguments)
-        output.printHelp(*arguments.parentArguments, config, helpArgIsPrinted);
-}
-
-private void printHelp(Output)(auto ref Output output, in CommandInfo[] commands, in Config config)
-{
-    import std.algorithm: map, maxElement, min;
-    import std.array: appender, array, join;
-
-    if(commands.length == 0)
-        return;
-
-    output.put("Available commands:\n");
-
-    // pre-compute the output
-    auto cmds = commands
-        .map!((ref _)
-        {
-            struct Result
-            {
-                string invocation, help;
-            }
-
-            //if(_.hideFromHelp)
-            //    return Result.init;
-
-            return Result(_.names.join(","), _.shortDescription.length > 0 ? _.shortDescription : _.description);
-        }).array;
-
-    immutable maxInvocationWidth = cmds.map!(_ => _.invocation.length).maxElement;
-    immutable helpPosition = min(maxInvocationWidth + 4, 24);
-
-
-    immutable ident = spaces(helpPosition + 2);
-
-    foreach(const ref cmd; cmds)
+    alias showArg = (ref _)
     {
-        if(cmd.invocation.length == 0)
-            continue;
+        if(_.hideFromHelp)
+            return false;
 
-        if(cmd.invocation.length <= helpPosition - 4) // 2=indent, 2=two spaces between invocation and help text
+        if(isHelpArgument(_.names[0]))
         {
-            import std.array: appender;
-            import std.string: leftJustify;
+            if(hideHelpArg)
+                return false;
 
-            auto invocation = appender!string;
-            invocation ~= "  ";
-            invocation ~= cmd.invocation.leftJustify(helpPosition);
-            output.wrapMutiLine(cmd.help, invocation[], ident);
+            hideHelpArg = true;
         }
-        else
+
+        return true;
+    };
+
+    alias getItem = (ref _)
+    {
+        auto invocation = appender!string;
+        printInvocation(_ => invocation.put(_), _, _.names, config);
+
+        return Item(invocation[], _.description);
+    };
+
+    Section[] sections;
+    size_t[string] sectionMap;
+
+    for(; arguments; arguments = arguments.parentArguments)
+    {
+        //user-defined groups first, then required args and then optional args
+        foreach(ref group; chain(arguments.groups[2..$], [arguments.requiredGroup, arguments.optionalGroup]))
         {
-            // long action name; start on the next line
-            output.put("  ");
-            output.put(cmd.invocation);
-            output.put("\n");
-            output.wrapMutiLine(cmd.help, ident, ident);
+            auto p = (group.name in sectionMap);
+            ulong index;
+            if(p !is null)
+                index = *p;
+            else
+            {
+                index = sectionMap[group.name] = sections.length;
+                sections ~= Section(group.name, group.description);
+            }
+
+            sections[index].entries.match!(
+                (ref Item[] items) {
+                    items ~= group.arguments
+                        .map!(_ => &arguments.arguments[_])
+                        .filter!((const _) => showArg(*_))
+                        .map!((const _) => getItem(*_))
+                        .array;
+                },
+                (_){});
         }
     }
 
-    output.put('\n');
+    return sections;
 }
 
-
-private void printHelp(T, Output)(auto ref Output output, in CommandArguments!T cmd, in Config config)
+private auto getSection(in CommandInfo[] commands, in Config config)
 {
-    printUsage(output, cmd, config);
-    output.put('\n');
+    import std.algorithm: filter, map;
+    import std.array: array, join;
 
-    if(cmd.info.description.length > 0)
+    alias showArg = (ref _)
     {
-        output.put(cmd.info.description);
-        output.put("\n\n");
-    }
+        //if(_.hideFromHelp)
+        //    return false;
+
+        return _.names.length > 0 && _.names[0].length > 0;
+    };
+
+    alias getItem = (ref _)
+    {
+        return Item(_.names.join(","), _.shortDescription.length > 0 ? _.shortDescription : _.description);
+    };
+
+    auto section = Section("Available commands");
+
+    // pre-compute the output
+    section.entries = commands
+        .filter!showArg
+        .map!getItem
+        .array;
+
+    return section;
+}
+
+private auto getSection(T)(in CommandArguments!T cmd, in Config config)
+{
+    import std.array: appender;
+
+    auto usage = appender!string;
+
+    printUsage(_ => usage.put(_), cmd, config);
+
+    Section[] sections;
 
     // sub commands
-    output.printHelp(cmd.subCommands, config);
+    if(cmd.subCommands.length > 0)
+        sections ~= getSection(cmd.subCommands, config);
 
-    output.printHelp(cmd.arguments, config);
+    sections ~= getSections(&cmd.arguments, config);
 
-    if(cmd.info.epilog.length > 0)
-    {
-        output.put(cmd.info.epilog);
-        output.put('\n');
-    }
+    auto section = Section(usage[], cmd.info.description, cmd.info.epilog);
+    section.entries = sections;
+
+    return section;
 }
 
-void printHelp(T, Output)(auto ref Output output, in Config config)
+package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, in Config config)
 {
-    printHelp(output, CommandArguments!T(config), config);
+    import std.algorithm: min;
+
+    auto section = getSection(cmd, config);
+
+    immutable helpPosition = min(section.maxItemNameLength() + 4, 24);
+    immutable indent = spaces(helpPosition + 2);
+
+    print(sink, section, "", indent);
 }
 
 unittest
@@ -544,19 +572,17 @@ unittest
         @TrailingArguments string[] args;
     }
 
-    auto test(alias func)()
+    auto test()
     {
         import std.array: appender;
 
         auto a = appender!string;
-        func!T(a, Config.init);
+        printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
         return a[];
     }
-    static assert(test!printUsage.length > 0);  // ensure that it works at compile time
-    static assert(test!printHelp .length > 0);  // ensure that it works at compile time
+    static assert(test().length > 0);  // ensure that it works at compile time
 
-    assert(test!printUsage == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n");
-    assert(test!printHelp  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
+    assert(test()  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
         "custom description\n\n"~
         "Required arguments:\n"~
         "  -f {apple,pear}, --fruit {apple,pear}\n"~
@@ -566,11 +592,11 @@ unittest
         "  param0                  This is a help text for param0. Very very very very\n"~
         "                          very very very very very very very very very very very\n"~
         "                          very very very very long text\n"~
-        "  {q,a}                   \n\n"~
+        "  {q,a}\n\n"~
         "Optional arguments:\n"~
-        "  -s S                    \n"~
-        "  -p VALUE                \n"~
-        "  -i {1,4,16,8}           \n"~
+        "  -s S\n"~
+        "  -p VALUE\n"~
+        "  -i {1,4,16,8}\n"~
         "  -h, --help              Show this help message and exit\n\n"~
         "custom epilog\n");
 }
@@ -599,27 +625,23 @@ unittest
         @PositionalArgument(1) string q;
     }
 
-    auto test(alias func)()
-    {
-        import std.array: appender;
+    import std.array: appender;
 
-        auto a = appender!string;
-        func!T(a, Config.init);
-        return a[];
-    }
+    auto a = appender!string;
+    printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
 
-    assert(test!printHelp  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
+    assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
         "group1:\n"~
         "  group1 description\n\n"~
-        "  -a A          \n"~
-        "  -b B          \n"~
-        "  p             \n\n"~
+        "  -a A\n"~
+        "  -b B\n"~
+        "  p\n\n"~
         "group2:\n"~
         "  group2 description\n\n"~
-        "  -c C          \n"~
-        "  -d D          \n\n"~
+        "  -c C\n"~
+        "  -d D\n\n"~
         "Required arguments:\n"~
-        "  q             \n\n"~
+        "  q\n\n"~
         "Optional arguments:\n"~
         "  -h, --help    Show this help message and exit\n\n");
 }
@@ -648,22 +670,18 @@ unittest
         SumType!(CMD1, CMD2) cmd;
     }
 
-    auto test(alias func)()
-    {
-        import std.array: appender;
+    import std.array: appender;
 
-        auto a = appender!string;
-        func!T(a, Config.init);
-        return a[];
-    }
+    auto a = appender!string;
+    printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
 
-    assert(test!printHelp  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
+    assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~
         "  cmd1                    Perform cmd 1\n"~
         "  very-long-command-name-2\n"~
         "                          Perform cmd 2\n\n"~
         "Optional arguments:\n"~
-        "  -c C          \n"~
-        "  -d D          \n"~
-        "  -h, --help    Show this help message and exit\n\n");
+        "  -c C\n"~
+        "  -d D\n"~
+        "  -h, --help              Show this help message and exit\n\n");
 }
