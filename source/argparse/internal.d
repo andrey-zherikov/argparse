@@ -15,6 +15,36 @@ package enum DEFAULT_COMMAND = "";
 /// Internal API
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+package struct LazyString
+{
+    SumType!(string, string delegate()) value;
+
+    this(string s) { value = s; }
+    this(string delegate() dg) { value = dg; }
+
+    void opAssign(string s) { value = s; }
+    void opAssign(string delegate() dg) { value = dg; }
+
+    @property string get() const
+    {
+        return value.match!(
+            (string _) => _,
+            (dg) => dg()
+        );
+    }
+}
+
+unittest
+{
+    LazyString s;
+    s = "asd";
+    assert(s.get == "asd");
+    s = () => "qwe";
+    assert(s.get == "qwe");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 package string getArgumentName(string name, in Config config)
 {
     import std.conv: to;

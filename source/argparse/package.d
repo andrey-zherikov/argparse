@@ -166,7 +166,7 @@ package struct ArgumentInfo
 
     string[] names;
 
-    string description;
+    LazyString description;
     string placeholder;
 
     void setAllowedValues(alias names)()
@@ -270,6 +270,12 @@ package struct ArgumentUDA(alias ValueParseFunctions)
         return this;
     }
 
+    public auto ref Description(string delegate() text)
+    {
+        info.description = text;
+        return this;
+    }
+
     public auto ref HideFromHelp(bool hide = true)
     {
         info.hideFromHelp = hide;
@@ -336,8 +342,11 @@ unittest
     assert(arg.info.maxValuesCount.isNull);
 
     arg = arg.Description("desc").Placeholder("text");
-    assert(arg.info.description == "desc");
+    assert(arg.info.description.get == "desc");
     assert(arg.info.placeholder == "text");
+
+    arg = arg.Description(() => "qwer").Placeholder("text");
+    assert(arg.info.description.get == "qwer");
 
     arg = arg.HideFromHelp().Required().NumberOfValues(10);
     assert(arg.info.hideFromHelp);
@@ -388,7 +397,7 @@ struct TrailingArguments {}
 package struct Group
 {
     package string name;
-    package string description;
+    package LazyString description;
     package size_t[] arguments;
 
     public auto ref Description(string text)
@@ -397,6 +406,11 @@ package struct Group
         return this;
     }
 
+    public auto ref Description(string delegate() text)
+    {
+        description = text;
+        return this;
+    }
 }
 
 auto ArgumentGroup(string name)
@@ -408,7 +422,10 @@ unittest
 {
     auto g = ArgumentGroup("name").Description("description");
     assert(g.name == "name");
-    assert(g.description == "description");
+    assert(g.description.get == "description");
+
+    g = g.Description(() => "descr");
+    assert(g.description.get == "descr");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -470,12 +487,18 @@ struct Default(COMMAND)
 package struct CommandInfo
 {
     package string[] names = [""];
-    package string usage;
-    package string description;
-    package string shortDescription;
-    package string epilog;
+    package LazyString usage;
+    package LazyString description;
+    package LazyString shortDescription;
+    package LazyString epilog;
 
     public auto ref Usage(string text)
+    {
+        usage = text;
+        return this;
+    }
+
+    public auto ref Usage(string delegate() text)
     {
         usage = text;
         return this;
@@ -487,13 +510,31 @@ package struct CommandInfo
         return this;
     }
 
+    public auto ref Description(string delegate() text)
+    {
+        description = text;
+        return this;
+    }
+
     public auto ref ShortDescription(string text)
     {
         shortDescription = text;
         return this;
     }
 
+    public auto ref ShortDescription(string delegate() text)
+    {
+        shortDescription = text;
+        return this;
+    }
+
     public auto ref Epilog(string text)
+    {
+        epilog = text;
+        return this;
+    }
+
+    public auto ref Epilog(string delegate() text)
     {
         epilog = text;
         return this;
@@ -505,10 +546,21 @@ unittest
     CommandInfo c;
     c = c.Usage("usg").Description("desc").ShortDescription("sum").Epilog("epi");
     assert(c.names == [""]);
-    assert(c.usage == "usg");
-    assert(c.description == "desc");
-    assert(c.shortDescription == "sum");
-    assert(c.epilog == "epi");
+    assert(c.usage.get == "usg");
+    assert(c.description.get == "desc");
+    assert(c.shortDescription.get == "sum");
+    assert(c.epilog.get == "epi");
+}
+
+unittest
+{
+    CommandInfo c;
+    c = c.Usage(() => "usg").Description(() => "desc").ShortDescription(() => "sum").Epilog(() => "epi");
+    assert(c.names == [""]);
+    assert(c.usage.get == "usg");
+    assert(c.description.get == "desc");
+    assert(c.shortDescription.get == "sum");
+    assert(c.epilog.get == "epi");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
