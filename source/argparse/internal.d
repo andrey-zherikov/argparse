@@ -41,6 +41,8 @@ unittest
     assert(s.get == "asd");
     s = () => "qwe";
     assert(s.get == "qwe");
+    assert(LazyString("asd").get == "asd");
+    assert(LazyString(() => "asd").get == "asd");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
