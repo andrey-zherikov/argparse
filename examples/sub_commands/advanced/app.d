@@ -25,7 +25,7 @@ auto filter(R)(R numbers, Filter filt)
 
 @(Command("sum")
 .Usage("%(PROG) [<number>...]")
-.Description("Print sum of the numbers")
+.Description(() => "Print sum of the numbers")
 )
 struct SumCmd
 {
@@ -34,9 +34,9 @@ struct SumCmd
 }
 
 @(Command("minimum", "min")
-.Usage("%(PROG) [<number>...]")
-.Description("Print the minimal number across provided")
-.ShortDescription("Print the minimum")
+.Usage(() => "%(PROG) [<number>...]")
+.Description(() => "Print the minimal number across provided")
+.ShortDescription(() => "Print the minimum")
 )
 struct MinCmd
 {

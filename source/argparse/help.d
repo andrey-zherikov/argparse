@@ -12,14 +12,14 @@ import std.sumtype: SumType, match;
 package struct Item
 {
     string name;
-    string description;
+    LazyString description;
 }
 
 package struct Section
 {
     string title;
-    string description;
-    string epilog;
+    LazyString description;
+    LazyString epilog;
 
     SumType!(Item[], Section[]) entries;
 
@@ -62,7 +62,8 @@ unittest
 
 private void print(void delegate(string) sink, const ref Item item, string indent, string descriptionIndent, bool unused = false)
 {
-    if(item.description.length == 0)
+    auto description = item.description.get;
+    if(description.length == 0)
     {
         sink(indent);
         sink(item.name);
@@ -74,14 +75,14 @@ private void print(void delegate(string) sink, const ref Item item, string inden
         sink(indent);
         sink(item.name);
         sink("\n");
-        wrapMutiLine(sink, item.description, descriptionIndent, descriptionIndent);
+        wrapMutiLine(sink, description, descriptionIndent, descriptionIndent);
     }
     else
     {
         import std.conv: text;
 
         wrapMutiLine(sink,
-                     item.description,
+                     description,
                      text(indent, item.name, spaces(descriptionIndent.length - indent.length - item.name.length)),
                      descriptionIndent);
     }
@@ -108,10 +109,11 @@ private void print(void delegate(string) sink, const ref Section section, string
         indent ~= "  ";
     }
 
-    if(section.description.length > 0)
+    auto description = section.description.get;
+    if(description.length > 0)
     {
         sink(indent);
-        sink(section.description);
+        sink(description);
         sink("\n\n");
     }
 
@@ -121,10 +123,11 @@ private void print(void delegate(string) sink, const ref Section section, string
             print(sink, entry, indent, descriptionIndent, false);
     });
 
-    if(section.epilog.length > 0)
+    auto epilog = section.epilog.get;
+    if(epilog.length > 0)
     {
         sink(indent);
-        sink(section.epilog);
+        sink(epilog);
         sink("\n");
     }
 
@@ -390,8 +393,9 @@ private void printUsage(T)(void delegate(string) sink, in CommandArguments!T cmd
 
     sink("Usage: ");
 
-    if(cmd.info.usage.length > 0)
-        substituteProg(sink, cmd.info.usage, progName);
+    auto usage = cmd.info.usage.get;
+    if(usage.length > 0)
+        substituteProg(sink, usage, progName);
     else
     {
         import std.algorithm: filter, each, map;
@@ -500,7 +504,10 @@ private auto getSection(in CommandInfo[] commands, in Config config)
 
     alias getItem = (ref _)
     {
-        return Item(_.names.join(","), _.shortDescription.length > 0 ? _.shortDescription : _.description);
+        return Item(_.names.join(","), LazyString(() {
+            auto shortDescription = _.shortDescription.get;
+            return shortDescription.length > 0 ? shortDescription : _.description.get;
+        }));
     };
 
     auto section = Section("Available commands");
@@ -550,9 +557,10 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 
 unittest
 {
+    static auto epilog() { return "custom epilog"; }
     @(Command("MYPROG")
      .Description("custom description")
-     .Epilog("custom epilog")
+     .Epilog(epilog)
     )
     struct T
     {

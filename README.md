@@ -864,12 +864,15 @@ SumType!(sum, min, Default!max) cmd;
   "Available commands" section on help screen of the parent command.
 - `Epilog` - custom text that is printed after the list of the arguments.
 
+`Usage`, `Description`, `ShortDescription` and `Epilog` modifiers take either `string` or `string delegate()` value -
+the latter can be used to return a value that is not known at compile time.
+
 ### Argument
 
 There are some customizations supported on argument level for both `PositionalArgument` and `NamedArgument` UDAs:
 
 - `Description` - provides brief description of the argument. This text is printed next to the argument in the argument
-  list section of a help message.
+  list section of a help message. `Description` takes either `string` or `string delegate()` value - the latter can be used to return a value that is not known at compile time.
 - `HideFromHelp` - can be used to indicate that the argument shouldn't be printed in help message.
 - `Placeholder` - provides custom text that it used to indicate the value of the argument in help message.
 
@@ -880,7 +883,7 @@ Here is an example of how this customization can be used:
 ```d
 @(Command("MYPROG")
  .Description("custom description")
- .Epilog("custom epilog")
+ .Epilog(() => "custom epilog")
 )
 struct T
 {
@@ -894,7 +897,7 @@ struct T
 
   @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
 
-  @(PositionalArgument(0).Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
+  @(PositionalArgument(0).Description(() => "This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
   @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
 
   @TrailingArguments string[] args;
@@ -933,7 +936,14 @@ custom epilog
 
 By default, parser groups command-line arguments into “required arguments” and “optional arguments” when displaying help
 message. When there is a better conceptual grouping of arguments than this default one, appropriate groups can be
-created using `ArgumentGroup` UDA:
+created using `ArgumentGroup` UDA.
+
+This UDA has some customization for displaying text:
+
+- `Description` - provides brief description of the group. This text is printed right after group name.
+  It takes either `string` or `string delegate()` value - the latter can be used to return a value that is not known at compile time.
+
+Example:
 
 ```d
 struct T
