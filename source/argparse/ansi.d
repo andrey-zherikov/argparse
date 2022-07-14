@@ -257,7 +257,7 @@ version(unittest)
         }
 
         if(forceNoColor)
-            environment["NO_COLOR"] = "1";
+            environment["NO_COLOR"] = "";
 
         return vals;
     }
