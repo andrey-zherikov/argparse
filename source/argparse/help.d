@@ -457,7 +457,7 @@ private void printUsage(T)(void delegate(string) sink, string delegate(string) g
         print(cmd.arguments.positionalArguments.map!(ref (_) => cmd.arguments.arguments[_]));
         // sub commands
         if(cmd.subCommands.length > 0)
-            sink(" <command> [<args>]");
+            sink(style.subcommandName.apply(" <command> [<args>]"));
     }
 
     sink("\n");
