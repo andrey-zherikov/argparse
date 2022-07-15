@@ -169,6 +169,33 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+package size_t getUnstyledTextLength(string text)
+{
+    import std.regex: ctRegex, matchAll;
+    import std.algorithm: map, sum;
+
+    enum re = ctRegex!(`\x1b\[(\d*(;\d*)*)?m`);
+
+    return text.length - text.matchAll(re).map!(_ => _.hit.length).sum;
+}
+
+package size_t getUnstyledTextLength(StyledText text)
+{
+    return getUnstyledTextLength(text.get);
+}
+
+unittest
+{
+    assert(getUnstyledTextLength("") == 0);
+    assert(getUnstyledTextLength(reset) == 0);
+    assert(getUnstyledTextLength(bold("foo")) == 3);
+    assert(getUnstyledTextLength(bold.italic("foo")) == 3);
+    assert(getUnstyledTextLength(bold.italic.red("foo")) == 3);
+    assert(getUnstyledTextLength(bold.italic.red.onWhite("foo")) == 3);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 package bool detectSupport()
 {
     import std.process: environment;

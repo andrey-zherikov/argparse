@@ -69,7 +69,7 @@ package struct Section
 
         return entries.match!(
                 (const ref Section[] _) => _.map!(_ => _.maxItemNameLength()).maxElement(0),
-                (const ref Item[] _) => _.map!(_ => _.name.length).maxElement(0));
+                (const ref Item[] _) => _.map!(_ => getUnstyledTextLength(_.name)).maxElement(0));
     }
 }
 
@@ -99,6 +99,8 @@ unittest
 
 private void print(void delegate(string) sink, const ref Item item, string indent, string descriptionIndent, bool unused = false)
 {
+    auto itemLength = getUnstyledTextLength(item.name);
+
     auto description = item.description.get;
     if(description.length == 0)
     {
@@ -106,7 +108,7 @@ private void print(void delegate(string) sink, const ref Item item, string inden
         sink(item.name);
         sink("\n");
     }
-    else if(indent.length + item.name.length + 2 > descriptionIndent.length) // 2 = two spaces between name and description
+    else if(indent.length + itemLength + 2 > descriptionIndent.length) // 2 = two spaces between name and description
     {
         // long name; start description on the next line
         sink(indent);
@@ -120,7 +122,7 @@ private void print(void delegate(string) sink, const ref Item item, string inden
 
         wrapMutiLine(sink,
                      description,
-                     text(indent, item.name, spaces(descriptionIndent.length - indent.length - item.name.length)),
+                     text(indent, item.name, spaces(descriptionIndent.length - indent.length - itemLength)),
                      descriptionIndent);
     }
 }
