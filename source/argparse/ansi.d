@@ -200,15 +200,12 @@ package bool detectSupport()
 {
     import std.process: environment;
 
-    string value;
-
     // https://no-color.org/
-    if(environment.get("NO_COLOR") !is null)
+    if(environment.get("NO_COLOR") != "")
         return false;
 
     // https://bixense.com/clicolors/
-    value = environment.get("CLICOLOR_FORCE");
-    if(value !is null && value != "0")
+    if(environment.get("CLICOLOR_FORCE", "0") != "0")
         return true;
 
     // https://bixense.com/clicolors/
@@ -216,19 +213,14 @@ package bool detectSupport()
         return false;
 
     // https://conemu.github.io/en/AnsiEscapeCodes.html#Environment_variable
-    if(environment.get("ConEmuANSI") == "OFF")
+    auto ConEmuANSI = environment.get("ConEmuANSI");
+    if(ConEmuANSI == "OFF")
         return false;
+    if(ConEmuANSI == "ON")
+        return true;
 
     // https://github.com/adoxa/ansicon/blob/master/readme.txt
     if(environment.get("ANSICON") !is null)
-        return true;
-
-    // https://bixense.com/clicolors/
-    if(environment.get("CLICOLOR") == "1")
-        return true;
-
-    // https://conemu.github.io/en/AnsiEscapeCodes.html#Environment_variable
-    if(environment.get("ConEmuANSI") == "ON")
         return true;
 
     version(Windows)
@@ -253,31 +245,31 @@ package bool detectSupport()
 
 version(unittest)
 {
-package auto cleanStyleEnv(bool forceNoColor = false)
-{
-    import std.process: environment;
-
-    string[string] vals;
-    foreach(var; ["NO_COLOR","CLICOLOR","CLICOLOR_FORCE","ConEmuANSI","ANSICON"])
+    package auto cleanStyleEnv(bool forceNoColor = false)
     {
-        vals[var] = environment.get(var);
-        environment.remove(var);
+        import std.process: environment;
+
+        string[string] vals;
+        foreach(var; ["NO_COLOR","CLICOLOR","CLICOLOR_FORCE","ConEmuANSI","ANSICON"])
+        {
+            vals[var] = environment.get(var);
+            environment.remove(var);
+        }
+
+        if(forceNoColor)
+            environment["NO_COLOR"] = "1";
+
+        return vals;
     }
 
-    if(forceNoColor)
-        environment["NO_COLOR"] = "";
+    package void restoreStyleEnv(string[string] vals)
+    {
+        import std.process: environment;
 
-    return vals;
-}
-
-package void restoreStyleEnv(string[string] vals)
-{
-    import std.process: environment;
-
-    foreach(var, val; vals)
-        if(val !is null)
-            environment[var] = val;
-}
+        foreach(var, val; vals)
+            if(val !is null)
+                environment[var] = val;
+    }
 }
 
 unittest
@@ -296,16 +288,21 @@ unittest
         return detectSupport();
     }
 
-    assert(!detect("NO_COLOR", ""));
+    // Force disable
+    assert(!detect("NO_COLOR", "1"));
     assert(!detect("CLICOLOR","0"));
     assert(!detect("ConEmuANSI","OFF"));
 
+    // Force enable
     assert(detect("CLICOLOR_FORCE","1"));
     assert(detect("ANSICON",""));
-    assert(detect("CLICOLOR","1"));
     assert(detect("ConEmuANSI","ON"));
 
-    assert(detect("CLICOLOR_FORCE","0") == detectSupport());
+    // Default behavior
+    auto defaultVal = detectSupport();
+    assert(detect("CLICOLOR","1") == defaultVal);
+    assert(detect("ConEmuANSI","") == defaultVal);
+    assert(detect("CLICOLOR_FORCE","0") == defaultVal);
 
     version(Windows)
     {
