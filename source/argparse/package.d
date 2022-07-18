@@ -3,6 +3,7 @@ module argparse;
 
 import argparse.internal;
 import argparse.parser: callParser;
+import argparse.help: Style;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,6 +59,18 @@ struct Config
        Defaults to true.
      */
     bool addHelp = true;
+
+    /**
+       Styling and coloring mode.
+       Defaults to auto-detectection of the capability.
+     */
+    enum StylingMode { autodetect, on, off }
+    StylingMode stylingMode = StylingMode.autodetect;
+
+    /**
+       Help style.
+     */
+    Style helpStyle = Style.Default;
 
     /**
        Delegate that processes error messages if they happen during argument parsing.

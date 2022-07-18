@@ -2,11 +2,46 @@ module argparse.help;
 
 import argparse: ArgumentInfo, Config, ArgumentGroup, Group, CommandInfo, Command, NamedArgument, PositionalArgument, TrailingArguments, AllowedValues;
 import argparse.internal;
+import argparse.ansi;
 
 import std.sumtype: SumType, match;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Help printing functions
+/// Help styling options
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package struct Style
+{
+    TextStyle programName;
+    TextStyle subcommandName;
+    TextStyle argumentGroupTitle;
+    TextStyle namedArgumentName;
+    TextStyle namedArgumentValue;
+    TextStyle positionalArgumentValue;
+
+    enum None = Style.init;
+
+    enum Default = Style(
+        bold,           // programName
+        bold,           // subcommandName
+        bold.underline, // argumentGroupTitle
+        lightYellow,    // namedArgumentName
+        italic,         // namedArgumentValue
+        lightYellow,    // positionalArgumentValue
+    );
+}
+
+unittest
+{
+    import std.stdio:writeln;
+
+    Style.Default.argumentGroupTitle.apply("bbb").writeln;
+    Style.Default.namedArgumentName.apply("bbb").writeln;
+    Style.Default.namedArgumentValue.apply("bbb").writeln;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Help elements
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package struct Item
@@ -34,7 +69,7 @@ package struct Section
 
         return entries.match!(
                 (const ref Section[] _) => _.map!(_ => _.maxItemNameLength()).maxElement(0),
-                (const ref Item[] _) => _.map!(_ => _.name.length).maxElement(0));
+                (const ref Item[] _) => _.map!(_ => getUnstyledTextLength(_.name)).maxElement(0));
     }
 }
 
@@ -59,9 +94,13 @@ unittest
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Help printing functions
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private void print(void delegate(string) sink, const ref Item item, string indent, string descriptionIndent, bool unused = false)
 {
+    auto itemLength = getUnstyledTextLength(item.name);
+
     auto description = item.description.get;
     if(description.length == 0)
     {
@@ -69,7 +108,7 @@ private void print(void delegate(string) sink, const ref Item item, string inden
         sink(item.name);
         sink("\n");
     }
-    else if(indent.length + item.name.length + 2 > descriptionIndent.length) // 2 = two spaces between name and description
+    else if(indent.length + itemLength + 2 > descriptionIndent.length) // 2 = two spaces between name and description
     {
         // long name; start description on the next line
         sink(indent);
@@ -83,7 +122,7 @@ private void print(void delegate(string) sink, const ref Item item, string inden
 
         wrapMutiLine(sink,
                      description,
-                     text(indent, item.name, spaces(descriptionIndent.length - indent.length - item.name.length)),
+                     text(indent, item.name, spaces(descriptionIndent.length - indent.length - itemLength)),
                      descriptionIndent);
     }
 }
@@ -255,20 +294,25 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printValue(void delegate(string) sink, in ArgumentInfo info)
+private string printValue(in ArgumentInfo info)
 {
     if(info.maxValuesCount.get == 0)
-        return;
+        return "";
+
+    import std.array: appender;
+    auto a = appender!string;
 
     if(info.minValuesCount.get == 0)
-        sink("[");
+        a.put("[");
 
-    sink(info.placeholder);
+    a.put(info.placeholder);
     if(info.maxValuesCount.get > 1)
-        sink(" ...");
+        a.put(" ...");
 
     if(info.minValuesCount.get == 0)
-        sink("]");
+        a.put("]");
+
+    return a[];
 }
 
 unittest
@@ -280,10 +324,7 @@ unittest
         info.minValuesCount = min;
         info.maxValuesCount = max;
 
-        import std.array: appender;
-        auto a = appender!string;
-        printValue(_ => a.put(_), info);
-        return a[];
+        return printValue(info);
     }
 
     assert(test(0,0) == "");
@@ -297,25 +338,25 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printInvocation(void delegate(string) sink, in ArgumentInfo info, in string[] names, in Config config)
+private void printInvocation(NAMES)(void delegate(string) sink, const ref Style style, in ArgumentInfo info, NAMES names)
 {
     if(info.positional)
-        printValue(sink, info);
+        sink(style.positionalArgumentValue.apply(printValue(info)));
     else
     {
-        import std.algorithm: each, map;
+        import std.algorithm: each;
 
         names.each!((i, name)
         {
             if(i > 0)
                 sink(", ");
 
-            sink(getArgumentName(name, config));
+            sink(name);
 
             if(info.maxValuesCount.get > 0)
             {
                 sink(" ");
-                printValue(sink, info);
+                sink(style.namedArgumentValue.apply(printValue(info)));
             }
         });
     }
@@ -335,7 +376,8 @@ unittest
 
         import std.array: appender;
         auto a = appender!string;
-        printInvocation(_ => a.put(_), info.setDefaults!(int, "foo"), ["f","foo"], Config.init);
+        Style style;
+        printInvocation(_ => a.put(_), style, info.setDefaults!(int, "foo"), ["-f","--foo"]);
         return a[];
     }
 
@@ -345,12 +387,12 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(void delegate(string) sink, in ArgumentInfo info, in Config config)
+private void printUsage(void delegate(string) sink, string delegate(string) getArgumentName, const ref Style style, in ArgumentInfo info)
 {
     if(!info.required)
         sink("[");
 
-    printInvocation(sink, info, [info.names[0]], config);
+    printInvocation(sink, style, info, [ getArgumentName(info.names[0]) ]);
 
     if(!info.required)
         sink("]");
@@ -372,7 +414,8 @@ unittest
 
         import std.array: appender;
         auto a = appender!string;
-        printUsage(_ => a.put(_), info.setDefaults!(int, "foo"), Config.init);
+        Style style;
+        printUsage(_ => a.put(_), _ => getArgumentName(_, Config.init), style, info.setDefaults!(int, "foo"));
         return a[];
     }
 
@@ -384,12 +427,12 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(T)(void delegate(string) sink, in CommandArguments!T cmd, in Config config)
+private void printUsage(T)(void delegate(string) sink, string delegate(string) getArgumentName, const ref Style style, in CommandArguments!T cmd)
 {
     import std.algorithm: map;
     import std.array: join;
 
-    string progName = (cmd.parentNames ~ cmd.info.names[0]).map!(_ => _.length > 0 ? _ : getProgramName()).join(" ");
+    string progName = style.programName.apply((cmd.parentNames ~ cmd.info.names[0]).map!(_ => _.length > 0 ? _ : getProgramName()).join(" "));
 
     sink("Usage: ");
 
@@ -405,7 +448,7 @@ private void printUsage(T)(void delegate(string) sink, in CommandArguments!T cmd
             .each!((ref _)
             {
                 sink(" ");
-                printUsage(sink, _, config);
+                printUsage(sink, getArgumentName, style, _);
             });
 
         sink(progName);
@@ -416,7 +459,7 @@ private void printUsage(T)(void delegate(string) sink, in CommandArguments!T cmd
         print(cmd.arguments.positionalArguments.map!(ref (_) => cmd.arguments.arguments[_]));
         // sub commands
         if(cmd.subCommands.length > 0)
-            sink(" <command> [<args>]");
+            sink(style.subcommandName.apply(" <command> [<args>]"));
     }
 
     sink("\n");
@@ -424,7 +467,7 @@ private void printUsage(T)(void delegate(string) sink, in CommandArguments!T cmd
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto getSections(const(Arguments)* arguments, in Config config)
+private auto getSections(string delegate(string) getArgumentName, const ref Style style, const(Arguments)* arguments)
 {
     import std.algorithm: filter, map;
     import std.array: appender, array;
@@ -451,7 +494,7 @@ private auto getSections(const(Arguments)* arguments, in Config config)
     alias getItem = (ref _)
     {
         auto invocation = appender!string;
-        printInvocation(_ => invocation.put(_), _, _.names, config);
+        printInvocation(_ => invocation.put(_), style, _, _.names.map!getArgumentName);
 
         return Item(invocation[], _.description);
     };
@@ -471,7 +514,7 @@ private auto getSections(const(Arguments)* arguments, in Config config)
             else
             {
                 index = sectionMap[group.name] = sections.length;
-                sections ~= Section(group.name, group.description);
+                sections ~= Section(style.argumentGroupTitle.apply(group.name), group.description);
             }
 
             sections[index].entries.match!(
@@ -489,7 +532,7 @@ private auto getSections(const(Arguments)* arguments, in Config config)
     return sections;
 }
 
-private auto getSection(in CommandInfo[] commands, in Config config)
+private auto getSection(const ref Style style, in CommandInfo[] commands)
 {
     import std.algorithm: filter, map;
     import std.array: array, join;
@@ -504,13 +547,13 @@ private auto getSection(in CommandInfo[] commands, in Config config)
 
     alias getItem = (ref _)
     {
-        return Item(_.names.join(","), LazyString(() {
+        return Item(_.names.map!(_ => style.subcommandName.apply(_)).join(","), LazyString(() {
             auto shortDescription = _.shortDescription.get;
             return shortDescription.length > 0 ? shortDescription : _.description.get;
         }));
     };
 
-    auto section = Section("Available commands");
+    auto section = Section(style.argumentGroupTitle.apply("Available commands"));
 
     // pre-compute the output
     section.entries = commands
@@ -521,21 +564,21 @@ private auto getSection(in CommandInfo[] commands, in Config config)
     return section;
 }
 
-private auto getSection(T)(in CommandArguments!T cmd, in Config config)
+private auto getSection(T)(string delegate(string) getArgumentName, const ref Style style, in CommandArguments!T cmd)
 {
     import std.array: appender;
 
     auto usage = appender!string;
 
-    printUsage(_ => usage.put(_), cmd, config);
+    printUsage(_ => usage.put(_), getArgumentName, style, cmd);
 
     Section[] sections;
 
     // sub commands
     if(cmd.subCommands.length > 0)
-        sections ~= getSection(cmd.subCommands, config);
+        sections ~= getSection(style, cmd.subCommands);
 
-    sections ~= getSections(&cmd.arguments, config);
+    sections ~= getSections(getArgumentName, style, &cmd.arguments);
 
     auto section = Section(usage[], cmd.info.description, cmd.info.epilog);
     section.entries = sections;
@@ -547,7 +590,12 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 {
     import std.algorithm: min;
 
-    auto section = getSection(cmd, config);
+    bool enableStyling = config.stylingMode == Config.StylingMode.on ||
+        config.stylingMode == Config.StylingMode.autodetect && detectSupport();
+
+    auto helpStyle = enableStyling ? config.helpStyle : Style.None;
+
+    auto section = getSection(_ => helpStyle.namedArgumentName.apply(getArgumentName(_, config)), helpStyle, cmd);
 
     immutable helpPosition = min(section.maxItemNameLength() + 4, 24);
     immutable indent = spaces(helpPosition + 2);
@@ -588,7 +636,9 @@ unittest
         printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
         return a[];
     }
-    static assert(test().length > 0);  // ensure that it works at compile time
+
+    auto env = cleanStyleEnv(true);
+    scope(exit) restoreStyleEnv(env);
 
     assert(test()  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
         "custom description\n\n"~
@@ -635,6 +685,9 @@ unittest
 
     import std.array: appender;
 
+    auto env = cleanStyleEnv(true);
+    scope(exit) restoreStyleEnv(env);
+
     auto a = appender!string;
     printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
 
@@ -679,6 +732,9 @@ unittest
     }
 
     import std.array: appender;
+
+    auto env = cleanStyleEnv(true);
+    scope(exit) restoreStyleEnv(env);
 
     auto a = appender!string;
     printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
