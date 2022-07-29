@@ -586,7 +586,7 @@ private auto getSection(T)(string delegate(string) getArgumentName, const ref St
     return section;
 }
 
-package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, in Config config)
+package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, Config* config)
 {
     import std.algorithm: min;
 
@@ -633,7 +633,8 @@ unittest
         import std.array: appender;
 
         auto a = appender!string;
-        printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
+        Config config;
+        printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
         return a[];
     }
 
@@ -689,7 +690,8 @@ unittest
     scope(exit) restoreStyleEnv(env);
 
     auto a = appender!string;
-    printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
+    Config config;
+    printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
         "group1:\n"~
@@ -737,7 +739,8 @@ unittest
     scope(exit) restoreStyleEnv(env);
 
     auto a = appender!string;
-    printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
+    Config config;
+    printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~

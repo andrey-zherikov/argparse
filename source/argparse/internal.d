@@ -47,45 +47,31 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package string getArgumentName(string name, in Config config)
-{
-    import std.conv: to;
-
-    immutable dash = config.namedArgChar.to!string;
-
-    name = dash ~ name;
-    return name.length > 2 ? dash ~ name : name;
-}
-
-unittest
-{
-    assert(getArgumentName("f", Config.init) == "-f");
-    assert(getArgumentName("foo", Config.init) == "--foo");
-}
-
-package string getArgumentName(in ArgumentInfo info, in Config config)
+package string getArgumentName(string name, Config* config)
 {
     import std.conv: text;
-    if(info.positional)
-        return info.placeholder;
-    else if(info.names[0].length == 1)
-        return text(config.namedArgChar, info.names[0]);
-    else
-        return text(config.namedArgChar, config.namedArgChar, info.names[0]);
+
+    return name.length == 1 ?
+        text(config.namedArgChar, name) :
+        text(config.namedArgChar, config.namedArgChar, name);
+}
+
+package string getArgumentName(in ArgumentInfo info, Config* config)
+{
+    return info.positional ? info.placeholder : info.names[0].getArgumentName(config);
 }
 
 unittest
 {
+    Config config;
+
     auto info = ArgumentInfo(["f","b"]);
     info.position = 0;
     info.placeholder = "FF";
-    assert(getArgumentName(info, Config.init) == "FF");
-}
+    assert(getArgumentName(info, &config) == "FF");
 
-unittest
-{
-    assert(ArgumentInfo(["f","b"]).getArgumentName(Config.init) == "-f");
-    assert(ArgumentInfo(["foo","boo"]).getArgumentName(Config.init) == "--foo");
+    assert(ArgumentInfo(["f","b"]).getArgumentName(&config) == "-f");
+    assert(ArgumentInfo(["foo","boo"]).getArgumentName(&config) == "--foo");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -179,13 +165,13 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package alias Restriction = Result delegate(in Config config, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs);
+package alias Restriction = Result delegate(Config* config, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs);
 
 package struct Restrictions
 {
     static Restriction RequiredArg(ArgumentInfo info)(size_t index)
     {
-        return partiallyApply!((size_t index, in Config config, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs)
+        return partiallyApply!((size_t index, Config* config, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs)
         {
             return (index in cliArgs) ?
                 Result.Success :
@@ -193,7 +179,7 @@ package struct Restrictions
         })(index);
     }
 
-    static Result RequiredTogether(in Config config,
+    static Result RequiredTogether(Config* config,
                                    in bool[size_t] cliArgs,
                                    in ArgumentInfo[] allArgs,
                                    in size_t[] restrictionArgs)
@@ -219,7 +205,7 @@ package struct Restrictions
         return Result.Success;
     }
 
-    static Result MutuallyExclusive(in Config config,
+    static Result MutuallyExclusive(Config* config,
                                     in bool[size_t] cliArgs,
                                     in ArgumentInfo[] allArgs,
                                     in size_t[] restrictionArgs)
@@ -239,8 +225,8 @@ package struct Restrictions
         return Result.Success;
     }
 
-    static Result RequiredAnyOf(in Config config,
-                               in bool[size_t] cliArgs,
+    static Result RequiredAnyOf(Config* config,
+                                in bool[size_t] cliArgs,
                                 in ArgumentInfo[] allArgs,
                                 in size_t[] restrictionArgs)
     {
@@ -385,7 +371,7 @@ package struct Arguments
     }
 
 
-    Result checkRestrictions(in bool[size_t] cliArgs, in Config config) const
+    Result checkRestrictions(in bool[size_t] cliArgs, Config* config) const
     {
         foreach(restriction; restrictions)
         {
@@ -569,12 +555,12 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package alias ParseFunction(RECEIVER) = Result delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
-package alias ParseSubCommandFunction(RECEIVER) = Result delegate(in Config config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver);
+package alias ParseFunction(RECEIVER) = Result delegate(Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
+package alias ParseSubCommandFunction(RECEIVER) = Result delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver);
 package alias InitSubCommandFunction(RECEIVER) = Result delegate(ref RECEIVER receiver);
 
 package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIVER, bool completionMode) =
-    delegate(in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
+    delegate(Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
     {
         static if(completionMode)
         {
@@ -611,7 +597,7 @@ package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIV
 
 package auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(const CommandArguments!RECEIVER* parentArguments)
 {
-    return delegate(in Config config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver)
+    return delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver)
     {
         auto target = &__traits(getMember, receiver, symbol);
 
@@ -778,7 +764,7 @@ package struct CommandArguments(RECEIVER)
 
 
 
-    this(in Config config)
+    this(Config* config)
     {
         static if(getUDAs!(RECEIVER, CommandInfo).length > 0)
             CommandInfo info = getUDAs!(RECEIVER, CommandInfo)[0];
@@ -788,7 +774,7 @@ package struct CommandArguments(RECEIVER)
         this(config, info);
     }
 
-    this(PARENT = void)(in Config config, CommandInfo info, const PARENT* parentArguments = null)
+    this(PARENT = void)(Config* config, CommandInfo info, const PARENT* parentArguments = null)
     {
         this.info = info;
 
@@ -811,7 +797,7 @@ package struct CommandArguments(RECEIVER)
         if(config.addHelp)
         {
             arguments.addArgument!helpArgument;
-            parseArguments ~= delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
+            parseArguments ~= delegate (Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
             {
                 import std.stdio: stdout;
 
@@ -820,7 +806,7 @@ package struct CommandArguments(RECEIVER)
 
                 return Result(0);
             };
-            completeArguments ~= delegate (in Config config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
+            completeArguments ~= delegate (Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
             {
                 return Result.Success;
             };
@@ -1164,9 +1150,8 @@ unittest
         {{
             // ensure that this compiles
             R receiver;
-            RawParam param;
-            param.value = [""];
-            DefaultValueParseFunctions!R.parse(receiver, param);
+            Config config;
+            DefaultValueParseFunctions!R.parse(receiver, RawParam(&config, "", [""]));
         }}
 }
 
@@ -1178,7 +1163,7 @@ unittest
         R receiver;
         foreach(value; values)
         {
-            assert(DefaultValueParseFunctions!R.parse(receiver, RawParam(config, "", value)));
+            assert(DefaultValueParseFunctions!R.parse(receiver, RawParam(&config, "", value)));
         }
         return receiver;
     };
@@ -1204,9 +1189,8 @@ unittest
     alias test(T) = (string[] values)
     {
         T receiver;
-        RawParam param;
-        param.value = values;
-        assert(DefaultValueParseFunctions!T.parse(receiver, param));
+        Config config;
+        assert(DefaultValueParseFunctions!T.parse(receiver, RawParam(&config, "", values)));
         return receiver;
     };
 
@@ -1398,10 +1382,15 @@ unittest
 
 unittest
 {
-    static assert(ValidateFunc!(void, string[])(RawParam(Config.init, "", ["1","2","3"])));
+    auto test(alias F, T)()
+    {
+        Config config;
+        return ValidateFunc!(F, T)(RawParam(&config, "", ["1","2","3"]));
+    }
+    static assert(test!(void, string[]));
 
-    static assert(!__traits(compiles, { ValidateFunc!(() {}, string[])(config, "", ["1","2","3"]); }));
-    static assert(!__traits(compiles, { ValidateFunc!((int,int) {}, string[])(config, "", ["1","2","3"]); }));
+    static assert(!__traits(compiles, { test!(() {}, string[]); }));
+    static assert(!__traits(compiles, { test!((int,int) {}, string[]); }));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1914,7 +1903,7 @@ unittest
         Config config;
         config.arraySep = arraySep;
 
-        auto param = RawParam(config, "", values);
+        auto param = RawParam(&config, "", values);
 
         splitValues(param);
 

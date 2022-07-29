@@ -120,7 +120,7 @@ unittest
 
 struct Param(VALUE_TYPE)
 {
-    const Config config;
+    const Config* config;
     string name;
 
     static if(!is(VALUE_TYPE == void))
@@ -597,15 +597,10 @@ unittest
         int f;
     }
 
-    enum config = {
-        Config config;
-        config.addHelp = false;
-        return config;
-    }();
+    Config config;
+    config.addHelp = false;
 
-    static assert(CommandArguments!T(config).arguments.arguments.length == 6);
-
-    auto a = CommandArguments!T(config);
+    auto a = CommandArguments!T(&config);
     assert(a.arguments.requiredGroup.arguments == [2,4]);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -618,15 +613,10 @@ unittest
         int a,b,c,d,e,f;
     }
 
-    enum config = {
-        Config config;
-        config.addHelp = false;
-        return config;
-    }();
+    Config config;
+    config.addHelp = false;
 
-    static assert(CommandArguments!T(config).arguments.arguments.length == 6);
-
-    auto a = CommandArguments!T(config);
+    auto a = CommandArguments!T(&config);
     assert(a.arguments.requiredGroup.arguments == []);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -707,14 +697,15 @@ unittest
         int no_c;
     }
 
-    enum p = CommandArguments!params(Config.init);
-    static assert(p.findNamedArgument("a").arg is null);
-    static assert(p.findNamedArgument("b").arg !is null);
-    static assert(p.findNamedArgument("boo").arg !is null);
-    static assert(p.findPositionalArgument(0).arg !is null);
-    static assert(p.findPositionalArgument(1).arg is null);
-    static assert(p.getParseFunction!false(p.findNamedArgument("b").index) !is null);
-    static assert(p.getParseFunction!true(p.findNamedArgument("b").index) !is null);
+    Config config;
+    auto p = CommandArguments!params(&config);
+    assert(p.findNamedArgument("a").arg is null);
+    assert(p.findNamedArgument("b").arg !is null);
+    assert(p.findNamedArgument("boo").arg !is null);
+    assert(p.findPositionalArgument(0).arg !is null);
+    assert(p.findPositionalArgument(1).arg is null);
+    assert(p.getParseFunction!false(p.findNamedArgument("b").index) !is null);
+    assert(p.getParseFunction!true(p.findNamedArgument("b").index) !is null);
 }
 
 unittest
