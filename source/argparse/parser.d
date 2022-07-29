@@ -25,7 +25,7 @@ package struct Parser
 
     alias Argument = SumType!(Unknown, EndOfArgs, Positional, NamedShort, NamedLong);
 
-    immutable Config config;
+    Config config;
 
     string[] args;
     string[] unrecognizedArgs;
@@ -70,7 +70,7 @@ package struct Parser
 
     auto parseArgument(T, PARSE)(PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
     {
-        auto res = parse(config, nameWithDash, receiver, value, args);
+        auto res = parse(&config, nameWithDash, receiver, value, args);
         if(!res)
             return res;
 
@@ -90,7 +90,7 @@ package struct Parser
         if(found.level < cmdStack.length)
             cmdStack.length = found.level;
 
-        cmdStack ~= CmdParser((const ref arg) => found.parse(config, this, arg, false, receiver), (const ref arg) => found.complete(config, this, arg, false, receiver));
+        cmdStack ~= CmdParser((const ref arg) => found.parse(&config, this, arg, false, receiver), (const ref arg) => found.complete(&config, this, arg, false, receiver));
 
         found.initialize(receiver);
         args.popFront();
@@ -285,7 +285,7 @@ package struct Parser
         auto found = cmd.findSubCommand(DEFAULT_COMMAND);
         if(found.parse !is null)
         {
-            auto p = CmdParser((const ref arg) => found.parse(config, this, arg, true, receiver));
+            auto p = CmdParser((const ref arg) => found.parse(&config, this, arg, true, receiver));
             p.isDefault = true;
             cmdStack ~= p;
             found.initialize(receiver);
@@ -305,7 +305,7 @@ package struct Parser
                     return res;
         }
 
-        return cmd.checkRestrictions(idxParsedArgs, config);
+        return cmd.checkRestrictions(idxParsedArgs, &config);
     }
 }
 
@@ -329,9 +329,11 @@ unittest
 
 package static Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 {
-    auto parser = Parser(config, args);
+    auto copyConfig = config;
 
-    auto command = CommandArguments!COMMAND(config);
+    auto parser = Parser(copyConfig, args);
+
+    auto command = CommandArguments!COMMAND(&copyConfig);
     auto res = parser.parseAll!completionMode(command, receiver);
 
     static if(!completionMode)

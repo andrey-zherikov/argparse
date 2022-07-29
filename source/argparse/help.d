@@ -297,7 +297,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printInvocation(void delegate(string) sink, in ArgumentInfo info, in string[] names, in Config config)
+private void printInvocation(void delegate(string) sink, in ArgumentInfo info, in string[] names, Config* config)
 {
     if(info.positional)
         printValue(sink, info);
@@ -335,7 +335,8 @@ unittest
 
         import std.array: appender;
         auto a = appender!string;
-        printInvocation(_ => a.put(_), info.setDefaults!(int, "foo"), ["f","foo"], Config.init);
+        Config config;
+        printInvocation(_ => a.put(_), info.setDefaults!(int, "foo"), ["f","foo"], &config);
         return a[];
     }
 
@@ -345,7 +346,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(void delegate(string) sink, in ArgumentInfo info, in Config config)
+private void printUsage(void delegate(string) sink, in ArgumentInfo info, Config* config)
 {
     if(!info.required)
         sink("[");
@@ -372,7 +373,8 @@ unittest
 
         import std.array: appender;
         auto a = appender!string;
-        printUsage(_ => a.put(_), info.setDefaults!(int, "foo"), Config.init);
+        Config config;
+        printUsage(_ => a.put(_), info.setDefaults!(int, "foo"), &config);
         return a[];
     }
 
@@ -384,7 +386,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(T)(void delegate(string) sink, in CommandArguments!T cmd, in Config config)
+private void printUsage(T)(void delegate(string) sink, in CommandArguments!T cmd, Config* config)
 {
     import std.algorithm: map;
     import std.array: join;
@@ -424,7 +426,7 @@ private void printUsage(T)(void delegate(string) sink, in CommandArguments!T cmd
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto getSections(const(Arguments)* arguments, in Config config)
+private auto getSections(const(Arguments)* arguments, Config* config)
 {
     import std.algorithm: filter, map;
     import std.array: appender, array;
@@ -489,7 +491,7 @@ private auto getSections(const(Arguments)* arguments, in Config config)
     return sections;
 }
 
-private auto getSection(in CommandInfo[] commands, in Config config)
+private auto getSection(in CommandInfo[] commands)
 {
     import std.algorithm: filter, map;
     import std.array: array, join;
@@ -521,7 +523,7 @@ private auto getSection(in CommandInfo[] commands, in Config config)
     return section;
 }
 
-private auto getSection(T)(in CommandArguments!T cmd, in Config config)
+private auto getSection(T)(in CommandArguments!T cmd, Config* config)
 {
     import std.array: appender;
 
@@ -533,7 +535,7 @@ private auto getSection(T)(in CommandArguments!T cmd, in Config config)
 
     // sub commands
     if(cmd.subCommands.length > 0)
-        sections ~= getSection(cmd.subCommands, config);
+        sections ~= getSection(cmd.subCommands);
 
     sections ~= getSections(&cmd.arguments, config);
 
@@ -543,7 +545,7 @@ private auto getSection(T)(in CommandArguments!T cmd, in Config config)
     return section;
 }
 
-package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, in Config config)
+package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, Config* config)
 {
     import std.algorithm: min;
 
@@ -585,7 +587,8 @@ unittest
         import std.array: appender;
 
         auto a = appender!string;
-        printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
+        Config config;
+        printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
         return a[];
     }
     static assert(test().length > 0);  // ensure that it works at compile time
@@ -636,7 +639,8 @@ unittest
     import std.array: appender;
 
     auto a = appender!string;
-    printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
+    Config config;
+    printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
         "group1:\n"~
@@ -681,7 +685,8 @@ unittest
     import std.array: appender;
 
     auto a = appender!string;
-    printHelp(_ => a.put(_), CommandArguments!T(Config.init), Config.init);
+    Config config;
+    printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~
