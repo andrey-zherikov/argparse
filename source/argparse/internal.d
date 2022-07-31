@@ -476,8 +476,13 @@ package auto setDefaults(TYPE, alias symbol)(ArgumentInfo info)
     if(info.names.length == 0)
         info.names = [ symbol ];
 
-    if(info.minValuesCount.isNull) info.minValuesCount = defaultValuesCount!TYPE.min;
-    if(info.maxValuesCount.isNull) info.maxValuesCount = defaultValuesCount!TYPE.max;
+    static if(is(typeof(*TYPE) == function) || is(typeof(*TYPE) == delegate))
+        alias defaultCount = defaultValuesCount!(typeof(*TYPE));
+    else
+        alias defaultCount = defaultValuesCount!TYPE;
+
+    if(info.minValuesCount.isNull) info.minValuesCount = defaultCount.min;
+    if(info.maxValuesCount.isNull) info.maxValuesCount = defaultCount.max;
 
     if(info.placeholder.length == 0)
     {
@@ -880,7 +885,7 @@ package struct CommandArguments(RECEIVER)
         static if(getUDAs!(member, Group).length > 0)
             arguments.addArgument!(info, restrictions, getUDAs!(member, Group)[0]);
         else
-        arguments.addArgument!(info, restrictions);
+            arguments.addArgument!(info, restrictions);
 
         parseArguments    ~= ParsingArgument!(symbol, uda, info, RECEIVER, false);
         completeArguments ~= ParsingArgument!(symbol, uda, info, RECEIVER, true);
@@ -1125,7 +1130,7 @@ if(!is(T == void))
         (ref T param) {}    // no-value action
         );
     }
-    else static if(is(T == delegate))
+    else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
         void,                           // pre process
@@ -1811,6 +1816,11 @@ private struct Actions
         else static if(__traits(compiles, { func(param); }))
         {
             func(param);
+        }
+        // ... func(RawParam param)
+        else static if(__traits(compiles, { func(RawParam.init); }))
+        {
+            func(RawParam(param.config, param.name));
         }
         else
             static assert(false, "Unsupported callback: " ~ F.stringof);
