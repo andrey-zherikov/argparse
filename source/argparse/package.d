@@ -182,17 +182,6 @@ package struct ArgumentInfo
     LazyString description;
     string placeholder;
 
-    void setAllowedValues(alias names)()
-    {
-        if(placeholder.length == 0)
-        {
-            import std.conv: to;
-            import std.array: join;
-            import std.format: format;
-            placeholder = "{%s}".format(names.to!(string[]).join(','));
-        }
-    }
-
     bool hideFromHelp = false;      // if true then this argument is not printed on help page
 
     bool required;
@@ -231,6 +220,14 @@ package struct ArgumentInfo
 
     bool allowBooleanNegation = true;
     bool ignoreInDefaultCommand;
+}
+
+package string formatAllowedValues(alias names)()
+{
+    import std.conv: to;
+    import std.array: join;
+    import std.format: format;
+    return "{%s}".format(names.to!(string[]).join(','));
 }
 
 
@@ -1263,7 +1260,9 @@ auto AllowedValues(alias values, ARG)(ARG arg)
     enum valuesAA = assocArray(values, false.repeat);
 
     auto desc = arg.Validation!(Validators.ValueInList!(values, KeyType!(typeof(valuesAA))));
-    desc.info.setAllowedValues!values;
+    if(desc.info.placeholder.length == 0)
+        desc.info.placeholder = formatAllowedValues!values;
+
     return desc;
 }
 

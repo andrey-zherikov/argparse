@@ -96,8 +96,6 @@ unittest
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Help printing functions
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Help printing functions
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private void print(void delegate(string) sink, const ref Item item, string indent, string descriptionIndent, bool unused = false)
 {
@@ -379,7 +377,8 @@ unittest
         import std.array: appender;
         auto a = appender!string;
         Style style;
-        printInvocation(_ => a.put(_), style, info.setDefaults!(int, "foo"), ["-f","--foo"]);
+        Config config;
+        printInvocation(_ => a.put(_), style, applyDefaults!(info, int, "foo"), ["-f".getArgumentName(&config),"--foo".getArgumentName(&config)]);
         return a[];
     }
 
@@ -417,7 +416,7 @@ unittest
         import std.array: appender;
         auto a = appender!string;
         Style style;
-        printUsage(_ => a.put(_), _ => getArgumentName(_, Config.init), style, info.setDefaults!(int, "foo"));
+        printUsage(_ => a.put(_), _ => getArgumentName(_, Config.init), style, applyDefaults!(info, int, "foo"));
         return a[];
     }
 

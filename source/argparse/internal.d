@@ -465,30 +465,36 @@ if(!is(T == void))
 }
 
 
-package auto setDefaults(TYPE, alias symbol)(ArgumentInfo info)
+package auto applyDefaults(ArgumentInfo origInfo, TYPE, alias symbol)()
 {
+    auto info = origInfo;
+
     static if(!isBoolean!TYPE)
         info.allowBooleanNegation = false;
 
-    static if(is(TYPE == enum))
-        info.setAllowedValues!(EnumMembersAsStrings!TYPE);
+    static if(origInfo.placeholder.length == 0)
+    {
+        static if(is(TYPE == enum))
+            info.placeholder = formatAllowedValues!(EnumMembersAsStrings!TYPE);
+        else static if(origInfo.positional)
+            info.placeholder = symbol;
+        else
+        {
+            import std.uni : toUpper;
+            info.placeholder = symbol.toUpper;
+        }
+    }
 
-    if(info.names.length == 0)
+    static if(origInfo.names.length == 0)
         info.names = [ symbol ];
 
     static if(is(typeof(*TYPE) == function) || is(typeof(*TYPE) == delegate))
-        alias defaultCount = defaultValuesCount!(typeof(*TYPE));
+        alias countType = typeof(*TYPE);
     else
-        alias defaultCount = defaultValuesCount!TYPE;
+        alias countType = TYPE;
 
-    if(info.minValuesCount.isNull) info.minValuesCount = defaultCount.min;
-    if(info.maxValuesCount.isNull) info.maxValuesCount = defaultCount.max;
-
-    if(info.placeholder.length == 0)
-    {
-        import std.uni : toUpper;
-        info.placeholder = info.positional ? symbol : symbol.toUpper;
-    }
+    static if(origInfo.minValuesCount.isNull) info.minValuesCount = defaultValuesCount!countType.min;
+    static if(origInfo.maxValuesCount.isNull) info.maxValuesCount = defaultValuesCount!countType.max;
 
     return info;
 }
@@ -505,14 +511,14 @@ unittest
     }
     assert(createInfo().allowBooleanNegation); // make codecov happy
 
-    auto res = createInfo().setDefaults!(int, "default-name");
+    auto res = applyDefaults!(createInfo(), int, "default-name");
     assert(!res.allowBooleanNegation);
     assert(res.names == [ "default-name" ]);
     assert(res.minValuesCount == defaultValuesCount!int.min);
     assert(res.maxValuesCount == defaultValuesCount!int.max);
     assert(res.placeholder == "default-name");
 
-    res = createInfo!"myvalue".setDefaults!(int, "default-name");
+    res = applyDefaults!(createInfo!"myvalue", int, "default-name");
     assert(res.placeholder == "myvalue");
 }
 
@@ -527,14 +533,14 @@ unittest
     }
     assert(createInfo().allowBooleanNegation); // make codecov happy
 
-    auto res = createInfo().setDefaults!(bool, "default_name");
+    auto res = applyDefaults!(createInfo(), bool, "default_name");
     assert(res.allowBooleanNegation);
     assert(res.names == ["default_name"]);
     assert(res.minValuesCount == defaultValuesCount!bool.min);
     assert(res.maxValuesCount == defaultValuesCount!bool.max);
     assert(res.placeholder == "DEFAULT_NAME");
 
-    res = createInfo!"myvalue".setDefaults!(bool, "default_name");
+    res = applyDefaults!(createInfo!"myvalue", bool, "default_name");
     assert(res.placeholder == "myvalue");
 }
 
@@ -551,10 +557,10 @@ unittest
     }
     assert(createInfo().allowBooleanNegation); // make codecov happy
 
-    auto res = createInfo().setDefaults!(E, "default-name");
+    auto res = applyDefaults!(createInfo(), E, "default-name");
     assert(res.placeholder == "{a,b,c}");
 
-    res = createInfo!"myvalue".setDefaults!(E, "default-name");
+    res = applyDefaults!(createInfo!"myvalue", E, "default-name");
     assert(res.placeholder == "myvalue");
 }
 
@@ -997,59 +1003,59 @@ if(!is(T == void))
     static if(is(T == enum))
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
-        void,   // pre process
-        Validators.ValueInList!(EnumMembersAsStrings!T, typeof(RawParam.value)),   // pre validate
-        void,   // parse
-        void,   // validate
-        void,   // action
-        void    // no-value action
+            void,   // pre process
+            Validators.ValueInList!(EnumMembersAsStrings!T, typeof(RawParam.value)),   // pre validate
+            void,   // parse
+            void,   // validate
+            void,   // action
+            void    // no-value action
         );
     }
     else static if(isSomeString!T || isNumeric!T)
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
-        void,   // pre process
-        void,   // pre validate
-        void,   // parse
-        void,   // validate
-        void,   // action
-        void    // no-value action
+            void,   // pre process
+            void,   // pre validate
+            void,   // parse
+            void,   // validate
+            void,   // action
+            void    // no-value action
         );
     }
     else static if(isBoolean!T)
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
-        void,                               // pre process
-        void,                               // pre validate
-        (string value)                      // parse
-        {
-            switch(value)
+            void,                               // pre process
+            void,                               // pre validate
+            (string value)                      // parse
             {
-                case "":    goto case;
-                case "yes": goto case;
-                case "y":   return true;
-                case "no":  goto case;
-                case "n":   return false;
-                default:    return value.to!T;
-            }
-        },
-        void,                               // validate
-        void,                               // action
-        (ref T result) { result = true; }   // no-value action
+                switch(value)
+                {
+                    case "":    goto case;
+                    case "yes": goto case;
+                    case "y":   return true;
+                    case "no":  goto case;
+                    case "n":   return false;
+                    default:    return value.to!T;
+                }
+            },
+            void,                               // validate
+            void,                               // action
+            (ref T result) { result = true; }   // no-value action
         );
     }
     else static if(isSomeChar!T)
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
-        void,                         // pre process
-        void,                         // pre validate
-        (string value)                // parse
-        {
-            return value.length > 0 ? value[0].to!T : T.init;
-        },
-        void,                         // validate
-        void,                         // action
-        void                          // no-value action
+            void,                         // pre process
+            void,                         // pre validate
+            (string value)                // parse
+            {
+                return value.length > 0 ? value[0].to!T : T.init;
+            },
+            void,                         // validate
+            void,                         // action
+            void                          // no-value action
         );
     }
     else static if(isArray!T)
@@ -1064,32 +1070,32 @@ if(!is(T == void))
                 alias action = Actions.Assign!T;
 
             alias DefaultValueParseFunctions = DefaultValueParseFunctions!TElement
-            .changePreProcess!splitValues
-            .changeParse!((ref T receiver, RawParam param)
-            {
-                static if(!isStaticArray!T)
+                .changePreProcess!splitValues
+                .changeParse!((ref T receiver, RawParam param)
                 {
-                    if(receiver.length < param.value.length)
-                        receiver.length = param.value.length;
-                }
+                    static if(!isStaticArray!T)
+                    {
+                        if(receiver.length < param.value.length)
+                            receiver.length = param.value.length;
+                    }
 
-                foreach(i, value; param.value)
-                {
-                    if(!DefaultValueParseFunctions!TElement.parse(receiver[i],
-                    RawParam(param.config, param.name, [value])))
-                        return false;
-                }
+                    foreach(i, value; param.value)
+                    {
+                        if(!DefaultValueParseFunctions!TElement.parse(receiver[i],
+                        RawParam(param.config, param.name, [value])))
+                            return false;
+                    }
 
-                return true;
-            })
-            .changeAction!(action)
-            .changeNoValueAction!((ref T param) {});
+                    return true;
+                })
+                .changeAction!(action)
+                .changeNoValueAction!((ref T param) {});
         }
         else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
         {
             alias DefaultValueParseFunctions = DefaultValueParseFunctions!TElement
-            .changeAction!(Actions.Extend!TElement)
-            .changeNoValueAction!((ref T param) { param ~= TElement.init; });
+                .changeAction!(Actions.Extend!TElement)
+                .changeNoValueAction!((ref T param) { param ~= TElement.init; });
         }
         else
         {
@@ -1100,45 +1106,45 @@ if(!is(T == void))
     {
         import std.string : indexOf;
         alias DefaultValueParseFunctions = ValueParseFunctions!(
-        splitValues,                                                // pre process
-        void,                                                       // pre validate
-        Parsers.PassThrough,                                        // parse
-        void,                                                       // validate
-        (ref T recepient, Param!(string[]) param)                   // action
-        {
-            alias K = KeyType!T;
-            alias V = ValueType!T;
-
-            foreach(input; param.value)
+            splitValues,                                                // pre process
+            void,                                                       // pre validate
+            Parsers.PassThrough,                                        // parse
+            void,                                                       // validate
+            (ref T recepient, Param!(string[]) param)                   // action
             {
-                auto j = indexOf(input, param.config.assignChar);
-                if(j < 0)
-                    return false;
+                alias K = KeyType!T;
+                alias V = ValueType!T;
 
-                K key;
-                if(!DefaultValueParseFunctions!K.parse(key, RawParam(param.config, param.name, [input[0 .. j]])))
-                    return false;
+                foreach(input; param.value)
+                {
+                    auto j = indexOf(input, param.config.assignChar);
+                    if(j < 0)
+                        return false;
 
-                V value;
-                if(!DefaultValueParseFunctions!V.parse(value, RawParam(param.config, param.name, [input[j + 1 .. $]])))
-                    return false;
+                    K key;
+                    if(!DefaultValueParseFunctions!K.parse(key, RawParam(param.config, param.name, [input[0 .. j]])))
+                        return false;
 
-                recepient[key] = value;
-            }
-            return true;
-        },
-        (ref T param) {}    // no-value action
+                    V value;
+                    if(!DefaultValueParseFunctions!V.parse(value, RawParam(param.config, param.name, [input[j + 1 .. $]])))
+                        return false;
+
+                    recepient[key] = value;
+                }
+                return true;
+            },
+            (ref T param) {}    // no-value action
         );
     }
     else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
-        void,                           // pre process
-        void,                           // pre validate
-        Parsers.PassThrough,            // parse
-        void,                           // validate
-        Actions.CallFunction!T,         // action
-        Actions.CallFunctionNoParam!T   // no-value action
+            void,                           // pre process
+            void,                           // pre validate
+            Parsers.PassThrough,            // parse
+            void,                           // validate
+            Actions.CallFunction!T,         // action
+            Actions.CallFunctionNoParam!T   // no-value action
         );
     }
     else
@@ -1241,12 +1247,12 @@ package struct ValueParseFunctions(alias PreProcess,
     alias changeAction       (alias func) = ValueParseFunctions!(PreProcess, PreValidation, Parse, Validation,   func, NoValueAction);
     alias changeNoValueAction(alias func) = ValueParseFunctions!(PreProcess, PreValidation, Parse, Validation, Action,          func);
 
-    template addDefaults(T)
+    template addDefaults(DefaultParseFunctions)
     {
         static if(is(PreProcess == void))
-            alias preProc = DefaultValueParseFunctions!T;
+            alias preProc = DefaultParseFunctions;
         else
-            alias preProc = DefaultValueParseFunctions!T.changePreProcess!PreProcess;
+            alias preProc = DefaultParseFunctions.changePreProcess!PreProcess;
 
         static if(is(PreValidation == void))
             alias preVal = preProc;
@@ -1286,7 +1292,7 @@ package struct ValueParseFunctions(alias PreProcess,
     // Requirement: rawValues.length must be correct
     static bool parse(T)(ref T receiver, RawParam param)
     {
-        return addDefaults!T.parseImpl(receiver, param);
+        return addDefaults!(DefaultValueParseFunctions!T).parseImpl(receiver, param);
     }
     static bool parseImpl(T)(ref T receiver, ref RawParam rawParam)
     {

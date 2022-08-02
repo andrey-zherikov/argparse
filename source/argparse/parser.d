@@ -25,7 +25,7 @@ package struct Parser
 
     alias Argument = SumType!(Unknown, EndOfArgs, Positional, NamedShort, NamedLong);
 
-    Config config;
+    Config* config;
 
     string[] args;
     string[] unrecognizedArgs;
@@ -70,7 +70,7 @@ package struct Parser
 
     auto parseArgument(T, PARSE)(PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
     {
-        auto res = parse(&config, nameWithDash, receiver, value, args);
+        auto res = parse(config, nameWithDash, receiver, value, args);
         if(!res)
             return res;
 
@@ -90,7 +90,7 @@ package struct Parser
         if(found.level < cmdStack.length)
             cmdStack.length = found.level;
 
-        cmdStack ~= CmdParser((const ref arg) => found.parse(&config, this, arg, false, receiver), (const ref arg) => found.complete(&config, this, arg, false, receiver));
+        cmdStack ~= CmdParser((const ref arg) => found.parse(config, this, arg, false, receiver), (const ref arg) => found.complete(config, this, arg, false, receiver));
 
         found.initialize(receiver);
         args.popFront();
@@ -285,7 +285,7 @@ package struct Parser
         auto found = cmd.findSubCommand(DEFAULT_COMMAND);
         if(found.parse !is null)
         {
-            auto p = CmdParser((const ref arg) => found.parse(&config, this, arg, true, receiver));
+            auto p = CmdParser((const ref arg) => found.parse(config, this, arg, true, receiver));
             p.isDefault = true;
             cmdStack ~= p;
             found.initialize(receiver);
@@ -305,24 +305,25 @@ package struct Parser
                     return res;
         }
 
-        return cmd.checkRestrictions(idxParsedArgs, &config);
+        return cmd.checkRestrictions(idxParsedArgs, config);
     }
 }
 
 unittest
 {
-    assert(Parser.init.splitArgumentNameValue("") == Parser.Argument(Parser.Unknown.init));
-    assert(Parser.init.splitArgumentNameValue("-") == Parser.Argument(Parser.Unknown.init));
-    assert(Parser.init.splitArgumentNameValue("--") == Parser.Argument(Parser.EndOfArgs.init));
-    assert(Parser.init.splitArgumentNameValue("abc=4") == Parser.Argument(Parser.Positional.init));
-    assert(Parser.init.splitArgumentNameValue("-abc") == Parser.Argument(Parser.NamedShort("abc", "-abc", null)));
-    assert(Parser.init.splitArgumentNameValue("--abc") == Parser.Argument(Parser.NamedLong("abc", "--abc", null)));
-    assert(Parser.init.splitArgumentNameValue("-abc=fd") == Parser.Argument(Parser.NamedShort("abc", "-abc", "fd")));
-    assert(Parser.init.splitArgumentNameValue("--abc=fd") == Parser.Argument(Parser.NamedLong("abc", "--abc", "fd")));
-    assert(Parser.init.splitArgumentNameValue("-abc=") == Parser.Argument(Parser.NamedShort("abc", "-abc", "")));
-    assert(Parser.init.splitArgumentNameValue("--abc=") == Parser.Argument(Parser.NamedLong("abc", "--abc", "")));
-    assert(Parser.init.splitArgumentNameValue("-=abc") == Parser.Argument(Parser.NamedShort("", "-", "abc")));
-    assert(Parser.init.splitArgumentNameValue("--=abc") == Parser.Argument(Parser.NamedLong("", "--", "abc")));
+    Config config;
+    assert(Parser(&config).splitArgumentNameValue("") == Parser.Argument(Parser.Unknown.init));
+    assert(Parser(&config).splitArgumentNameValue("-") == Parser.Argument(Parser.Unknown.init));
+    assert(Parser(&config).splitArgumentNameValue("--") == Parser.Argument(Parser.EndOfArgs.init));
+    assert(Parser(&config).splitArgumentNameValue("abc=4") == Parser.Argument(Parser.Positional.init));
+    assert(Parser(&config).splitArgumentNameValue("-abc") == Parser.Argument(Parser.NamedShort("abc", "-abc", null)));
+    assert(Parser(&config).splitArgumentNameValue("--abc") == Parser.Argument(Parser.NamedLong("abc", "--abc", null)));
+    assert(Parser(&config).splitArgumentNameValue("-abc=fd") == Parser.Argument(Parser.NamedShort("abc", "-abc", "fd")));
+    assert(Parser(&config).splitArgumentNameValue("--abc=fd") == Parser.Argument(Parser.NamedLong("abc", "--abc", "fd")));
+    assert(Parser(&config).splitArgumentNameValue("-abc=") == Parser.Argument(Parser.NamedShort("abc", "-abc", "")));
+    assert(Parser(&config).splitArgumentNameValue("--abc=") == Parser.Argument(Parser.NamedLong("abc", "--abc", "")));
+    assert(Parser(&config).splitArgumentNameValue("-=abc") == Parser.Argument(Parser.NamedShort("", "-", "abc")));
+    assert(Parser(&config).splitArgumentNameValue("--=abc") == Parser.Argument(Parser.NamedLong("", "--", "abc")));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -331,7 +332,7 @@ package static Result callParser(Config config, bool completionMode, COMMAND)(re
 {
     auto copyConfig = config;
 
-    auto parser = Parser(copyConfig, args);
+    auto parser = Parser(&copyConfig, args);
 
     auto command = CommandArguments!COMMAND(&copyConfig);
     auto res = parser.parseAll!completionMode(command, receiver);
