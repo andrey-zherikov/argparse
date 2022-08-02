@@ -331,6 +331,7 @@ unittest
 package static Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 {
     auto copyConfig = config;
+    copyConfig.setStylingMode = (Config.StylingMode mode) { copyConfig.stylingMode = mode; };
 
     auto parser = Parser(&copyConfig, args);
 

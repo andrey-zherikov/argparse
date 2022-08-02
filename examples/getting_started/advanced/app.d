@@ -20,6 +20,9 @@ static struct Advanced
 
     @NamedArgument(["b","banana","ban"])
     int banana;
+
+    @NamedArgument
+    static auto color = ansiStylingArgument;
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:

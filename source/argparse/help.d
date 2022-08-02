@@ -378,7 +378,7 @@ unittest
         auto a = appender!string;
         Style style;
         Config config;
-        printInvocation(_ => a.put(_), style, applyDefaults!(info, int, "foo"), ["-f".getArgumentName(&config),"--foo".getArgumentName(&config)]);
+        printInvocation(_ => a.put(_), style, applyDefaults!(info, int, "foo"), ["f".getArgumentName(&config),"foo".getArgumentName(&config)]);
         return a[];
     }
 
@@ -416,7 +416,8 @@ unittest
         import std.array: appender;
         auto a = appender!string;
         Style style;
-        printUsage(_ => a.put(_), _ => getArgumentName(_, Config.init), style, applyDefaults!(info, int, "foo"));
+        Config config;
+        printUsage(_ => a.put(_), _ => getArgumentName(_, &config), style, applyDefaults!(info, int, "foo"));
         return a[];
     }
 

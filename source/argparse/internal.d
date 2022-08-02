@@ -32,6 +32,14 @@ package struct LazyString
             (dg) => dg()
         );
     }
+
+    bool isSet() const
+    {
+        return value.match!(
+                (string _) => _.length > 0,
+                (dg) => dg != null
+        );
+    }
 }
 
 unittest
@@ -875,11 +883,16 @@ package struct CommandArguments(RECEIVER)
         "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
 
         static if(getUDAs!(member, ArgumentUDA).length > 0)
-            enum uda = getUDAs!(member, ArgumentUDA)[0];
+            enum originalUDA = getUDAs!(member, ArgumentUDA)[0];
         else
-            enum uda = NamedArgument();
+            enum originalUDA = NamedArgument();
 
-        enum info = uda.info.setDefaults!(typeof(member), symbol);
+        static if(is(typeof(member) == AnsiStylingArgument))
+            enum uda = originalUDA.addDefaults(getUDAs!(AnsiStylingArgument, ArgumentUDA)[0]);
+        else
+            alias uda = originalUDA;
+
+        enum info = applyDefaults!(uda.info, typeof(member), symbol);
 
         enum restrictions = {
             RestrictionGroup[] restrictions;
@@ -1145,6 +1158,17 @@ if(!is(T == void))
             void,                           // validate
             Actions.CallFunction!T,         // action
             Actions.CallFunctionNoParam!T   // no-value action
+        );
+    }
+    else static if(is(T == AnsiStylingArgument))
+    {
+        alias DefaultValueParseFunctions = ValueParseFunctions!(
+            void,   // pre process
+            void,   // pre validate
+            Parsers.PassThrough,   // parse
+            void,   // validate
+            AnsiStylingArgument.action,   // action
+            AnsiStylingArgument.action    // no-value action
         );
     }
     else
@@ -1874,28 +1898,38 @@ unittest
 
 package struct Validators
 {
-    static auto ValueInList(alias values, TYPE)(in Param!TYPE param)
+    template ValueInList(alias values, TYPE)
     {
-        import std.array : assocArray, join;
-        import std.range : repeat, front;
-        import std.conv: to;
+        static auto ValueInList(Param!TYPE param)
+        {
+            import std.array : assocArray, join;
+            import std.range : repeat, front;
+            import std.conv: to;
 
-        enum valuesAA = assocArray(values, false.repeat);
-        enum allowedValues = values.to!(string[]).join(',');
+            enum valuesAA = assocArray(values, false.repeat);
+            enum allowedValues = values.to!(string[]).join(',');
 
-        static if(is(typeof(values.front) == TYPE))
-            auto paramValues = [param.value];
-        else
-            auto paramValues = param.value;
+            static if(is(typeof(values.front) == TYPE))
+                auto paramValues = [param.value];
+            else
+                auto paramValues = param.value;
 
-        foreach(value; paramValues)
-            if(!(value in valuesAA))
-            {
-                param.config.onError("Invalid value '", value, "' for argument '", param.name, "'.\nValid argument values are: ", allowedValues);
-                return false;
-            }
+            foreach(value; paramValues)
+                if(!(value in valuesAA))
+                {
+                    param.config.onError("Invalid value '", value, "' for argument '", param.name, "'.\nValid argument values are: ", allowedValues);
+                    return false;
+                }
 
-        return true;
+            return true;
+        }
+        static auto ValueInList(Param!(TYPE[]) param)
+        {
+            foreach(ref value; param.value)
+                if(!ValueInList!(values, TYPE)(Param!TYPE(param.config, param.name, value)))
+                    return false;
+            return true;
+        }
     }
 }
 

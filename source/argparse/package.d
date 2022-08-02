@@ -5,6 +5,7 @@ import argparse.internal;
 import argparse.parser: callParser;
 import argparse.help: Style;
 
+public import argparse.ansi;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Public API
@@ -66,6 +67,8 @@ struct Config
      */
     enum StylingMode { autodetect, on, off }
     StylingMode stylingMode = StylingMode.autodetect;
+
+    package void delegate(StylingMode) setStylingMode;
 
     /**
        Help style.
@@ -273,6 +276,22 @@ package struct ArgumentUDA(alias ValueParseFunctions)
     package ArgumentInfo info;
 
     package alias parsingFunc = ValueParseFunctions;
+
+    package auto addDefaults(T)(ArgumentUDA!T uda)
+    {
+        import std.traits: getUDAs;
+
+        auto newInfo = info;
+
+        if(newInfo.names.length == 0) newInfo.names = uda.info.names;
+        if(newInfo.placeholder.length == 0) newInfo.placeholder = uda.info.placeholder;
+        if(!newInfo.description.isSet()) newInfo.description = uda.info.description;
+        if(newInfo.position.isNull()) newInfo.position = uda.info.position;
+        if(newInfo.minValuesCount.isNull()) newInfo.minValuesCount = uda.info.minValuesCount;
+        if(newInfo.maxValuesCount.isNull()) newInfo.maxValuesCount = uda.info.maxValuesCount;
+
+        return ArgumentUDA!(parsingFunc.addDefaults!(uda.parsingFunc))(newInfo);
+    }
 
     public auto ref Description(string text)
     {
@@ -1583,4 +1602,32 @@ unittest
     assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+@(NamedArgument
+.Description("Colorize the output. Value can be 'always' (default if omitted), 'auto', or 'never'")
+.AllowedValues!(["always","auto","never"])
+.NumberOfValues(0, 1)
+)
+package struct AnsiStylingArgument
+{
+    static void action(ref AnsiStylingArgument receiver, RawParam param)
+    {
+        switch(param.value[0])
+        {
+            case "always":  param.config.setStylingMode(Config.StylingMode.on);         return;
+            case "auto":    param.config.setStylingMode(Config.StylingMode.autodetect); return;
+            case "never":   param.config.setStylingMode(Config.StylingMode.off);        return;
+            default:
+        }
+    }
+    static void action(ref AnsiStylingArgument receiver, Param!void param)
+    {
+        param.config.setStylingMode(Config.StylingMode.on);
+    }
+}
+
+auto ansiStylingArgument()
+{
+    return AnsiStylingArgument.init;
+}
