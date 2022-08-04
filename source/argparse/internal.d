@@ -45,9 +45,12 @@ package struct LazyString
 unittest
 {
     LazyString s;
+    assert(!s.isSet());
     s = "asd";
+    assert(s.isSet());
     assert(s.get == "asd");
     s = () => "qwe";
+    assert(s.isSet());
     assert(s.get == "qwe");
     assert(LazyString("asd").get == "asd");
     assert(LazyString(() => "asd").get == "asd");
@@ -1931,6 +1934,20 @@ package struct Validators
             return true;
         }
     }
+}
+
+unittest
+{
+    enum values = ["a","b","c"];
+    Config config;
+
+    assert(Validators.ValueInList!(values, string)(Param!string(&config, "", "b")));
+    assert(!Validators.ValueInList!(values, string)(Param!string(&config, "", "d")));
+
+    assert(Validators.ValueInList!(values, string)(RawParam(&config, "", ["b"])));
+    assert(Validators.ValueInList!(values, string)(RawParam(&config, "", ["b","a"])));
+    assert(!Validators.ValueInList!(values, string)(RawParam(&config, "", ["d"])));
+    assert(!Validators.ValueInList!(values, string)(RawParam(&config, "", ["b","d"])));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

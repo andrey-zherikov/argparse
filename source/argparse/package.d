@@ -1288,6 +1288,8 @@ auto AllowedValues(alias values, ARG)(ARG arg)
 
 unittest
 {
+    assert(NamedArgument.AllowedValues!([1,3,5]).info.placeholder == "{1,3,5}");
+
     struct T
     {
         @(NamedArgument.AllowedValues!([1,3,5])) int a;
@@ -1630,4 +1632,35 @@ package struct AnsiStylingArgument
 auto ansiStylingArgument()
 {
     return AnsiStylingArgument.init;
+}
+
+unittest
+{
+    assert(ansiStylingArgument == AnsiStylingArgument.init);
+
+    Config config;
+    config.setStylingMode = (Config.StylingMode mode) { config.stylingMode = mode; };
+
+    AnsiStylingArgument arg;
+    AnsiStylingArgument.action(arg, Param!void(&config));
+
+    assert(config.stylingMode == Config.StylingMode.on);
+}
+
+unittest
+{
+    auto test(string value)
+    {
+        Config config;
+        config.setStylingMode = (Config.StylingMode mode) { config.stylingMode = mode; };
+
+        AnsiStylingArgument arg;
+        AnsiStylingArgument.action(arg, RawParam(&config, "", [value]));
+        return config.stylingMode;
+    }
+
+    assert(test("always") == Config.StylingMode.on);
+    assert(test("auto")   == Config.StylingMode.autodetect);
+    assert(test("never")  == Config.StylingMode.off);
+    assert(test(""    )   == Config.StylingMode.autodetect);
 }
