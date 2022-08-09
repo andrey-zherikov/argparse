@@ -4,8 +4,7 @@ module argparse;
 import argparse.internal;
 import argparse.parser: callParser;
 import argparse.help: Style;
-
-public import argparse.ansi;
+import argparse.ansi;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Public API
@@ -770,16 +769,6 @@ unittest
         return 12345;
     })([]) == 12345);
     assert(CLI!T.parseArgs!((T t, string[] args) {
-        assert(t == T("aa"));
-        assert(args == ["-g"]);
-        return 12345;
-    })(["-a","aa","-g"]) == 12345);
-    static assert(CLI!T.parseArgs!((T t, string[] args) {
-        assert(t == T.init);
-        assert(args.length == 0);
-        return 12345;
-    })([]) == 12345);
-    static assert(CLI!T.parseArgs!((T t, string[] args) {
         assert(t == T("aa"));
         assert(args == ["-g"]);
         return 12345;
@@ -1662,5 +1651,5 @@ unittest
     assert(test("always") == Config.StylingMode.on);
     assert(test("auto")   == Config.StylingMode.autodetect);
     assert(test("never")  == Config.StylingMode.off);
-    assert(test(""    )   == Config.StylingMode.autodetect);
+    assert(test("")       == Config.StylingMode.autodetect);
 }

@@ -51,27 +51,3 @@ mixin CLI!Basic.main!((args)
     args.writeln;
     return 0;
 });
-
-// Parser can even work at compile time
-enum values = {
-    Basic values;
-    assert(CLI!Basic.parseArgs(values,
-        [
-        "--boolean",
-        "--number","100",
-        "--name","Jake",
-        "--array","1","2","3",
-        "--choice","foo",
-        "--callback",
-        "--callback1","cb-value",
-        "--callback2","cb-v1","cb-v2",
-        ]));
-    return values;
-}();
-
-static assert(values.name     == "Jake");
-static assert(values.unused   == Basic.init.unused);
-static assert(values.number   == 100);
-static assert(values.boolean  == true);
-static assert(values.choice   == Basic.Enum.foo);
-static assert(values.array    == [1,2,3]);

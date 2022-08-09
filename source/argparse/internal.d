@@ -879,11 +879,9 @@ package struct CommandArguments(RECEIVER)
     {
         alias member = __traits(getMember, RECEIVER, symbol);
 
-        static assert(getUDAs!(member, ArgumentUDA).length <= 1,
-        "Member "~RECEIVER.stringof~"."~symbol~" has multiple '*Argument' UDAs");
+        static assert(getUDAs!(member, ArgumentUDA).length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple '*Argument' UDAs");
 
-        static assert(getUDAs!(member, Group).length <= 1,
-        "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
+        static assert(getUDAs!(member, Group).length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
 
         static if(getUDAs!(member, ArgumentUDA).length > 0)
             enum originalUDA = getUDAs!(member, ArgumentUDA)[0];
