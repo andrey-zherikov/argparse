@@ -592,8 +592,8 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 {
     import std.algorithm: min;
 
-    bool enableStyling = config.stylingMode == Config.StylingMode.on ||
-        config.stylingMode == Config.StylingMode.autodetect && detectSupport();
+    bool enableStyling = config.helpStylingMode == Config.StylingMode.on ||
+        config.helpStylingMode == Config.StylingMode.autodetect && detectSupport();
 
     auto helpStyle = enableStyling ? config.helpStyle : Style.None;
 

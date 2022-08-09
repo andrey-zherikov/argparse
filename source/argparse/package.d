@@ -65,7 +65,7 @@ struct Config
        Defaults to auto-detectection of the capability.
      */
     enum StylingMode { autodetect, on, off }
-    StylingMode stylingMode = StylingMode.autodetect;
+    StylingMode helpStylingMode = StylingMode.autodetect;
 
     package void delegate(StylingMode) setStylingMode;
 
@@ -1633,7 +1633,7 @@ unittest
     AnsiStylingArgument arg;
     AnsiStylingArgument.action(arg, Param!void(&config));
 
-    assert(config.stylingMode == Config.StylingMode.on);
+    assert(config.helpStylingMode == Config.StylingMode.on);
 }
 
 unittest
@@ -1645,7 +1645,7 @@ unittest
 
         AnsiStylingArgument arg;
         AnsiStylingArgument.action(arg, RawParam(&config, "", [value]));
-        return config.stylingMode;
+        return config.helpStylingMode;
     }
 
     assert(test("always") == Config.StylingMode.on);
