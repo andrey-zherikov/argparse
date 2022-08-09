@@ -378,6 +378,7 @@ unittest
         auto a = appender!string;
         Style style;
         Config config;
+        config.helpStylingMode = Config.StylingMode.off;
         printInvocation(_ => a.put(_), style, applyDefaults!(info, int, "foo"), ["f".getArgumentName(&config),"foo".getArgumentName(&config)]);
         return a[];
     }
@@ -417,6 +418,7 @@ unittest
         auto a = appender!string;
         Style style;
         Config config;
+        config.helpStylingMode = Config.StylingMode.off;
         printUsage(_ => a.put(_), _ => getArgumentName(_, &config), style, applyDefaults!(info, int, "foo"));
         return a[];
     }
@@ -636,6 +638,7 @@ unittest
 
         auto a = appender!string;
         Config config;
+        config.helpStylingMode = Config.StylingMode.off;
         printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
         return a[];
     }
@@ -693,6 +696,7 @@ unittest
 
     auto a = appender!string;
     Config config;
+    config.helpStylingMode = Config.StylingMode.off;
     printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
@@ -742,6 +746,7 @@ unittest
 
     auto a = appender!string;
     Config config;
+    config.helpStylingMode = Config.StylingMode.off;
     printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
