@@ -53,10 +53,15 @@ package struct TextStyle
     {
         style = st;
     }
+    private this(ubyte st)
+    {
+        if(st != 0)
+            style = [st];
+    }
 
     private auto opBinary(string op)(ubyte other) if(op == "~")
     {
-        return TextStyle(style ~ other);
+        return other != 0 ? TextStyle(style ~ other) : this;
     }
 
     public auto opCall(string str) const
@@ -120,6 +125,8 @@ package template StyleImpl(ubyte styleCode)
         return StyledText(otherStyle ~ styleCode, text);
     }
 }
+
+alias noStyle      = StyleImpl!(0);
 
 alias bold         = StyleImpl!(Font.bold);
 alias italic       = StyleImpl!(Font.italic);
