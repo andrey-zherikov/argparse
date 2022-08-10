@@ -49,12 +49,17 @@ package struct TextStyle
 {
     private ubyte[] style;
 
+    private this(ubyte[] st)
+    {
+        style = st;
+    }
+
     private auto opBinary(string op)(ubyte other) if(op == "~")
     {
         return TextStyle(style ~ other);
     }
 
-    auto apply(string str) const
+    public auto opCall(string str) const
     {
         import std.conv: text, to;
         import std.algorithm: joiner, map;
@@ -69,9 +74,9 @@ package struct TextStyle
 
 unittest
 {
-    assert(TextStyle([]).apply("foo") == "foo");
-    assert(TextStyle([Font.bold]).apply("foo") == "\033[1mfoo\033[m");
-    assert(TextStyle([Font.bold, Font.italic]).apply("foo") == "\033[1;3mfoo\033[m");
+    assert(TextStyle([])("foo") == "foo");
+    assert(TextStyle([Font.bold])("foo") == "\033[1mfoo\033[m");
+    assert(TextStyle([Font.bold, Font.italic])("foo") == "\033[1;3mfoo\033[m");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

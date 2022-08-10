@@ -35,9 +35,9 @@ unittest
 {
     import std.stdio:writeln;
 
-    Style.Default.argumentGroupTitle.apply("bbb").writeln;
-    Style.Default.namedArgumentName.apply("bbb").writeln;
-    Style.Default.namedArgumentValue.apply("bbb").writeln;
+    Style.Default.argumentGroupTitle("bbb").writeln;
+    Style.Default.namedArgumentName("bbb").writeln;
+    Style.Default.namedArgumentValue("bbb").writeln;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -341,7 +341,7 @@ unittest
 private void printInvocation(NAMES)(void delegate(string) sink, const ref Style style, in ArgumentInfo info, NAMES names)
 {
     if(info.positional)
-        sink(style.positionalArgumentValue.apply(printValue(info)));
+        sink(style.positionalArgumentValue(printValue(info)));
     else
     {
         import std.algorithm: each;
@@ -356,7 +356,7 @@ private void printInvocation(NAMES)(void delegate(string) sink, const ref Style 
             if(info.maxValuesCount.get > 0)
             {
                 sink(" ");
-                sink(style.namedArgumentValue.apply(printValue(info)));
+                sink(style.namedArgumentValue(printValue(info)));
             }
         });
     }
@@ -436,7 +436,7 @@ private void printUsage(T)(void delegate(string) sink, string delegate(string) g
     import std.algorithm: map;
     import std.array: join;
 
-    string progName = style.programName.apply((cmd.parentNames ~ cmd.info.names[0]).map!(_ => _.length > 0 ? _ : getProgramName()).join(" "));
+    string progName = style.programName((cmd.parentNames ~ cmd.info.names[0]).map!(_ => _.length > 0 ? _ : getProgramName()).join(" "));
 
     sink("Usage: ");
 
@@ -463,7 +463,7 @@ private void printUsage(T)(void delegate(string) sink, string delegate(string) g
         print(cmd.arguments.positionalArguments.map!(ref (_) => cmd.arguments.arguments[_]));
         // sub commands
         if(cmd.subCommands.length > 0)
-            sink(style.subcommandName.apply(" <command> [<args>]"));
+            sink(style.subcommandName(" <command> [<args>]"));
     }
 
     sink("\n");
@@ -518,7 +518,7 @@ private auto getSections(string delegate(string) getArgumentName, const ref Styl
             else
             {
                 index = sectionMap[group.name] = sections.length;
-                sections ~= Section(style.argumentGroupTitle.apply(group.name), group.description);
+                sections ~= Section(style.argumentGroupTitle(group.name), group.description);
             }
 
             sections[index].entries.match!(
@@ -551,13 +551,13 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
 
     alias getItem = (ref _)
     {
-        return Item(_.names.map!(_ => style.subcommandName.apply(_)).join(","), LazyString(() {
+        return Item(_.names.map!(_ => style.subcommandName(_)).join(","), LazyString(() {
             auto shortDescription = _.shortDescription.get;
             return shortDescription.length > 0 ? shortDescription : _.description.get;
         }));
     };
 
-    auto section = Section(style.argumentGroupTitle.apply("Available commands"));
+    auto section = Section(style.argumentGroupTitle("Available commands"));
 
     // pre-compute the output
     section.entries = commands
@@ -599,7 +599,7 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 
     auto helpStyle = enableStyling ? config.helpStyle : Style.None;
 
-    auto section = getSection(_ => helpStyle.namedArgumentName.apply(getArgumentName(_, config)), helpStyle, cmd);
+    auto section = getSection(_ => helpStyle.namedArgumentName(getArgumentName(_, config)), helpStyle, cmd);
 
     immutable helpPosition = min(section.maxItemNameLength() + 4, 24);
     immutable indent = spaces(helpPosition + 2);
