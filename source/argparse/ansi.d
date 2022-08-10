@@ -108,19 +108,19 @@ unittest
 
 package template StyleImpl(ubyte styleCode)
 {
-    auto StyleImpl()
+    public auto StyleImpl()
     {
-        return TextStyle([styleCode]);
+        return TextStyle(styleCode);
     }
-    auto StyleImpl(TextStyle otherStyle)
+    public auto StyleImpl(TextStyle otherStyle)
     {
         return otherStyle ~ styleCode;
     }
-    auto StyleImpl(string text)
+    public auto StyleImpl(string text)
     {
-        return StyledText(TextStyle([styleCode]), text);
+        return StyledText(TextStyle(styleCode), text);
     }
-    auto StyleImpl(TextStyle otherStyle, string text)
+    public auto StyleImpl(TextStyle otherStyle, string text)
     {
         return StyledText(otherStyle ~ styleCode, text);
     }
