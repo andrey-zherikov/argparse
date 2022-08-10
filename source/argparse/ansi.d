@@ -229,7 +229,25 @@ package bool detectSupport()
         import std.algorithm: startsWith, find;
         auto term = environment.get("TERM");
 
-        return term.find("cygwin") || term.startsWith("xterm");
+        if(term.find("cygwin") || term.startsWith("xterm"))
+            return true;
+
+        // ANSI escape sequences are supported since Windows10 v1511 so try to enable it
+        import core.sys.windows.winbase: GetStdHandle, STD_OUTPUT_HANDLE, INVALID_HANDLE_VALUE;
+        import core.sys.windows.wincon: GetConsoleMode, SetConsoleMode, ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+
+        auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        if(!handle || handle == INVALID_HANDLE_VALUE)
+            return false;
+
+        uint mode;
+        if(!GetConsoleMode(handle, &mode))
+            return false;
+
+        if(mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+            return true; // already enabled
+
+        return SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0;
     }
     else version(Posix)
     {
