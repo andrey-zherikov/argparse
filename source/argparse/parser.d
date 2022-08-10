@@ -328,20 +328,29 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package static Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
+package static Result callParser(Config origConfig, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 {
-    auto copyConfig = config;
-    copyConfig.setStylingMode = (Config.StylingMode mode) { copyConfig.stylingMode = mode; };
+    import argparse.ansi: detectSupport;
 
-    auto parser = Parser(&copyConfig, args);
+    auto config = origConfig;
+    config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.helpStylingMode = mode; };
 
-    auto command = CommandArguments!COMMAND(&copyConfig);
+    auto parser = Parser(&config, args);
+
+    auto command = CommandArguments!COMMAND(&config);
     auto res = parser.parseAll!completionMode(command, receiver);
 
     static if(!completionMode)
     {
         if(res)
+        {
             unrecognizedArgs = parser.unrecognizedArgs;
+
+            if(config.helpStylingMode == Config.StylingMode.autodetect)
+                config.setStylingMode(detectSupport() ? Config.StylingMode.on : Config.StylingMode.off);
+
+            command.onParsingDone(receiver, &config);
+        }
         else if(res.errorMsg.length > 0)
             config.onError(res.errorMsg);
     }

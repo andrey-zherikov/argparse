@@ -767,6 +767,9 @@ package struct CommandArguments(RECEIVER)
     ParseFunction!RECEIVER[] parseArguments;
     ParseFunction!RECEIVER[] completeArguments;
 
+    alias void delegate(ref RECEIVER receiver, const Config* config) ParseFinalizer;
+    ParseFinalizer[] parseFinalizers;
+
     uint level; // (sub-)command level, 0 = top level
 
     // sub commands
@@ -889,7 +892,15 @@ package struct CommandArguments(RECEIVER)
             enum originalUDA = NamedArgument();
 
         static if(is(typeof(member) == AnsiStylingArgument))
+        {
             enum uda = originalUDA.addDefaults(getUDAs!(AnsiStylingArgument, ArgumentUDA)[0]);
+
+            parseFinalizers ~= (ref RECEIVER receiver, const Config* config)
+                {
+                    auto target = &__traits(getMember, receiver, symbol);
+                    AnsiStylingArgument.finalize(*target, config);
+                };
+        }
         else
             alias uda = originalUDA;
 
@@ -1004,6 +1015,12 @@ package struct CommandArguments(RECEIVER)
 
             rawArgs = [];
         }
+    }
+
+    package void onParsingDone(ref RECEIVER receiver, const Config* config) const
+    {
+        foreach(dg; parseFinalizers)
+            dg(receiver, config);
     }
 }
 

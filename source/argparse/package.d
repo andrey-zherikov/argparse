@@ -67,7 +67,12 @@ struct Config
     enum StylingMode { autodetect, on, off }
     StylingMode helpStylingMode = StylingMode.autodetect;
 
-    package void delegate(StylingMode) setStylingMode;
+    package void delegate(StylingMode)[] setStylingModeHandlers;
+    package void setStylingMode(StylingMode mode) const
+    {
+        foreach(dg; setStylingModeHandlers)
+            dg(mode);
+    }
 
     /**
        Help style.
@@ -1596,25 +1601,43 @@ unittest
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 @(NamedArgument
-.Description("Colorize the output. Value can be 'always' (default if omitted), 'auto', or 'never'")
+.Description("Colorize the output. If value is omitted then 'always' is used.")
 .AllowedValues!(["always","auto","never"])
 .NumberOfValues(0, 1)
 )
 package struct AnsiStylingArgument
 {
-    static void action(ref AnsiStylingArgument receiver, RawParam param)
+    Config.StylingMode helpStylingMode = Config.StylingMode.autodetect;
+
+    alias helpStylingMode this;
+
+    string toString() const
+    {
+        import std.conv: to;
+        return helpStylingMode.to!string;
+    }
+
+    package void set(const Config* config, Config.StylingMode mode)
+    {
+        config.setStylingMode(helpStylingMode = mode);
+    }
+    package static void action(ref AnsiStylingArgument receiver, RawParam param)
     {
         switch(param.value[0])
         {
-            case "always":  param.config.setStylingMode(Config.StylingMode.on);         return;
-            case "auto":    param.config.setStylingMode(Config.StylingMode.autodetect); return;
-            case "never":   param.config.setStylingMode(Config.StylingMode.off);        return;
+            case "always":  receiver.set(param.config, Config.StylingMode.on);         return;
+            case "auto":    receiver.set(param.config, Config.StylingMode.autodetect); return;
+            case "never":   receiver.set(param.config, Config.StylingMode.off);        return;
             default:
         }
     }
-    static void action(ref AnsiStylingArgument receiver, Param!void param)
+    package static void action(ref AnsiStylingArgument receiver, Param!void param)
     {
-        param.config.setStylingMode(Config.StylingMode.on);
+        receiver.set(param.config, Config.StylingMode.on);
+    }
+    package static void finalize(ref AnsiStylingArgument receiver, const Config* config)
+    {
+        receiver.set(config, config.helpStylingMode);
     }
 }
 
@@ -1628,7 +1651,7 @@ unittest
     assert(ansiStylingArgument == AnsiStylingArgument.init);
 
     Config config;
-    config.setStylingMode = (Config.StylingMode mode) { config.stylingMode = mode; };
+    config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.helpStylingMode = mode; };
 
     AnsiStylingArgument arg;
     AnsiStylingArgument.action(arg, Param!void(&config));
@@ -1641,7 +1664,7 @@ unittest
     auto test(string value)
     {
         Config config;
-        config.setStylingMode = (Config.StylingMode mode) { config.stylingMode = mode; };
+        config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.helpStylingMode = mode; };
 
         AnsiStylingArgument arg;
         AnsiStylingArgument.action(arg, RawParam(&config, "", [value]));
