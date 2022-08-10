@@ -1,4 +1,5 @@
 import argparse;
+import argparse.ansi;
 
 static struct Advanced
 {
@@ -25,8 +26,19 @@ static struct Advanced
     static auto color = ansiStylingArgument;
 }
 
+// Customize prsing config
+auto config()
+{
+    Config cfg;
+
+    cfg.helpStyle.programName = blue.onYellow;
+    cfg.helpStyle.namedArgumentName = bold.italic.cyan.onRed;
+
+    return cfg;
+}
+
 // This mixin defines standard main function that parses command line and calls the provided function:
-mixin CLI!Advanced.main!((args, unparsed)
+mixin CLI!(config(), Advanced).main!((args, unparsed)
 {
     // 'args' has 'Advanced' type
     static assert(is(typeof(args) == Advanced));
@@ -38,5 +50,10 @@ mixin CLI!Advanced.main!((args, unparsed)
     import std.stdio: writeln;
     args.writeln;
     writeln("Unparsed args: ", unparsed);
+
+    // use actual styling mode to print output
+    auto style = Advanced.color == Config.StylingMode.on ? red.onWhite : noStyle;
+    writeln(style("Styling mode: "), Advanced.color);
+
     return 0;
 });
