@@ -87,16 +87,16 @@ package struct StyledText
 
     string text;
 
-    @property auto get()
+    string toString() const
     {
-        return style.apply(text);
+        return style(text);
     }
 }
 
 unittest
 {
     auto s = TextStyle([Font.bold]);
-    assert(StyledText(s, "foo").get == s.apply("foo"));
+    assert(StyledText(s, "foo").toString() == s("foo"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -166,10 +166,10 @@ unittest
     assert(bold.italic == TextStyle([Font.bold, Font.italic]));
     assert(bold.italic.red == TextStyle([Font.bold, Font.italic, Color.red]));
     assert(bold.italic.red.onWhite == TextStyle([Font.bold, Font.italic, Color.red, colorBgOffset + Color.white]));
-    assert(bold("foo").get == "\033[1mfoo\033[m");
-    assert(bold.italic("foo").get == "\033[1;3mfoo\033[m");
-    assert(bold.italic.red("foo").get == "\033[1;3;31mfoo\033[m");
-    assert(bold.italic.red.onWhite("foo").get == "\033[1;3;31;107mfoo\033[m");
+    assert(bold("foo").toString() == "\033[1mfoo\033[m");
+    assert(bold.italic("foo").toString() == "\033[1;3mfoo\033[m");
+    assert(bold.italic.red("foo").toString() == "\033[1;3;31mfoo\033[m");
+    assert(bold.italic.red.onWhite("foo").toString() == "\033[1;3;31;107mfoo\033[m");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -186,7 +186,7 @@ package size_t getUnstyledTextLength(string text)
 
 package size_t getUnstyledTextLength(StyledText text)
 {
-    return getUnstyledTextLength(text.get);
+    return getUnstyledTextLength(text.toString());
 }
 
 unittest
