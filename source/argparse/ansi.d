@@ -210,6 +210,10 @@ unittest
 
 package bool detectSupport()
 {
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    // Heuristics section in README must be in sync with the code below
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     import std.process: environment;
 
     // https://no-color.org/
