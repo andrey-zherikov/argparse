@@ -1044,7 +1044,7 @@ void printText(bool enableStyle)
 ### Styling mode
 
 By default `argparse` will try to detect whether ANSI styling is supported and if so it will apply styling to the help text.
-In some cases this behavior should be adjusted or overridden. To do so you can use `Config.helpStylingMode`:
+In some cases this behavior should be adjusted or overridden. To do so you can use `Config.stylingMode`:
 Argparse provides the following setting to control the styling:
 - If it's set to `Config.StylingMode.on` then styling is **always enabled**.
 - If it's set to `Config.StylingMode.off` then styling is **always disabled**.
@@ -1526,7 +1526,7 @@ Default is `true`.
 
 ### Help styling mode
 
-`Config.helpStylingMode` - styling mode that is used to print help text. It has the following type: `enum StylingMode { autodetect, on, off }`.
+`Config.stylingMode` - styling mode that is used to print help text. It has the following type: `enum StylingMode { autodetect, on, off }`.
 
 Default value is `Config.StylingMode.autodetect`.
 

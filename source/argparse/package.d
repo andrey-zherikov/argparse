@@ -65,7 +65,7 @@ struct Config
        Defaults to auto-detectection of the capability.
      */
     enum StylingMode { autodetect, on, off }
-    StylingMode helpStylingMode = StylingMode.autodetect;
+    StylingMode stylingMode = StylingMode.autodetect;
 
     package void delegate(StylingMode)[] setStylingModeHandlers;
     package void setStylingMode(StylingMode mode) const
@@ -1607,19 +1607,19 @@ unittest
 )
 package struct AnsiStylingArgument
 {
-    Config.StylingMode helpStylingMode = Config.StylingMode.autodetect;
+    Config.StylingMode stylingMode = Config.StylingMode.autodetect;
 
-    alias helpStylingMode this;
+    alias stylingMode this;
 
     string toString() const
     {
         import std.conv: to;
-        return helpStylingMode.to!string;
+        return stylingMode.to!string;
     }
 
     package void set(const Config* config, Config.StylingMode mode)
     {
-        config.setStylingMode(helpStylingMode = mode);
+        config.setStylingMode(stylingMode = mode);
     }
     package static void action(ref AnsiStylingArgument receiver, RawParam param)
     {
@@ -1637,7 +1637,7 @@ package struct AnsiStylingArgument
     }
     package static void finalize(ref AnsiStylingArgument receiver, const Config* config)
     {
-        receiver.set(config, config.helpStylingMode);
+        receiver.set(config, config.stylingMode);
     }
 }
 
@@ -1651,12 +1651,12 @@ unittest
     assert(ansiStylingArgument == AnsiStylingArgument.init);
 
     Config config;
-    config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.helpStylingMode = mode; };
+    config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.stylingMode = mode; };
 
     AnsiStylingArgument arg;
     AnsiStylingArgument.action(arg, Param!void(&config));
 
-    assert(config.helpStylingMode == Config.StylingMode.on);
+    assert(config.stylingMode == Config.StylingMode.on);
 }
 
 unittest
@@ -1664,11 +1664,11 @@ unittest
     auto test(string value)
     {
         Config config;
-        config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.helpStylingMode = mode; };
+        config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.stylingMode = mode; };
 
         AnsiStylingArgument arg;
         AnsiStylingArgument.action(arg, RawParam(&config, "", [value]));
-        return config.helpStylingMode;
+        return config.stylingMode;
     }
 
     assert(test("always") == Config.StylingMode.on);

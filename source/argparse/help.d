@@ -378,7 +378,7 @@ unittest
         auto a = appender!string;
         Style style;
         Config config;
-        config.helpStylingMode = Config.StylingMode.off;
+        config.stylingMode = Config.StylingMode.off;
         printInvocation(_ => a.put(_), style, applyDefaults!(info, int, "foo"), ["f".getArgumentName(&config),"foo".getArgumentName(&config)]);
         return a[];
     }
@@ -418,7 +418,7 @@ unittest
         auto a = appender!string;
         Style style;
         Config config;
-        config.helpStylingMode = Config.StylingMode.off;
+        config.stylingMode = Config.StylingMode.off;
         printUsage(_ => a.put(_), _ => getArgumentName(_, &config), style, applyDefaults!(info, int, "foo"));
         return a[];
     }
@@ -594,8 +594,8 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 {
     import std.algorithm: min;
 
-    bool enableStyling = config.helpStylingMode == Config.StylingMode.on ||
-        config.helpStylingMode == Config.StylingMode.autodetect && detectSupport();
+    bool enableStyling = config.stylingMode == Config.StylingMode.on ||
+        config.stylingMode == Config.StylingMode.autodetect && detectSupport();
 
     auto helpStyle = enableStyling ? config.helpStyle : Style.None;
 
@@ -638,7 +638,7 @@ unittest
 
         auto a = appender!string;
         Config config;
-        config.helpStylingMode = Config.StylingMode.off;
+        config.stylingMode = Config.StylingMode.off;
         printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
         return a[];
     }
@@ -696,7 +696,7 @@ unittest
 
     auto a = appender!string;
     Config config;
-    config.helpStylingMode = Config.StylingMode.off;
+    config.stylingMode = Config.StylingMode.off;
     printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
@@ -746,7 +746,7 @@ unittest
 
     auto a = appender!string;
     Config config;
-    config.helpStylingMode = Config.StylingMode.off;
+    config.stylingMode = Config.StylingMode.off;
     printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~

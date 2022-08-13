@@ -333,7 +333,7 @@ package static Result callParser(Config origConfig, bool completionMode, COMMAND
     import argparse.ansi: detectSupport;
 
     auto config = origConfig;
-    config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.helpStylingMode = mode; };
+    config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.stylingMode = mode; };
 
     auto parser = Parser(&config, args);
 
@@ -346,7 +346,7 @@ package static Result callParser(Config origConfig, bool completionMode, COMMAND
         {
             unrecognizedArgs = parser.unrecognizedArgs;
 
-            if(config.helpStylingMode == Config.StylingMode.autodetect)
+            if(config.stylingMode == Config.StylingMode.autodetect)
                 config.setStylingMode(detectSupport() ? Config.StylingMode.on : Config.StylingMode.off);
 
             command.onParsingDone(receiver, &config);
