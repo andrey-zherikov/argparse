@@ -3,7 +3,8 @@ module argparse;
 
 import argparse.internal;
 import argparse.parser: callParser;
-
+import argparse.help: Style;
+import argparse.ansi;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Public API
@@ -58,6 +59,25 @@ struct Config
        Defaults to true.
      */
     bool addHelp = true;
+
+    /**
+       Styling and coloring mode.
+       Defaults to auto-detectection of the capability.
+     */
+    enum StylingMode { autodetect, on, off }
+    StylingMode stylingMode = StylingMode.autodetect;
+
+    package void delegate(StylingMode)[] setStylingModeHandlers;
+    package void setStylingMode(StylingMode mode) const
+    {
+        foreach(dg; setStylingModeHandlers)
+            dg(mode);
+    }
+
+    /**
+       Help style.
+     */
+    Style helpStyle = Style.Default;
 
     /**
        Delegate that processes error messages if they happen during argument parsing.
@@ -169,17 +189,6 @@ package struct ArgumentInfo
     LazyString description;
     string placeholder;
 
-    void setAllowedValues(alias names)()
-    {
-        if(placeholder.length == 0)
-        {
-            import std.conv: to;
-            import std.array: join;
-            import std.format: format;
-            placeholder = "{%s}".format(names.to!(string[]).join(','));
-        }
-    }
-
     bool hideFromHelp = false;      // if true then this argument is not printed on help page
 
     bool required;
@@ -218,6 +227,14 @@ package struct ArgumentInfo
 
     bool allowBooleanNegation = true;
     bool ignoreInDefaultCommand;
+}
+
+package string formatAllowedValues(alias names)()
+{
+    import std.conv: to;
+    import std.array: join;
+    import std.format: format;
+    return "{%s}".format(names.to!(string[]).join(','));
 }
 
 
@@ -263,6 +280,22 @@ package struct ArgumentUDA(alias ValueParseFunctions)
     package ArgumentInfo info;
 
     package alias parsingFunc = ValueParseFunctions;
+
+    package auto addDefaults(T)(ArgumentUDA!T uda)
+    {
+        import std.traits: getUDAs;
+
+        auto newInfo = info;
+
+        if(newInfo.names.length == 0) newInfo.names = uda.info.names;
+        if(newInfo.placeholder.length == 0) newInfo.placeholder = uda.info.placeholder;
+        if(!newInfo.description.isSet()) newInfo.description = uda.info.description;
+        if(newInfo.position.isNull()) newInfo.position = uda.info.position;
+        if(newInfo.minValuesCount.isNull()) newInfo.minValuesCount = uda.info.minValuesCount;
+        if(newInfo.maxValuesCount.isNull()) newInfo.maxValuesCount = uda.info.maxValuesCount;
+
+        return ArgumentUDA!(parsingFunc.addDefaults!(uda.parsingFunc))(newInfo);
+    }
 
     public auto ref Description(string text)
     {
@@ -335,7 +368,7 @@ package enum bool isArgumentUDA(T) = (is(typeof(T.info) == ArgumentInfo) && is(T
 
 unittest
 {
-    ArgumentUDA!void arg;
+    ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void)) arg;
     assert(!arg.info.hideFromHelp);
     assert(!arg.info.required);
     assert(arg.info.minValuesCount.isNull);
@@ -360,6 +393,15 @@ unittest
     assert(arg.info.maxValuesCount.get == 30);
 
     arg = arg.MinNumberOfValues(2).MaxNumberOfValues(3);
+    assert(arg.info.minValuesCount.get == 2);
+    assert(arg.info.maxValuesCount.get == 3);
+
+    // values shouldn't be changed
+    arg.addDefaults(ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void)).init);
+    assert(arg.info.placeholder == "text");
+    assert(arg.info.description.get == "qwer");
+    assert(arg.info.hideFromHelp);
+    assert(!arg.info.required);
     assert(arg.info.minValuesCount.get == 2);
     assert(arg.info.maxValuesCount.get == 3);
 }
@@ -697,8 +739,6 @@ unittest
 
 unittest
 {
-    import std.typecons : tuple;
-
     struct T
     {
         string a;
@@ -731,6 +771,7 @@ unittest
     struct T
     {
         string a;
+        static auto color = ansiStylingArgument;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(false); })(["-g"]) != 0);
@@ -745,16 +786,14 @@ unittest
         assert(args == ["-g"]);
         return 12345;
     })(["-a","aa","-g"]) == 12345);
-    static assert(CLI!T.parseArgs!((T t, string[] args) {
-        assert(t == T.init);
-        assert(args.length == 0);
+    assert(CLI!T.parseArgs!((T t) {
+        assert(t.color == Config.StylingMode.on);
         return 12345;
-    })([]) == 12345);
-    static assert(CLI!T.parseArgs!((T t, string[] args) {
-        assert(t == T("aa"));
-        assert(args == ["-g"]);
+    })(["--color"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) {
+        assert(t.color == Config.StylingMode.off);
         return 12345;
-    })(["-a","aa","-g"]) == 12345);
+    })(["--color","never"]) == 12345);
 }
 
 unittest
@@ -1250,13 +1289,17 @@ auto AllowedValues(alias values, ARG)(ARG arg)
     enum valuesAA = assocArray(values, false.repeat);
 
     auto desc = arg.Validation!(Validators.ValueInList!(values, KeyType!(typeof(valuesAA))));
-    desc.info.setAllowedValues!values;
+    if(desc.info.placeholder.length == 0)
+        desc.info.placeholder = formatAllowedValues!values;
+
     return desc;
 }
 
 
 unittest
 {
+    assert(NamedArgument.AllowedValues!([1,3,5]).info.placeholder == "{1,3,5}");
+
     struct T
     {
         @(NamedArgument.AllowedValues!([1,3,5])) int a;
@@ -1571,4 +1614,85 @@ unittest
     assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+@(NamedArgument
+.Description("Colorize the output. If value is omitted then 'always' is used.")
+.AllowedValues!(["always","auto","never"])
+.NumberOfValues(0, 1)
+)
+package struct AnsiStylingArgument
+{
+    Config.StylingMode stylingMode = Config.StylingMode.autodetect;
+
+    alias stylingMode this;
+
+    string toString() const
+    {
+        import std.conv: to;
+        return stylingMode.to!string;
+    }
+
+    package void set(const Config* config, Config.StylingMode mode)
+    {
+        config.setStylingMode(stylingMode = mode);
+    }
+    package static void action(ref AnsiStylingArgument receiver, RawParam param)
+    {
+        switch(param.value[0])
+        {
+            case "always":  receiver.set(param.config, Config.StylingMode.on);         return;
+            case "auto":    receiver.set(param.config, Config.StylingMode.autodetect); return;
+            case "never":   receiver.set(param.config, Config.StylingMode.off);        return;
+            default:
+        }
+    }
+    package static void action(ref AnsiStylingArgument receiver, Param!void param)
+    {
+        receiver.set(param.config, Config.StylingMode.on);
+    }
+    package static void finalize(ref AnsiStylingArgument receiver, const Config* config)
+    {
+        receiver.set(config, config.stylingMode);
+    }
+}
+
+auto ansiStylingArgument()
+{
+    return AnsiStylingArgument.init;
+}
+
+unittest
+{
+    import std.conv: to;
+
+    assert(ansiStylingArgument == AnsiStylingArgument.init);
+    assert(ansiStylingArgument.toString() == Config.StylingMode.autodetect.to!string);
+
+    Config config;
+    config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.stylingMode = mode; };
+
+    AnsiStylingArgument arg;
+    AnsiStylingArgument.action(arg, Param!void(&config));
+
+    assert(config.stylingMode == Config.StylingMode.on);
+    assert(arg.toString() == Config.StylingMode.on.to!string);
+}
+
+unittest
+{
+    auto test(string value)
+    {
+        Config config;
+        config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.stylingMode = mode; };
+
+        AnsiStylingArgument arg;
+        AnsiStylingArgument.action(arg, RawParam(&config, "", [value]));
+        return config.stylingMode;
+    }
+
+    assert(test("always") == Config.StylingMode.on);
+    assert(test("auto")   == Config.StylingMode.autodetect);
+    assert(test("never")  == Config.StylingMode.off);
+    assert(test("")       == Config.StylingMode.autodetect);
+}

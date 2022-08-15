@@ -38,6 +38,7 @@
     - Validation of parsed data (i.e. after conversion to `destination type`).
     - Custom action on parsed data (doing something different from storing the parsed value in a member of destination
       object).
+- [ANSI colors and styles](#ansi-colors-and-styles)
 - [Built-in reporting of error happened during argument parsing](#error-handling).
 - [Built-in help generation](#help-generation).
 
@@ -121,33 +122,6 @@ Optional arguments:
   --callback2 [CALLBACK2 ...]
 
   -h, --help              Show this help message and exit
-```
-
-Parser can even work at compile time, so you can do something like this:
-
-```d
-enum values = {
-    Basic values;
-    assert(CLI!Basic.parseArgs(values,
-        [
-        "--boolean",
-        "--number","100",
-        "--name","Jake",
-        "--array","1","2","3",
-        "--choice","foo",
-        "--callback",
-        "--callback1","cb-value",
-        "--callback2","cb-v1","cb-v2",
-        ]));
-    return values;
-}();
-
-static assert(values.name     == "Jake");
-static assert(values.unused   == Basic.init.unused);
-static assert(values.number   == 100);
-static assert(values.boolean  == true);
-static assert(values.choice   == Basic.Enum.foo);
-static assert(values.array    == [1,2,3]);
 ```
 
 For more sophisticated CLI usage, `argparse` provides few UDAs:
@@ -995,6 +969,153 @@ Optional arguments:
 ```
 
 
+## ANSI colors and styles
+
+Using colors in your command’s output does not just look good: **contrasting** important elements like argument names
+from the rest of the text **reduces the cognitive load** on the user. `argparse` uses [ANSI escape sequences](https://en.wikipedia.org/wiki/ANSI_escape_code)
+to add coloring and styling to help text. In addition, `argparse` offers public API to apply colors and styles
+to any text printed to the console (see below).
+
+![Default styling](https://github.com/andrey-zherikov/argparse/blob/master/images/default_styling.png?raw=true)
+
+### Styles and colors
+
+The `argpase.ansi` submodule provides supported styles and colors. You can use any combinations of them:
+
+**Font styles:**
+- `bold`
+- `italic`
+- `underline`
+
+**Foreground colors:**
+- `black`
+- `red`
+- `green`
+- `yellow`
+- `blue`
+- `magenta`
+- `cyan`
+- `lightGray`
+- `darkGray`
+- `lightRed`
+- `lightGreen`
+- `lightYellow`
+- `lightBlue`
+- `lightMagenta`
+- `lightCyan`
+- `white`
+
+**Background colors:**
+- `onBlack`
+- `onRed`
+- `onGreen`
+- `onYellow`
+- `onBlue`
+- `onMagenta`
+- `onCyan`
+- `onLightGray`
+- `onDarkGray`
+- `onLightRed`
+- `onLightGreen`
+- `onLightYellow`
+- `onLightBlue`
+- `onLightMagenta`
+- `onLightCyan`
+- `onWhite`
+
+There is also a "virtual" style `noStyle` that means no styling is applied. It's useful in ternary operations as a fallback
+for the case when styling is disabled. See below example for details.
+
+All styles above can be combined using `.` and even be used in regular output:
+
+```d
+// `enableStyle` is a flag indicating that styling should be enabled
+void printText(bool enableStyle)
+{
+  // style is enabled at runtime when `enableStyle` is true
+  auto myStyle = enableStyle ? bold.italic.cyan.onRed : noStyle;
+  
+  // "Hello" is always printed in green;
+  // "world!" is printed in bold, italic, cyan and on red when `enableStyle` is true, "as is" otherwise
+  writeln(green("Hello "), myStyle("world!"));
+}
+```
+
+### Styling mode
+
+By default `argparse` will try to detect whether ANSI styling is supported and if so it will apply styling to the help text.
+In some cases this behavior should be adjusted or overridden. To do so you can use `Config.stylingMode`:
+Argparse provides the following setting to control the styling:
+- If it's set to `Config.StylingMode.on` then styling is **always enabled**.
+- If it's set to `Config.StylingMode.off` then styling is **always disabled**.
+- If it's set to `Config.StylingMode.autodetect` then [heuristics](#heuristics-for-enabling-styling) are used to determine
+  whether styling will be applied.
+
+In some cases styling control should be exposed to a user as a command line argument (similar to `--color` argument in `ls` and `grep` commands).
+Argparse supports this use case - just add an argument to your command (you can customize it with `@NamedArgument` UDA):
+
+```d
+static auto color = ansiStylingArgument;
+```
+
+This will add the following argument:
+```
+  --color [{always,auto,never}]
+                          Colorize the output. If value is omitted then 'always'
+                          is used.
+```
+
+If you want to determine whether `--color` argument was specified in command line, you can simply check the value of that
+data member:
+
+```d
+static struct Arguments
+{
+    static auto color = ansiStylingArgument;
+}
+
+mixin CLI!Arguments.main!((args)
+{
+    // 'autodetect' is converted to either 'on' or 'off' 
+    if(args.color == Config.StylingMode.on)
+      writeln("Colors are enabled");
+    else
+      writeln("Colors are disabled");
+});
+```
+
+### Help text styling scheme
+
+`argparse` uses `Config.helpStyle` to determine what style should be applied to different parts of help text.
+This parameter has the following members that can be tuned:
+
+- `programName`: style for the program name. Default is `bold`.
+- `subcommandName`: style for the subcommand name. Default is `bold`.
+- `argumentGroupTitle`: style for the title of argument group. Default is `bold.underline`.
+- `namedArgumentName`: style for the name of named argument. Default is `lightYellow`.
+- `namedArgumentValue`: style for the value of named argument. Default is `italic`.
+- `positionalArgumentValue`: style for the value of positional argument. Default is `lightYellow`.
+
+### Heuristics for enabling styling
+
+Below is the exact sequence of steps argparse uses to determine whether or not to emit ANSI escape codes
+(see detectSupport() function [here](https://github.com/andrey-zherikov/argparse/blob/master/source/argparse/ansi.d) for details):
+
+1. If environment variable `NO_COLOR != ""` then styling is **disabled**. See [here](https://no-color.org/) for details.
+2. If environment variable `CLICOLOR_FORCE != "0"` then styling is **enabled**. See [here](https://bixense.com/clicolors/) for details.
+3. If environment variable `CLICOLOR == "0"` then styling is **disabled**. See [here](https://bixense.com/clicolors/) for details.
+4. If environment variable `ConEmuANSI == "OFF"` then styling is **disabled**. See [here](https://conemu.github.io/en/AnsiEscapeCodes.html#Environment_variable) for details.
+5. If environment variable `ConEmuANSI == "ON"` then styling is **enabled**. See [here](https://conemu.github.io/en/AnsiEscapeCodes.html#Environment_variable) for details.
+6. If environment variable `ANSICON` is defined (regardless of its value) then styling is **enabled**. See [here](https://github.com/adoxa/ansicon/blob/master/readme.txt) for details.
+7. **Windows only** (`version(Windows)`):
+   1. If environment variable `TERM` contains `"cygwin"` or starts with `"xterm"` then styling is **enabled**.
+   2. If `GetConsoleMode` call for `STD_OUTPUT_HANDLE` returns a mode that has `ENABLE_VIRTUAL_TERMINAL_PROCESSING` set then styling is **enabled**.
+   3. If `SetConsoleMode` call for `STD_OUTPUT_HANDLE` with `ENABLE_VIRTUAL_TERMINAL_PROCESSING` mode was successful then styling is **enabled**.
+8. **Posix only** (`version(Posix)`):
+   1. If `STDOUT` is **not** redirected then styling is **enabled**.
+9. If none of the above applies then styling is **disabled**.
+
+
 ## Supported types
 
 ### Boolean
@@ -1402,6 +1523,27 @@ If `CLI!(...).parseArgs(alias newMain)` or `CLI!(...).main(alias newMain)` is us
 not be called.
 
 Default is `true`.
+
+### Help styling mode
+
+`Config.stylingMode` - styling mode that is used to print help text. It has the following type: `enum StylingMode { autodetect, on, off }`.
+
+Default value is `Config.StylingMode.autodetect`.
+
+See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
+
+### Help styling scheme
+
+`Config.helpStyle` - contains help text style. It has the following members:
+
+- `programName`: style for the program name.
+- `subcommandName`: style for the subcommand name.
+- `argumentGroupTitle`: style for the title of argument group.
+- `namedArgumentName`: style for the name of named argument.
+- `namedArgumentValue`: style for the value of named argument.
+- `positionalArgumentValue`: style for the value of positional argument.
+
+See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 
 ### Error handling
 
