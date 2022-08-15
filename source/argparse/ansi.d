@@ -340,11 +340,14 @@ unittest
 
     version(Windows)
     {
-        // clean "TERM" env for windows
-        auto term = environment.get("TERM");
-        scope(exit) environment["TERM"] = term;
         environment.remove("TERM");
 
         assert(!detectSupport());
+
+        environment["TERM"] = "some cygwin flavor";
+        assert(detectSupport());
+
+        environment["TERM"] = "xterm1";
+        assert(detectSupport());
     }
 }

@@ -730,8 +730,6 @@ unittest
 
 unittest
 {
-    import std.typecons : tuple;
-
     struct T
     {
         string a;
@@ -764,6 +762,7 @@ unittest
     struct T
     {
         string a;
+        static auto color = ansiStylingArgument;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(false); })(["-g"]) != 0);
@@ -778,6 +777,14 @@ unittest
         assert(args == ["-g"]);
         return 12345;
     })(["-a","aa","-g"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) {
+        assert(t.color == Config.StylingMode.on);
+        return 12345;
+    })(["--color"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) {
+        assert(t.color == Config.StylingMode.off);
+        return 12345;
+    })(["--color","never"]) == 12345);
 }
 
 unittest
@@ -1648,7 +1655,10 @@ auto ansiStylingArgument()
 
 unittest
 {
+    import std.conv: to;
+
     assert(ansiStylingArgument == AnsiStylingArgument.init);
+    assert(ansiStylingArgument.toString() == Config.StylingMode.autodetect.to!string);
 
     Config config;
     config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.stylingMode = mode; };
@@ -1657,6 +1667,7 @@ unittest
     AnsiStylingArgument.action(arg, Param!void(&config));
 
     assert(config.stylingMode == Config.StylingMode.on);
+    assert(arg.toString() == Config.StylingMode.on.to!string);
 }
 
 unittest

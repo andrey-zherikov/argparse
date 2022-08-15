@@ -1247,30 +1247,30 @@ unittest
         return receiver;
     };
 
-    static assert(test!string([""]) == "");
-    static assert(test!string(["foo"]) == "foo");
-    static assert(isNaN(test!double([""])));
-    static assert(test!double(["-12.34"]) == -12.34);
-    static assert(test!double(["12.34"]) == 12.34);
-    static assert(test!uint(["1234"]) == 1234);
-    static assert(test!int([""]) == int.init);
-    static assert(test!int(["-1234"]) == -1234);
-    static assert(test!char([""]) == char.init);
-    static assert(test!char(["f"]) == 'f');
-    static assert(test!bool([]) == true);
-    static assert(test!bool([""]) == true);
-    static assert(test!bool(["yes"]) == true);
-    static assert(test!bool(["y"]) == true);
-    static assert(test!bool(["true"]) == true);
-    static assert(test!bool(["no"]) == false);
-    static assert(test!bool(["n"]) == false);
-    static assert(test!bool(["false"]) == false);
-    static assert(test!MyEnum(["foo"]) == MyEnum.foo);
-    static assert(test!MyEnum(["bar"]) == MyEnum.bar);
-    static assert(test!(MyEnum[])(["bar","foo"]) == [MyEnum.bar, MyEnum.foo]);
-    static assert(test!(string[string])(["a=bar","b=foo"]) == ["a":"bar", "b":"foo"]);
-    static assert(test!(MyEnum[string])(["a=bar","b=foo"]) == ["a":MyEnum.bar, "b":MyEnum.foo]);
-    static assert(test!(int[MyEnum])(["bar=3","foo=5"]) == [MyEnum.bar:3, MyEnum.foo:5]);
+    assert(test!string([""]) == "");
+    assert(test!string(["foo"]) == "foo");
+    assert(isNaN(test!double([""])));
+    assert(test!double(["-12.34"]) == -12.34);
+    assert(test!double(["12.34"]) == 12.34);
+    assert(test!uint(["1234"]) == 1234);
+    assert(test!int([""]) == int.init);
+    assert(test!int(["-1234"]) == -1234);
+    assert(test!char([""]) == char.init);
+    assert(test!char(["f"]) == 'f');
+    assert(test!bool([]) == true);
+    assert(test!bool([""]) == true);
+    assert(test!bool(["yes"]) == true);
+    assert(test!bool(["y"]) == true);
+    assert(test!bool(["true"]) == true);
+    assert(test!bool(["no"]) == false);
+    assert(test!bool(["n"]) == false);
+    assert(test!bool(["false"]) == false);
+    assert(test!MyEnum(["foo"]) == MyEnum.foo);
+    assert(test!MyEnum(["bar"]) == MyEnum.bar);
+    assert(test!(MyEnum[])(["bar","foo"]) == [MyEnum.bar, MyEnum.foo]);
+    assert(test!(string[string])(["a=bar","b=foo"]) == ["a":"bar", "b":"foo"]);
+    assert(test!(MyEnum[string])(["a=bar","b=foo"]) == ["a":MyEnum.bar, "b":MyEnum.foo]);
+    assert(test!(int[MyEnum])(["bar=3","foo=5"]) == [MyEnum.bar:3, MyEnum.foo:5]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
