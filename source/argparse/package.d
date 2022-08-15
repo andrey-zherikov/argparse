@@ -395,6 +395,15 @@ unittest
     arg = arg.MinNumberOfValues(2).MaxNumberOfValues(3);
     assert(arg.info.minValuesCount.get == 2);
     assert(arg.info.maxValuesCount.get == 3);
+
+    // values shouldn't be changed
+    arg.addDefaults(ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void)).init);
+    assert(arg.info.placeholder == "text");
+    assert(arg.info.description.get == "qwer");
+    assert(arg.info.hideFromHelp);
+    assert(!arg.info.required);
+    assert(arg.info.minValuesCount.get == 2);
+    assert(arg.info.maxValuesCount.get == 3);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
