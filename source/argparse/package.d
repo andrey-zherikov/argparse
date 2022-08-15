@@ -368,7 +368,7 @@ package enum bool isArgumentUDA(T) = (is(typeof(T.info) == ArgumentInfo) && is(T
 
 unittest
 {
-    ArgumentUDA!void arg;
+    ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void)) arg;
     assert(!arg.info.hideFromHelp);
     assert(!arg.info.required);
     assert(arg.info.minValuesCount.isNull);
