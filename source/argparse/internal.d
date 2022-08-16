@@ -1754,22 +1754,22 @@ unittest
         return receiver;
     }
 
-    static assert(test!(void, string[])(["1","2","3"]) == ["1","2","3"]);
+    assert(test!(void, string[])(["1","2","3"]) == ["1","2","3"]);
 
     static assert(!__traits(compiles, { test!(() {}, string[])(["1","2","3"]); }));
     static assert(!__traits(compiles, { test!((int,int) {}, string[])(["1","2","3"]); }));
 
     // bool action(ref T receiver, ParseType value)
-    static assert(test!((ref string[] p, string[] a) { p=a; return true; }, string[])(["1","2","3"]) == ["1","2","3"]);
+    assert(test!((ref string[] p, string[] a) { p=a; return true; }, string[])(["1","2","3"]) == ["1","2","3"]);
 
     // void action(ref T receiver, ParseType value)
-    static assert(test!((ref string[] p, string[] a) { p=a; }, string[])(["1","2","3"]) == ["1","2","3"]);
+    assert(test!((ref string[] p, string[] a) { p=a; }, string[])(["1","2","3"]) == ["1","2","3"]);
 
     // bool action(ref T receiver, Param!ParseType param)
-    static assert(test!((ref string[] p, Param!(string[]) a) { p=a.value; return true; }, string[]) (["1","2","3"]) == ["1","2","3"]);
+    assert(test!((ref string[] p, Param!(string[]) a) { p=a.value; return true; }, string[]) (["1","2","3"]) == ["1","2","3"]);
 
     // void action(ref T receiver, Param!ParseType param)
-    static assert(test!((ref string[] p, Param!(string[]) a) { p=a.value; }, string[])(["1","2","3"]) == ["1","2","3"]);
+    assert(test!((ref string[] p, Param!(string[]) a) { p=a.value; }, string[])(["1","2","3"]) == ["1","2","3"]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1790,11 +1790,11 @@ private struct Parsers
 
 unittest
 {
-    static assert(Parsers.Convert!int("7") == 7);
-    static assert(Parsers.Convert!string("7") == "7");
-    static assert(Parsers.Convert!char("7") == '7');
+    assert(Parsers.Convert!int("7") == 7);
+    assert(Parsers.Convert!string("7") == "7");
+    assert(Parsers.Convert!char("7") == '7');
 
-    static assert(Parsers.PassThrough(["7","8"]) == ["7","8"]);
+    assert(Parsers.PassThrough(["7","8"]) == ["7","8"]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1901,7 +1901,7 @@ unittest
 
         return res;
     };
-    static assert(test([1,2,3],[7,8,9]) == [1,2,3,7,8,9]);
+    assert(test([1,2,3],[7,8,9]) == [1,2,3,7,8,9]);
 }
 
 unittest
