@@ -275,7 +275,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct ArgumentUDA(alias ValueParseFunctions)
+package struct ArgumentUDA(ValueParseFunctions)
 {
     package ArgumentInfo info;
 
@@ -500,6 +500,13 @@ public auto MutuallyExclusive(string file=__FILE__, uint line = __LINE__)()
 {
     import std.conv: to;
     return RestrictionGroup(file~":"~line.to!string, RestrictionGroup.Type.exclusive);
+}
+
+
+unittest
+{
+    assert(!RestrictionGroup.init.required);
+    assert(RestrictionGroup.init.Required.required);
 }
 
 unittest
@@ -1233,6 +1240,44 @@ public auto AllowNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
     return desc;
 }
 
+
+unittest
+{
+    auto uda = NamedArgument().PreValidation!({});
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, FUNC, void, void, void, void)), alias FUNC));
+    assert(!is(FUNC == void));
+}
+
+unittest
+{
+    auto uda = NamedArgument().Parse!({});
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, FUNC, void, void, void)), alias FUNC));
+    assert(!is(FUNC == void));
+}
+
+unittest
+{
+    auto uda = NamedArgument().Validation!({});
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, FUNC, void, void)), alias FUNC));
+    assert(!is(FUNC == void));
+}
+
+unittest
+{
+    auto uda = NamedArgument().Action!({});
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, void, FUNC, void)), alias FUNC));
+    assert(!is(FUNC == void));
+}
+
+unittest
+{
+    auto uda = NamedArgument().AllowNoValue!({});
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, FUNC)), alias FUNC));
+    assert(!is(FUNC == void));
+    assert(uda.info.minValuesCount == 0);
+}
+
+
 public auto RequireNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
 {
     auto desc = uda.AllowNoValue!valueToUse;
@@ -1240,6 +1285,17 @@ public auto RequireNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
     desc.info.maxValuesCount = 0;
     return desc;
 }
+
+
+unittest
+{
+    auto uda = NamedArgument().RequireNoValue!"value";
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, FUNC)), alias FUNC));
+    assert(!is(FUNC == void));
+    assert(uda.info.minValuesCount == 0);
+    assert(uda.info.maxValuesCount == 0);
+}
+
 
 public auto Counter(T)(auto ref ArgumentUDA!T uda)
 {
@@ -1264,6 +1320,13 @@ public auto Counter(T)(auto ref ArgumentUDA!T uda)
 
 unittest
 {
+    auto uda = NamedArgument().Counter();
+    assert(is(typeof(uda) : ArgumentUDA!TYPE, TYPE));
+    assert(is(TYPE));
+    assert(!is(TYPE == void));
+    assert(uda.info.minValuesCount == 0);
+    assert(uda.info.maxValuesCount == 0);
+
     struct T
     {
         @(NamedArgument.Counter()) int a;
