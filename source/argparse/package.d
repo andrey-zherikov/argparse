@@ -296,75 +296,75 @@ package struct ArgumentUDA(alias ValueParseFunctions)
 
         return ArgumentUDA!(parsingFunc.addDefaults!(uda.parsingFunc))(newInfo);
     }
-
-    public auto ref Description(string text)
-    {
-        info.description = text;
-        return this;
-    }
-
-    public auto ref Description(string delegate() text)
-    {
-        info.description = text;
-        return this;
-    }
-
-    public auto ref HideFromHelp(bool hide = true)
-    {
-        info.hideFromHelp = hide;
-        return this;
-    }
-
-    public auto ref Placeholder(string value)
-    {
-        info.placeholder = value;
-        return this;
-    }
-
-    public auto ref Required()
-    {
-        info.required = true;
-        return this;
-    }
-
-    public auto ref Optional()
-    {
-        info.required = false;
-        return this;
-    }
-
-    public auto ref NumberOfValues(ulong num)
-    {
-        info.minValuesCount = num;
-        info.maxValuesCount = num;
-        return this;
-    }
-
-    public auto ref NumberOfValues(ulong min, ulong max)
-    {
-        info.minValuesCount = min;
-        info.maxValuesCount = max;
-        return this;
-    }
-
-    public auto ref MinNumberOfValues(ulong min)
-    {
-        assert(min <= info.maxValuesCount.get(ulong.max));
-
-        info.minValuesCount = min;
-        return this;
-    }
-
-    public auto ref MaxNumberOfValues(ulong max)
-    {
-        assert(max >= info.minValuesCount.get(0));
-
-        info.maxValuesCount = max;
-        return this;
-    }
 }
 
-package enum bool isArgumentUDA(T) = (is(typeof(T.info) == ArgumentInfo) && is(T.parsingFunc));
+private enum bool isArgumentUDA(T) = (is(typeof(T.info) == ArgumentInfo) && is(T.parsingFunc));
+
+public auto ref Description(T)(auto ref ArgumentUDA!T uda, string text)
+{
+    uda.info.description = text;
+    return uda;
+}
+
+public auto ref Description(T)(auto ref ArgumentUDA!T uda, string delegate() text)
+{
+    uda.info.description = text;
+    return uda;
+}
+
+public auto ref HideFromHelp(T)(auto ref ArgumentUDA!T uda, bool hide = true)
+{
+    uda.info.hideFromHelp = hide;
+    return uda;
+}
+
+public auto ref Placeholder(T)(auto ref ArgumentUDA!T uda, string value)
+{
+    uda.info.placeholder = value;
+    return uda;
+}
+
+public auto ref Required(T)(auto ref ArgumentUDA!T uda)
+{
+    uda.info.required = true;
+    return uda;
+}
+
+public auto ref Optional(T)(auto ref ArgumentUDA!T uda)
+{
+    uda.info.required = false;
+    return uda;
+}
+
+public auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong num)
+{
+    uda.info.minValuesCount = num;
+    uda.info.maxValuesCount = num;
+    return uda;
+}
+
+public auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong min, ulong max)
+{
+    uda.info.minValuesCount = min;
+    uda.info.maxValuesCount = max;
+    return uda;
+}
+
+public auto ref MinNumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong min)
+{
+    assert(min <= uda.info.maxValuesCount.get(ulong.max));
+
+    uda.info.minValuesCount = min;
+    return uda;
+}
+
+public auto ref MaxNumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong max)
+{
+    assert(max >= uda.info.minValuesCount.get(0));
+
+    uda.info.maxValuesCount = max;
+    return uda;
+}
 
 unittest
 {
@@ -441,18 +441,18 @@ package struct Group
     package string name;
     package LazyString description;
     package size_t[] arguments;
+}
 
-    public auto ref Description(string text)
-    {
-        description = text;
-        return this;
-    }
+public auto ref Description(T : Group)(auto ref T group, string text)
+{
+    group.description = text;
+    return group;
+}
 
-    public auto ref Description(string delegate() text)
-    {
-        description = text;
-        return this;
-    }
+public auto ref Description(T : Group)(auto ref T group, string delegate() text)
+{
+    group.description = text;
+    return group;
 }
 
 auto ArgumentGroup(string name)
@@ -482,21 +482,21 @@ package struct RestrictionGroup
     package size_t[] arguments;
 
     package bool required;
-
-    public auto ref Required()
-    {
-        required = true;
-        return this;
-    }
 }
 
-auto RequiredTogether(string file=__FILE__, uint line = __LINE__)()
+public auto ref Required(T : RestrictionGroup)(auto ref T group)
+{
+    group.required = true;
+    return group;
+}
+
+public auto RequiredTogether(string file=__FILE__, uint line = __LINE__)()
 {
     import std.conv: to;
     return RestrictionGroup(file~":"~line.to!string, RestrictionGroup.Type.together);
 }
 
-auto MutuallyExclusive(string file=__FILE__, uint line = __LINE__)()
+public auto MutuallyExclusive(string file=__FILE__, uint line = __LINE__)()
 {
     import std.conv: to;
     return RestrictionGroup(file~":"~line.to!string, RestrictionGroup.Type.exclusive);
@@ -533,54 +533,54 @@ package struct CommandInfo
     package LazyString description;
     package LazyString shortDescription;
     package LazyString epilog;
+}
 
-    public auto ref Usage(string text)
-    {
-        usage = text;
-        return this;
-    }
+public auto ref Usage(T : CommandInfo)(auto ref T cmd, string text)
+{
+    cmd.usage = text;
+    return cmd;
+}
 
-    public auto ref Usage(string delegate() text)
-    {
-        usage = text;
-        return this;
-    }
+public auto ref Usage(T : CommandInfo)(auto ref T cmd, string delegate() text)
+{
+    cmd.usage = text;
+    return cmd;
+}
 
-    public auto ref Description(string text)
-    {
-        description = text;
-        return this;
-    }
+public auto ref Description(T : CommandInfo)(auto ref T cmd, string text)
+{
+    cmd.description = text;
+    return cmd;
+}
 
-    public auto ref Description(string delegate() text)
-    {
-        description = text;
-        return this;
-    }
+public auto ref Description(T : CommandInfo)(auto ref T cmd, string delegate() text)
+{
+    cmd.description = text;
+    return cmd;
+}
 
-    public auto ref ShortDescription(string text)
-    {
-        shortDescription = text;
-        return this;
-    }
+public auto ref ShortDescription(T : CommandInfo)(auto ref T cmd, string text)
+{
+    cmd.shortDescription = text;
+    return cmd;
+}
 
-    public auto ref ShortDescription(string delegate() text)
-    {
-        shortDescription = text;
-        return this;
-    }
+public auto ref ShortDescription(T : CommandInfo)(auto ref T cmd, string delegate() text)
+{
+    cmd.shortDescription = text;
+    return cmd;
+}
 
-    public auto ref Epilog(string text)
-    {
-        epilog = text;
-        return this;
-    }
+public auto ref Epilog(T : CommandInfo)(auto ref T cmd, string text)
+{
+    cmd.epilog = text;
+    return cmd;
+}
 
-    public auto ref Epilog(string delegate() text)
-    {
-        epilog = text;
-        return this;
-    }
+public auto ref Epilog(T : CommandInfo)(auto ref T cmd, string delegate() text)
+{
+    cmd.epilog = text;
+    return cmd;
 }
 
 unittest
@@ -1206,49 +1206,42 @@ unittest
 }
 
 
-auto PreValidation(alias func, ARG)(ARG arg)
-if(isArgumentUDA!ARG)
+public auto PreValidation(alias func, T)(auto ref ArgumentUDA!T uda)
 {
-    return ArgumentUDA!(arg.parsingFunc.changePreValidation!func)(arg.tupleof);
+    return ArgumentUDA!(uda.parsingFunc.changePreValidation!func)(uda.tupleof);
 }
 
-auto Parse(alias func, ARG)(ARG arg)
-if(isArgumentUDA!ARG)
+public auto Parse(alias func, T)(auto ref ArgumentUDA!T uda)
 {
-    return ArgumentUDA!(arg.parsingFunc.changeParse!func)(arg.tupleof);
+    return ArgumentUDA!(uda.parsingFunc.changeParse!func)(uda.tupleof);
 }
 
-auto Validation(alias func, ARG)(ARG arg)
-if(isArgumentUDA!ARG)
+public auto Validation(alias func, T)(auto ref ArgumentUDA!T uda)
 {
-    return ArgumentUDA!(arg.parsingFunc.changeValidation!func)(arg.tupleof);
+    return ArgumentUDA!(uda.parsingFunc.changeValidation!func)(uda.tupleof);
 }
 
-auto Action(alias func, ARG)(ARG arg)
-if(isArgumentUDA!ARG)
+public auto Action(alias func, T)(auto ref ArgumentUDA!T uda)
 {
-    return ArgumentUDA!(arg.parsingFunc.changeAction!func)(arg.tupleof);
+    return ArgumentUDA!(uda.parsingFunc.changeAction!func)(uda.tupleof);
 }
 
-auto AllowNoValue(alias valueToUse, ARG)(ARG arg)
-if(isArgumentUDA!ARG)
+public auto AllowNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
 {
-    auto desc = ArgumentUDA!(arg.parsingFunc.changeNoValueAction!(() { return valueToUse; }))(arg.tupleof);
+    auto desc = ArgumentUDA!(uda.parsingFunc.changeNoValueAction!(() { return valueToUse; }))(uda.tupleof);
     desc.info.minValuesCount = 0;
     return desc;
 }
 
-auto RequireNoValue(alias valueToUse, ARG)(ARG arg)
-if(isArgumentUDA!ARG)
+public auto RequireNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
 {
-    auto desc = arg.AllowNoValue!valueToUse;
+    auto desc = uda.AllowNoValue!valueToUse;
     desc.info.minValuesCount = 0;
     desc.info.maxValuesCount = 0;
     return desc;
 }
 
-auto Counter(ARG)(ARG arg)
-if(isArgumentUDA!ARG)
+public auto Counter(T)(auto ref ArgumentUDA!T uda)
 {
     struct CounterParsingFunction
     {
@@ -1262,7 +1255,7 @@ if(isArgumentUDA!ARG)
         }
     }
 
-    auto desc = ArgumentUDA!(CounterParsingFunction)(arg.tupleof);
+    auto desc = ArgumentUDA!(CounterParsingFunction)(uda.tupleof);
     desc.info.minValuesCount = 0;
     desc.info.maxValuesCount = 0;
     return desc;

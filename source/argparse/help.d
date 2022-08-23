@@ -1,6 +1,6 @@
 module argparse.help;
 
-import argparse: ArgumentInfo, Config, ArgumentGroup, Group, CommandInfo, Command, NamedArgument, PositionalArgument, TrailingArguments, AllowedValues;
+import argparse;
 import argparse.internal;
 import argparse.ansi;
 
