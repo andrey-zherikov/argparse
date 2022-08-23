@@ -36,7 +36,7 @@ package struct LazyString
     bool isSet() const
     {
         return value.match!(
-                (string _) => _.length > 0,
+                (string s) => s.length > 0,
                 (dg) => dg != null
         );
     }

@@ -1,5 +1,7 @@
 module argparse.ansi;
 
+import std.regex: ctRegex;
+
 // The string that starts an ANSI command sequence.
 private enum prefix = "\033[";
 
@@ -11,6 +13,9 @@ private enum suffix = "m";
 
 // The sequence used to reset all styling.
 private enum reset = prefix ~ suffix;
+
+// Regex to match ANSI sequence
+private enum sequenceRegex = ctRegex!(`\x1b\[(\d*(;\d*)*)?m`);
 
 // Code offset between foreground and background
 private enum colorBgOffset = 10;
@@ -95,6 +100,17 @@ package struct StyledText
     string toString() const
     {
         return style(text);
+    }
+
+    // this ~ rhs
+    string opBinary(string op : "~")(string rhs) const
+    {
+        return toString() ~ rhs;
+    }
+    // lhs ~ this
+    string opBinaryRight(string op : "~")(string lhs) const
+    {
+        return lhs ~ toString();
     }
 }
 
@@ -181,14 +197,18 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+package auto getUnstyledText(string text)
+{
+    import std.regex: splitter;
+
+    return text.splitter(sequenceRegex);
+}
+
 package size_t getUnstyledTextLength(string text)
 {
-    import std.regex: ctRegex, matchAll;
     import std.algorithm: map, sum;
 
-    enum re = ctRegex!(`\x1b\[(\d*(;\d*)*)?m`);
-
-    return text.length - text.matchAll(re).map!(_ => _.hit.length).sum;
+    return text.getUnstyledText.map!(_ => _.length).sum;
 }
 
 package size_t getUnstyledTextLength(StyledText text)

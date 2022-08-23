@@ -99,31 +99,25 @@ unittest
 
 private void print(void delegate(string) sink, const ref Item item, string indent, string descriptionIndent, bool unused = false)
 {
-    auto itemLength = getUnstyledTextLength(item.name);
+    auto nameLength = getUnstyledTextLength(item.name);
+
+    sink(indent);
+    sink(item.name);
 
     auto description = item.description.get;
-    if(description.length == 0)
+    if(description.getUnstyledTextLength == 0)
     {
-        sink(indent);
-        sink(item.name);
         sink("\n");
     }
-    else if(indent.length + itemLength + 2 > descriptionIndent.length) // 2 = two spaces between name and description
+    else if(indent.length + nameLength + 2 > descriptionIndent.length) // 2 = two spaces between name and description
     {
         // long name; start description on the next line
-        sink(indent);
-        sink(item.name);
         sink("\n");
-        wrapMutiLine(sink, description, descriptionIndent, descriptionIndent);
+        wrap(sink, description, descriptionIndent, descriptionIndent);
     }
     else
     {
-        import std.conv: text;
-
-        wrapMutiLine(sink,
-                     description,
-                     text(indent, item.name, spaces(descriptionIndent.length - indent.length - itemLength)),
-                     descriptionIndent);
+        wrap(sink, description, descriptionIndent[indent.length + nameLength..$], descriptionIndent, indent.length + nameLength);
     }
 }
 
@@ -149,7 +143,7 @@ private void print(void delegate(string) sink, const ref Section section, string
     }
 
     auto description = section.description.get;
-    if(description.length > 0)
+    if(description.getUnstyledTextLength > 0)
     {
         sink(indent);
         sink(description);
@@ -163,7 +157,7 @@ private void print(void delegate(string) sink, const ref Section section, string
     });
 
     auto epilog = section.epilog.get;
-    if(epilog.length > 0)
+    if(epilog.getUnstyledTextLength > 0)
     {
         sink(indent);
         sink(epilog);
@@ -252,37 +246,75 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void wrapMutiLine(void delegate(string) sink,
-                          string s,
-                          string firstindent = null,
-                          string indent = null,
-                          in size_t columns = 80,
-                          in size_t tabsize = 8)
+private void wrap(void delegate(string) sink,
+                  string s,
+                  string firstIndent,
+                  string indent,
+                  size_t firstColumns = 0,
+                  size_t columns = 80)
 {
-    import std.string: wrap, lineSplitter, join;
-    import std.algorithm: map, each;
+    import std.string: lineSplitter;
+    import std.range: enumerate;
+    import std.algorithm: map;
+    import std.typecons: tuple;
+    import std.regex: ctRegex, splitter;
 
     if(s.length == 0)
         return;
 
-    auto lines = s.lineSplitter;
+    enum whitespaces = ctRegex!(`\s+`);
 
-    sink(lines.front.wrap(columns, firstindent, indent, tabsize));
-    lines.popFront;
+    foreach(lineIdx, line; s.lineSplitter.enumerate)
+    {
+        size_t col = 0;
 
-    lines.map!(s => s.wrap(columns, indent, indent, tabsize)).each!sink;
+        if(lineIdx == 0)
+        {
+            sink(firstIndent);
+            col = firstColumns + firstIndent.length;
+        }
+        else
+        {
+            sink(indent);
+            col = indent.length;
+        }
+
+        foreach(wordIdx, word; line.splitter(whitespaces).map!(_ => _, getUnstyledTextLength).enumerate)
+        {
+            if(wordIdx > 0)
+            {
+                if (col + 1 + word[1] > columns)
+                {
+                    sink("\n");
+                    sink(indent);
+                    col = indent.length;
+                }
+                else
+                {
+                    sink(" ");
+                    col++;
+                }
+            }
+
+            sink(word[0]);
+            col += word[1];
+        }
+
+        sink("\n");
+    }
 }
 
 unittest
 {
-    string test(string s, size_t columns, string firstindent = null, string indent = null)
+    string test(string s, size_t columns, string firstIndent = null, string indent = null, size_t firstColumns = 0)
     {
         import std.array: appender;
         auto a = appender!string;
-        wrapMutiLine(_ => a.put(_), s, firstindent, indent, columns);
+        wrap(_ => a.put(_), s, firstIndent, indent, firstColumns, columns);
         return a[];
     }
     assert(test("a short string", 7) == "a short\nstring\n");
+    assert(test("a short string", 7, "-","+", 4) == "-a\n+short\n+string\n");
     assert(test("a\nshort string", 7) == "a\nshort\nstring\n");
 
     // wrap will not break inside of a word, but at the next space
@@ -592,7 +624,7 @@ private auto getSection(T)(string delegate(string) getArgumentName, const ref St
 
 package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, Config* config)
 {
-    import std.algorithm: min;
+    import std.algorithm: min, each;
 
     bool enableStyling = config.stylingMode == Config.StylingMode.on ||
         config.stylingMode == Config.StylingMode.autodetect && detectSupport();
@@ -604,7 +636,7 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
     immutable helpPosition = min(section.maxItemNameLength() + 4, 24);
     immutable indent = spaces(helpPosition + 2);
 
-    print(sink, section, "", indent);
+    print(enableStyling ? sink : (string _) { _.getUnstyledText.each!sink; }, section, "", indent);
 }
 
 unittest
