@@ -423,7 +423,7 @@ auto PositionalArgument(uint pos, string name)
 
 auto NamedArgument(string[] name...)
 {
-    return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo(name)).Optional();
+    return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo(name.dup)).Optional();
 }
 
 auto NamedArgument(string name)
