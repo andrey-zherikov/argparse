@@ -617,7 +617,7 @@ package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIV
         }
     };
 
-package auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(const CommandArguments!RECEIVER* parentArguments)
+package auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(scope const CommandArguments!RECEIVER* parentArguments)
 {
     return delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver)
     {
