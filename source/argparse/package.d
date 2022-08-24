@@ -283,8 +283,6 @@ package struct ArgumentUDA(ValueParseFunctions)
 
     package auto addDefaults(T)(ArgumentUDA!T uda)
     {
-        import std.traits: getUDAs;
-
         auto newInfo = info;
 
         if(newInfo.names.length == 0) newInfo.names = uda.info.names;
@@ -365,6 +363,7 @@ public auto ref MaxNumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong max)
     uda.info.maxValuesCount = max;
     return uda;
 }
+
 
 unittest
 {

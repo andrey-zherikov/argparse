@@ -1041,6 +1041,13 @@ void printText(bool enableStyle)
 }
 ```
 
+This example shows how styling can be used in custom help text (`Usage`, `Description`, `ShortDescription`, `Epilog` API):
+
+```d
+    @(NamedArgument.Description(bold.underline("Colorize the output:")~" make everything "~red("red")))
+    bool red;
+```
+
 ### Styling mode
 
 By default `argparse` will try to detect whether ANSI styling is supported and if so it will apply styling to the help text.

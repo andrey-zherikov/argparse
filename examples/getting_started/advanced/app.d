@@ -22,7 +22,7 @@ static struct Advanced
     @NamedArgument(["b","banana","ban"])
     int banana;
 
-    @NamedArgument
+    @(NamedArgument.Description(green.bold.underline("Colorize")~" the output. If value is omitted then '"~red("always")~"' is used."))
     static auto color = ansiStylingArgument;
 }
 
