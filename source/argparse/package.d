@@ -96,17 +96,16 @@ struct Config
     }
 
 
-    package void onError(A...)(A args) const nothrow
+    package void onError(string message) const nothrow
     {
-        import std.conv: text;
         import std.stdio: stderr, writeln;
 
         try
         {
             if(errorHandlerFunc)
-                errorHandlerFunc(text!A(args));
+                errorHandlerFunc(message);
             else
-                stderr.writeln("Error: ", args);
+                stderr.writeln("Error: ", message);
         }
         catch(Exception e)
         {
@@ -117,10 +116,18 @@ struct Config
 
 unittest
 {
-    Config.init.onError("--just testing error func--",1,2.3,false);
+    enum text = "--just testing error func--";
+
+    bool called = false;
+
     Config c;
-    c.errorHandler = (string s){};
-    c.onError("--just testing error func--",1,2.3,false);
+    c.errorHandler = (string s)
+    {
+        assert(s == text);
+        called = true;
+    };
+    c.onError(text);
+    assert(called);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1106,7 +1113,8 @@ template CLI(Config config, COMMAND)
 
         if(res && unrecognizedArgs.length > 0)
         {
-            config.onError("Unrecognized arguments: ", unrecognizedArgs);
+            import std.conv: to;
+            config.onError("Unrecognized arguments: "~unrecognizedArgs.to!string);
             return 1;
         }
 
@@ -1332,13 +1340,13 @@ public auto Counter(T)(auto ref ArgumentUDA!T uda)
 {
     struct CounterParsingFunction
     {
-        static bool parse(T)(ref T receiver, const ref RawParam param)
+        static Result parse(T)(ref T receiver, const ref RawParam param)
         {
             assert(param.value.length == 0);
 
             ++receiver;
 
-            return true;
+            return Result.Success;
         }
     }
 

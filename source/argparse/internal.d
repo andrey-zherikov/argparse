@@ -606,9 +606,9 @@ package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIV
                 auto target = &__traits(getMember, receiver, symbol);
 
                 static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                    return uda.parsingFunc.parse(target, param) ? Result.Success : Result.Failure;
+                    return uda.parsingFunc.parse(target, param);
                 else
-                    return uda.parsingFunc.parse(*target, param) ? Result.Success : Result.Failure;
+                    return uda.parsingFunc.parse(*target, param);
             }
             catch(Exception e)
             {
@@ -1332,11 +1332,11 @@ package struct ValueParseFunctions(alias PreProcess,
     //  - if there is no value:
     //      - action if no value
     // Requirement: rawValues.length must be correct
-    static bool parse(T)(ref T receiver, RawParam param)
+    static Result parse(T)(ref T receiver, RawParam param)
     {
         return addDefaults!(DefaultValueParseFunctions!T).parseImpl(receiver, param);
     }
-    static bool parseImpl(T)(ref T receiver, ref RawParam rawParam)
+    static Result parseImpl(T)(ref T receiver, ref RawParam rawParam)
     {
         alias ParseType(T)     = .ParseType!(Parse, T);
 
@@ -1348,28 +1348,30 @@ package struct ValueParseFunctions(alias PreProcess,
 
         if(rawParam.value.length == 0)
         {
-            return noValueAction!T(receiver, Param!void(rawParam.config, rawParam.name));
+            return noValueAction!T(receiver, Param!void(rawParam.config, rawParam.name)) ? Result.Success : Result.Failure;
         }
         else
         {
             static if(!is(PreProcess == void))
                 PreProcess(rawParam);
 
-            if(!preValidation(rawParam))
-                return false;
+            Result res = preValidation(rawParam);
+            if(!res)
+                return res;
 
             auto parsedParam = Param!(ParseType!T)(rawParam.config, rawParam.name);
 
             if(!parse!T(parsedParam.value, rawParam))
-                return false;
+                return Result.Failure;
 
-            if(!validation!T(parsedParam))
-                return false;
+            res = validation!T(parsedParam);
+            if(!res)
+                return res;
 
             if(!action!T(receiver, parsedParam))
-                return false;
+                return Result.Failure;
 
-            return true;
+            return Result.Success;
         }
     }
 }
@@ -1380,31 +1382,55 @@ package struct ValueParseFunctions(alias PreProcess,
 // bool validate(T value)
 // bool validate(T[i] value)
 // bool validate(Param!T param)
+// Result validate(T value)
+// Result validate(T[i] value)
+// Result validate(Param!T param)
 private struct ValidateFunc(alias F, T, string funcName="Validation")
 {
-    static bool opCall(Param!T param)
+    static Result opCall(Param!T param)
     {
         static if(is(F == void))
         {
-            return true;
+            return Result.Success;
+        }
+        else static if(__traits(compiles, { Result res = F(param); }))
+        {
+            // Result validate(Param!T param)
+            return F(param);
         }
         else static if(__traits(compiles, { F(param); }))
         {
             // bool validate(Param!T param)
-            return cast(bool) F(param);
+            return F(param) ? Result.Success : Result.Failure;
+        }
+        else static if(__traits(compiles, { Result res = F(param.value); }))
+        {
+            // Result validate(T values)
+            return F(param.value);
         }
         else static if(__traits(compiles, { F(param.value); }))
         {
             // bool validate(T values)
-            return cast(bool) F(param.value);
+            return F(param.value) ? Result.Success : Result.Failure;
         }
-        else static if(/*isArray!T &&*/ __traits(compiles, { F(param.value[0]); }))
+        else static if(__traits(compiles, { Result res = F(param.value[0]); }))
+        {
+            // Result validate(T[i] value)
+            foreach(value; param.value)
+            {
+                Result res = F(value);
+                if(!res)
+                    return res;
+            }
+            return Result.Success;
+        }
+        else static if(__traits(compiles, { F(param.value[0]); }))
         {
             // bool validate(T[i] value)
             foreach(value; param.value)
                 if(!F(value))
-                    return false;
-            return true;
+                    return Result.Failure;
+            return Result.Success;
         }
         else
             static assert(false, funcName~" function is not supported for type "~T.stringof~": "~typeof(F).stringof);
@@ -1934,19 +1960,19 @@ package struct Validators
 
             foreach(value; paramValues)
                 if(!(value in valuesAA))
-                {
-                    param.config.onError("Invalid value '", value, "' for argument '", param.name, "'.\nValid argument values are: ", allowedValues);
-                    return false;
-                }
+                    return Result.Error("Invalid value '", value, "' for argument '", param.name, "'.\nValid argument values are: ", allowedValues);
 
-            return true;
+            return Result.Success;
         }
         static auto ValueInList(Param!(TYPE[]) param)
         {
             foreach(ref value; param.value)
-                if(!ValueInList!(values, TYPE)(Param!TYPE(param.config, param.name, value)))
-                    return false;
-            return true;
+            {
+                auto res = ValueInList!(values, TYPE)(Param!TYPE(param.config, param.name, value));
+                if(!res)
+                    return res;
+            }
+            return Result.Success;
         }
     }
 }
