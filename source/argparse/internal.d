@@ -58,31 +58,29 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package string getArgumentName(string name, Config* config)
+package string getArgumentName(string name, char namedArgChar)
 {
     import std.conv: text;
 
     return name.length == 1 ?
-        text(config.namedArgChar, name) :
-        text(config.namedArgChar, config.namedArgChar, name);
+        text(namedArgChar, name) :
+        text(namedArgChar, namedArgChar, name);
 }
 
-package string getArgumentName(in ArgumentInfo info, Config* config)
+package string getArgumentName(in ArgumentInfo info, char namedArgChar)
 {
-    return info.positional ? info.placeholder : info.names[0].getArgumentName(config);
+    return info.positional ? info.placeholder : info.names[0].getArgumentName(namedArgChar);
 }
 
 unittest
 {
-    Config config;
-
     auto info = ArgumentInfo(["f","b"]);
     info.position = 0;
     info.placeholder = "FF";
-    assert(getArgumentName(info, &config) == "FF");
+    assert(getArgumentName(info, Config.init.namedArgChar) == "FF");
 
-    assert(ArgumentInfo(["f","b"]).getArgumentName(&config) == "-f");
-    assert(ArgumentInfo(["foo","boo"]).getArgumentName(&config) == "--foo");
+    assert(ArgumentInfo(["f","b"]).getArgumentName(Config.init.namedArgChar) == "-f");
+    assert(ArgumentInfo(["foo","boo"]).getArgumentName(Config.init.namedArgChar) == "--foo");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -186,7 +184,7 @@ package struct Restrictions
         {
             return (index in cliArgs) ?
                 Result.Success :
-                Result.Error("The following argument is required: ", info.getArgumentName(config));
+                Result.Error("The following argument is required: ", info.getArgumentName(config.namedArgChar));
         })(index);
     }
 
@@ -209,8 +207,8 @@ package struct Restrictions
                 missedIndex = index;
 
             if(foundIndex != size_t.max && missedIndex != size_t.max)
-                return Result.Error("Missed argument '", allArgs[missedIndex].getArgumentName(config),
-                                    "' - it is required by argument '", allArgs[foundIndex].getArgumentName(config),"'");
+                return Result.Error("Missed argument '", allArgs[missedIndex].getArgumentName(config.namedArgChar),
+                                    "' - it is required by argument '", allArgs[foundIndex].getArgumentName(config.namedArgChar),"'");
         }
 
         return Result.Success;
@@ -229,8 +227,8 @@ package struct Restrictions
                 if(foundIndex == size_t.max)
                     foundIndex = index;
                 else
-                    return Result.Error("Argument '", allArgs[foundIndex].getArgumentName(config),
-                                        "' is not allowed with argument '", allArgs[index].getArgumentName(config),"'");
+                    return Result.Error("Argument '", allArgs[foundIndex].getArgumentName(config.namedArgChar),
+                                        "' is not allowed with argument '", allArgs[index].getArgumentName(config.namedArgChar),"'");
             }
 
         return Result.Success;
@@ -248,7 +246,7 @@ package struct Restrictions
             if(index in cliArgs)
                 return Result.Success;
 
-        return Result.Error("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].getArgumentName(config)).join("', '"), "'");
+        return Result.Error("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].getArgumentName(config.namedArgChar)).join("', '"), "'");
     }
 }
 

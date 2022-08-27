@@ -409,9 +409,7 @@ unittest
         import std.array: appender;
         auto a = appender!string;
         Style style;
-        Config config;
-        config.stylingMode = Config.StylingMode.off;
-        printInvocation(_ => a.put(_), style, applyDefaults!(info, int, "foo"), ["f".getArgumentName(&config),"foo".getArgumentName(&config)]);
+        printInvocation(_ => a.put(_), style, applyDefaults!(info, int, "foo"), ["f".getArgumentName(Config.init.namedArgChar),"foo".getArgumentName(Config.init.namedArgChar)]);
         return a[];
     }
 
@@ -449,9 +447,7 @@ unittest
         import std.array: appender;
         auto a = appender!string;
         Style style;
-        Config config;
-        config.stylingMode = Config.StylingMode.off;
-        printUsage(_ => a.put(_), _ => getArgumentName(_, &config), style, applyDefaults!(info, int, "foo"));
+        printUsage(_ => a.put(_), _ => getArgumentName(_, Config.init.namedArgChar), style, applyDefaults!(info, int, "foo"));
         return a[];
     }
 
@@ -631,7 +627,7 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 
     auto helpStyle = enableStyling ? config.helpStyle : Style.None;
 
-    auto section = getSection(_ => helpStyle.namedArgumentName(getArgumentName(_, config)), helpStyle, cmd);
+    auto section = getSection(_ => helpStyle.namedArgumentName(getArgumentName(_, config.namedArgChar)), helpStyle, cmd);
 
     immutable helpPosition = min(section.maxItemNameLength() + 4, 24);
     immutable indent = spaces(helpPosition + 2);
