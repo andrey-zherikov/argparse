@@ -575,12 +575,12 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package alias ParseFunction(RECEIVER) = Result delegate(Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
+package alias ParseFunction(RECEIVER) = Result delegate(Config* config, const ref CommandArguments!RECEIVER cmd, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
 package alias ParseSubCommandFunction(RECEIVER) = Result delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver);
 package alias InitSubCommandFunction(RECEIVER) = Result delegate(ref RECEIVER receiver);
 
 package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIVER, bool completionMode) =
-    delegate(Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
+    delegate(Config* config, const ref CommandArguments!RECEIVER cmd, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
     {
         static if(completionMode)
         {

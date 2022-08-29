@@ -68,9 +68,9 @@ package struct Parser
         : Argument(NamedShort(nameWithDash[1..$], nameWithDash, value));
     }
 
-    auto parseArgument(T, PARSE)(PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
+    auto parseArgument(T, PARSE)(const ref CommandArguments!T cmd, PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
     {
-        auto res = parse(config, nameWithDash, receiver, value, args);
+        auto res = parse(config, cmd, nameWithDash, receiver, value, args);
         if(!res)
             return res;
 
@@ -140,7 +140,7 @@ package struct Parser
         if(foundArg.arg is null)
             return parseSubCommand(cmd, receiver);
 
-        auto res = parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, null, foundArg.arg.names[0], foundArg.index);
+        auto res = parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, null, foundArg.arg.names[0], foundArg.index);
         if(!res)
             return res;
 
@@ -172,7 +172,7 @@ package struct Parser
             return Result.UnknownArgument;
 
         args.popFront();
-        return parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
+        return parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
     }
 
     auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, bool isDefaultCmd, ref T receiver, NamedShort arg)
@@ -186,7 +186,7 @@ package struct Parser
                 return Result.UnknownArgument;
 
             args.popFront();
-            return parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
+            return parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
         }
 
         // Try to parse "-ABC..." where "A","B","C" are different single-letter arguments
@@ -216,7 +216,7 @@ package struct Parser
                 arg.name = "";
             }
 
-            auto res = parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, value, "-"~name, foundArg.index);
+            auto res = parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, value, "-"~name, foundArg.index);
             if(!res)
                 return res;
         }
