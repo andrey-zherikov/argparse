@@ -658,7 +658,7 @@ unittest
 
         @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
 
-        @(PositionalArgument(0).Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
+        @(PositionalArgument(0, "param0").Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string _param0;
         @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
 
         @TrailingArguments string[] args;
