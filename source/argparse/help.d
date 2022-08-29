@@ -171,19 +171,36 @@ private void print(void delegate(string) sink, const ref Section section, string
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package enum helpArgument = {
-    ArgumentInfo arg;
-    arg.names = ["h","help"];
-    arg.description = "Show this help message and exit";
-    arg.minValuesCount = 0;
-    arg.maxValuesCount = 0;
-    arg.allowBooleanNegation = false;
-    arg.ignoreInDefaultCommand = true;
-    return arg;
+    struct HelpArgumentParsingFunction
+    {
+        static auto parse(T)()
+        {
+            return delegate(Config* config, const ref CommandArguments!T cmd, string argName, ref T receiver, string rawValue, ref string[] rawArgs)
+            {
+                import std.stdio: stdout;
+
+                auto output = stdout.lockingTextWriter();
+                printHelp(_ => output.put(_), cmd, config);
+
+                return Result(0);
+            };
+        }
+    }
+
+    auto uda = ArgumentUDA!(HelpArgumentParsingFunction)(ArgumentInfo(["h","help"]))
+        .Description("Show this help message and exit")
+        .Optional()
+        .NumberOfValues(0);
+
+    uda.info.allowBooleanNegation = false;
+    uda.info.ignoreInDefaultCommand = true;
+
+    return uda;
 }();
 
 private bool isHelpArgument(string name)
 {
-    static foreach(n; helpArgument.names)
+    static foreach(n; helpArgument.info.names)
         if(n == name)
             return true;
 
