@@ -416,9 +416,7 @@ auto PositionalArgument(uint pos)
 
 auto PositionalArgument(uint pos, string name)
 {
-    auto arg = ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo([name])).Required();
-    arg.info.position = pos;
-    return arg;
+    return PositionalArgument(pos).Placeholder(name);
 }
 
 auto NamedArgument(string[] name...)
