@@ -431,6 +431,40 @@ auto NamedArgument(string name)
 
 struct TrailingArguments {}
 
+
+unittest
+{
+    auto arg = PositionalArgument(3, "foo");
+    assert(arg.info.required);
+    assert(arg.info.positional);
+    assert(arg.info.position == 3);
+    assert(arg.info.placeholder == "foo");
+}
+
+unittest
+{
+    auto arg = NamedArgument("foo");
+    assert(!arg.info.required);
+    assert(!arg.info.positional);
+    assert(arg.info.names == ["foo"]);
+}
+
+unittest
+{
+    auto arg = NamedArgument(["foo","bar"]);
+    assert(!arg.info.required);
+    assert(!arg.info.positional);
+    assert(arg.info.names == ["foo","bar"]);
+}
+
+unittest
+{
+    auto arg = NamedArgument("foo","bar");
+    assert(!arg.info.required);
+    assert(!arg.info.positional);
+    assert(arg.info.names == ["foo","bar"]);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package struct Group
