@@ -626,7 +626,7 @@ package auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER,
             static if(!is(COMMAND_TYPE == Default!TYPE, TYPE))
                 alias TYPE = COMMAND_TYPE;
 
-            auto command = CommandArguments!TYPE(config, info, parentArguments);
+            auto command = commandArguments!(TYPE, info)(config, parentArguments);
 
             return parser.parse!completionMode(command, isDefaultCmd, cmdTarget, arg);
         };
@@ -755,9 +755,7 @@ package struct CommandArguments(RECEIVER)
     private enum _validate = checkArgumentNames!RECEIVER &&
     checkPositionalIndexes!RECEIVER;
 
-    static assert(getUDAs!(RECEIVER, CommandInfo).length <= 1);
-
-    CommandInfo info;
+    const CommandInfo info;
     const(string)[] parentNames;
 
     Arguments arguments;
@@ -787,120 +785,36 @@ package struct CommandArguments(RECEIVER)
 
 
 
-    this(Config* config)
-    {
-        static if(getUDAs!(RECEIVER, CommandInfo).length > 0)
-            CommandInfo info = getUDAs!(RECEIVER, CommandInfo)[0];
-        else
-            CommandInfo info;
-
-        this(config, info);
-    }
-
-    this(PARENT = void)(Config* config, CommandInfo info, const PARENT* parentArguments = null)
+    private this(bool caseSensitive, CommandInfo info)
     {
         this.info = info;
 
-        checkArgumentName!RECEIVER(config.namedArgChar);
-
-        static if(is(PARENT == void))
-        {
-            level = 0;
-            arguments = Arguments(config.caseSensitive);
-        }
-        else
-        {
-            parentNames = parentArguments.parentNames ~ parentArguments.info.names[0];
-            level = parentArguments.level + 1;
-            arguments = Arguments(config.caseSensitive, &parentArguments.arguments);
-        }
-
-        fillArguments();
-
-        if(config.addHelp)
-        {
-            arguments.addArgument!helpArgument;
-            parseArguments ~= delegate (Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
-            {
-                import std.stdio: stdout;
-
-                auto output = stdout.lockingTextWriter();
-                printHelp(_ => output.put(_), this, config);
-
-                return Result(0);
-            };
-            completeArguments ~= delegate (Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
-            {
-                return Result.Success;
-            };
-        }
-
-
-        import std.algorithm: sort, map;
-        import std.range: join;
-        import std.array: array;
-
-        completeSuggestion = arguments.argsNamed.keys.map!(_ => getArgumentName(_, config)).array;
-        completeSuggestion ~= subCommandsByName.keys.array;
-        completeSuggestion.sort;
+        level = 0;
+        arguments = Arguments(caseSensitive);
     }
-
-    private void fillArguments()
+    private this(PARENT)(bool caseSensitive, CommandInfo info, const PARENT* parentArguments)
     {
-        enum hasNoUDAs = getSymbolsByUDA!(RECEIVER, ArgumentUDA  ).length == 0 &&
-        getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0 &&
-        getSymbolsByUDA!(RECEIVER, SubCommands  ).length == 0;
+        this.info = info;
 
-        static foreach(sym; __traits(allMembers, RECEIVER))
-        {{
-            alias mem = __traits(getMember, RECEIVER, sym);
-
-            static if(!is(mem)) // skip types
-            {
-                static if(hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
-                    addArgument!sym;
-                else static if(hasUDA!(mem, SubCommands))
-                    addSubCommands!sym;
-                else static if(hasNoUDAs &&
-                    // skip "op*" functions
-                    !(is(typeof(mem) == function) && sym.length > 2 && sym[0..2] == "op"))
-                    {
-                        import std.sumtype: isSumType;
-
-                        static if(isSumType!(typeof(mem)))
-                            addSubCommands!sym;
-                        else
-                            addArgument!sym;
-                    }
-            }
-        }}
+        parentNames = parentArguments.parentNames ~ parentArguments.info.names[0];
+        level = parentArguments.level + 1;
+        arguments = Arguments(caseSensitive, &parentArguments.arguments);
     }
 
     private void addArgument(alias symbol)()
     {
         alias member = __traits(getMember, RECEIVER, symbol);
 
-        static assert(getUDAs!(member, ArgumentUDA).length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple '*Argument' UDAs");
-
-        static assert(getUDAs!(member, Group).length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
-
-        static if(getUDAs!(member, ArgumentUDA).length > 0)
-            enum originalUDA = getUDAs!(member, ArgumentUDA)[0];
-        else
-            enum originalUDA = NamedArgument();
+        enum uda = getArgumentUDA!(RECEIVER, symbol);
 
         static if(is(typeof(member) == AnsiStylingArgument))
         {
-            enum uda = originalUDA.addDefaults(getUDAs!(AnsiStylingArgument, ArgumentUDA)[0]);
-
             parseFinalizers ~= (ref RECEIVER receiver, const Config* config)
                 {
                     auto target = &__traits(getMember, receiver, symbol);
                     AnsiStylingArgument.finalize(*target, config);
                 };
         }
-        else
-            alias uda = originalUDA;
 
         enum info = applyDefaults!(uda.info, typeof(member), symbol);
 
@@ -911,6 +825,7 @@ package struct CommandArguments(RECEIVER)
             return restrictions;
         }();
 
+        static assert(getUDAs!(member, Group).length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
         static if(getUDAs!(member, Group).length > 0)
             arguments.addArgument!(info, restrictions, getUDAs!(member, Group)[0]);
         else
@@ -918,62 +833,6 @@ package struct CommandArguments(RECEIVER)
 
         parseArguments    ~= ParsingArgument!(symbol, uda, info, RECEIVER, false);
         completeArguments ~= ParsingArgument!(symbol, uda, info, RECEIVER, true);
-    }
-
-    private void addSubCommands(alias symbol)()
-    {
-        import std.sumtype: isSumType;
-
-        alias member = __traits(getMember, RECEIVER, symbol);
-
-        static assert(isSumType!(typeof(member)), RECEIVER.stringof~"."~symbol~" must have 'SumType' type");
-
-        static assert(getUDAs!(member, SubCommands).length <= 1,
-        "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'SubCommands' UDAs");
-
-        static foreach(TYPE; typeof(member).Types)
-        {{
-            enum defaultCommand = is(TYPE == Default!COMMAND_TYPE, COMMAND_TYPE);
-            static if(!defaultCommand)
-                alias COMMAND_TYPE = TYPE;
-
-            static assert(getUDAs!(COMMAND_TYPE, CommandInfo).length <= 1);
-
-            //static assert(getUDAs!(member, Group).length <= 1,
-            //    "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
-
-            static if(getUDAs!(COMMAND_TYPE, CommandInfo).length > 0)
-                enum info = getUDAs!(COMMAND_TYPE, CommandInfo)[0];
-            else
-                enum info = CommandInfo([COMMAND_TYPE.stringof]);
-
-            static assert(info.names.length > 0 && info.names[0].length > 0);
-
-            //static if(getUDAs!(member, Group).length > 0)
-            //    args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingArgument!(symbol, uda, info, RECEIVER));
-            //else
-            //arguments.addSubCommand!(info);
-
-            immutable index = subCommands.length;
-
-            static foreach(name; info.names)
-            {
-                assert(!(name in subCommandsByName), "Duplicated name of subcommand: "~name);
-                subCommandsByName[arguments.convertCase(name)] = index;
-            }
-
-            static if(defaultCommand)
-            {
-                assert(!(DEFAULT_COMMAND in subCommandsByName), "Multiple default subcommands: "~RECEIVER.stringof~"."~symbol);
-                subCommandsByName[DEFAULT_COMMAND] = index;
-            }
-
-            subCommands ~= info;
-            //group.arguments ~= index;
-            parseSubCommands    ~= ParsingSubCommandArgument!(TYPE, info, RECEIVER, symbol, false)(&this);
-            completeSubCommands ~= ParsingSubCommandArgument!(TYPE, info, RECEIVER, symbol, true)(&this);
-            initSubCommands     ~= ParsingSubCommandInit!(TYPE, RECEIVER, symbol);
-        }}
     }
 
     auto getParseFunction(bool completionMode)(size_t index) const
@@ -1020,6 +879,167 @@ package struct CommandArguments(RECEIVER)
         foreach(dg; parseFinalizers)
             dg(receiver, config);
     }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA  ).length == 0 &&
+                                            getSymbolsByUDA!(COMMAND, NamedArgument).length == 0 &&
+                                            getSymbolsByUDA!(COMMAND, SubCommands  ).length == 0;
+
+private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
+
+private template getArgumentUDA(TYPE, alias symbol)
+{
+    alias member = __traits(getMember, TYPE, symbol);
+    enum udas = getUDAs!(member, ArgumentUDA);
+    static assert(udas.length <= 1, "Member "~TYPE.stringof~"."~symbol~" has multiple '*Argument' UDAs");
+
+    static if(udas.length > 0)
+        enum originalUDA = udas[0];
+    else
+        enum originalUDA = NamedArgument();
+
+    static if(is(typeof(member) == AnsiStylingArgument))
+    {
+        enum getArgumentUDA = originalUDA.addDefaults(getUDAs!(AnsiStylingArgument, ArgumentUDA)[0]);
+    }
+    else
+        alias getArgumentUDA = originalUDA;
+}
+
+private void addArguments(COMMAND)(ref CommandArguments!COMMAND cmd)
+{
+    import std.sumtype: isSumType;
+
+    enum isArgument(alias mem) = hasUDA!(mem, ArgumentUDA) ||
+                                 hasUDA!(mem, NamedArgument) ||
+                                 hasNoMembersWithUDA!COMMAND && !isOpFunction!mem && !isSumType!(typeof(mem));
+
+    static foreach(sym; __traits(allMembers, COMMAND))
+    {{
+        alias mem = __traits(getMember, COMMAND, sym);
+
+        // skip types
+        static if(!is(mem) && isArgument!mem)
+            cmd.addArgument!sym;
+    }}
+}
+
+private void addSubCommands(COMMAND)(ref CommandArguments!COMMAND cmd)
+{
+    import std.sumtype: isSumType;
+
+    enum isSubCommand(alias mem) = hasUDA!(mem, SubCommands) ||
+                                   hasNoMembersWithUDA!COMMAND && !isOpFunction!mem && isSumType!(typeof(mem));
+
+    static foreach(sym; __traits(allMembers, COMMAND))
+    {{
+        alias mem = __traits(getMember, COMMAND, sym);
+
+        // skip types
+        static if(!is(mem) && isSubCommand!mem)
+        {
+            static assert(isSumType!(typeof(mem)), COMMAND.stringof~"."~sym~" must have 'SumType' type");
+
+            static assert(getUDAs!(mem, SubCommands).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
+
+            static foreach(TYPE; typeof(mem).Types)
+                addSubCommand!(TYPE, sym)(cmd);
+        }
+    }}
+}
+
+private void addSubCommand(SUBCOMMAND, alias symbol, COMMAND)(ref CommandArguments!COMMAND cmd)
+{
+    enum defaultCommand = is(SUBCOMMAND == Default!COMMAND_TYPE, COMMAND_TYPE);
+    static if(!defaultCommand)
+        alias COMMAND_TYPE = SUBCOMMAND;
+
+    //static assert(getUDAs!(member, Group).length <= 1,
+    //    "Member "~COMMAND.stringof~"."~symbol~" has multiple 'Group' UDAs");
+
+    //static if(getUDAs!(member, Group).length > 0)
+    //    args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingArgument!(symbol, uda, info, COMMAND));
+    //else
+    //arguments.addSubCommand!(info);
+
+    immutable index = cmd.subCommands.length;
+
+    enum info = getCommandInfo!(COMMAND_TYPE, COMMAND_TYPE.stringof);
+
+    static foreach(name; info.names)
+    {
+        assert(!(name in cmd.subCommandsByName), "Duplicated name of subcommand: "~name);
+        cmd.subCommandsByName[cmd.arguments.convertCase(name)] = index;
+    }
+
+    static if(defaultCommand)
+    {
+        assert(!(DEFAULT_COMMAND in cmd.subCommandsByName), "Multiple default subcommands: "~COMMAND.stringof~"."~symbol);
+        cmd.subCommandsByName[DEFAULT_COMMAND] = index;
+    }
+
+    cmd.subCommands ~= info;
+    //group.arguments ~= index;
+    cmd.parseSubCommands    ~= ParsingSubCommandArgument!(SUBCOMMAND, info, COMMAND, symbol, false)(&cmd);
+    cmd.completeSubCommands ~= ParsingSubCommandArgument!(SUBCOMMAND, info, COMMAND, symbol, true)(&cmd);
+    cmd.initSubCommands     ~= ParsingSubCommandInit!(SUBCOMMAND, COMMAND, symbol);
+}
+
+private template getCommandInfo(COMMAND, string name = "")
+{
+    enum udas = getUDAs!(COMMAND, CommandInfo);
+    static assert(udas.length <= 1, COMMAND.stringof~" has more that one @Command UDA");
+
+    static if(udas.length > 0)
+        enum getCommandInfo = udas[0];
+    else
+        enum getCommandInfo = CommandInfo([name]);
+
+    static assert(name == "" || getCommandInfo.names.length > 0 && getCommandInfo.names[0].length > 0, "Command "~COMMAND.stringof~" must have name");
+}
+
+
+private void initCommandArguments(COMMAND)(ref CommandArguments!COMMAND cmd, Config* config)
+{
+    import std.algorithm: sort, map;
+    import std.array: array;
+
+    addArguments(cmd);
+    addSubCommands(cmd);
+
+    if(config.addHelp)
+    {
+        cmd.arguments.addArgument!(helpArgument.info);
+        cmd.parseArguments ~= helpArgument.parsingFunc.parse!COMMAND;
+        cmd.completeArguments ~= ParsingArgument!("", helpArgument, helpArgument.info, COMMAND, true);
+    }
+
+    cmd.completeSuggestion = cmd.arguments.argsNamed.keys.map!(_ => getArgumentName(_, config.namedArgChar)).array ~ cmd.subCommandsByName.keys.array;
+    cmd.completeSuggestion.sort;
+}
+
+package auto commandArguments(COMMAND, Config config1)()
+{
+    Config config = config1;
+
+    checkArgumentName!COMMAND(config.namedArgChar);
+
+    auto cmd = CommandArguments!COMMAND(config.caseSensitive, getCommandInfo!COMMAND);
+    initCommandArguments(cmd, &config);
+
+    return cmd;
+}
+
+package auto commandArguments(COMMAND, CommandInfo info, PARENT)(Config* config, const PARENT* parentArguments)
+{
+    checkArgumentName!COMMAND(config.namedArgChar);
+
+    auto cmd = CommandArguments!COMMAND(config.caseSensitive, info, parentArguments);
+    initCommandArguments(cmd, config);
+
+    return cmd;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

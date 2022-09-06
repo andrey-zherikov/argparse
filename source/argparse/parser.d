@@ -337,7 +337,7 @@ package static Result callParser(Config origConfig, bool completionMode, COMMAND
 
     auto parser = Parser(&config, args);
 
-    auto command = CommandArguments!COMMAND(&config);
+    auto command = commandArguments!(COMMAND, origConfig);
     auto res = parser.parseAll!completionMode(command, receiver);
 
     static if(!completionMode)

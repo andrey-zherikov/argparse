@@ -671,10 +671,13 @@ unittest
         int f;
     }
 
-    Config config;
-    config.addHelp = false;
+    enum config = {
+        Config config;
+        config.addHelp = false;
+        return config;
+    }();
 
-    auto a = CommandArguments!T(&config);
+    auto a = commandArguments!(T, config);
     assert(a.arguments.requiredGroup.arguments == [2,4]);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -687,10 +690,13 @@ unittest
         int a,b,c,d,e,f;
     }
 
-    Config config;
-    config.addHelp = false;
+    enum config = {
+        Config config;
+        config.addHelp = false;
+        return config;
+    }();
 
-    auto a = CommandArguments!T(&config);
+    auto a = commandArguments!(T, config);
     assert(a.arguments.requiredGroup.arguments == []);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -771,8 +777,7 @@ unittest
         int no_c;
     }
 
-    Config config;
-    auto p = CommandArguments!params(&config);
+    auto p = commandArguments!(params, Config.init);
     assert(p.findNamedArgument("a").arg is null);
     assert(p.findNamedArgument("b").arg !is null);
     assert(p.findNamedArgument("boo").arg !is null);
