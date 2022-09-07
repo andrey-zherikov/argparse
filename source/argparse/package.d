@@ -2,8 +2,8 @@ module argparse;
 
 
 import argparse.internal;
-import argparse.parser: callParser;
-import argparse.help: Style;
+import argparse.internal.parser: callParser;
+import argparse.internal.help: Style;
 import argparse.ansi;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1103,7 +1103,7 @@ template CLI(Config config, COMMAND)
 
     int complete(string[] args)
     {
-        import argparse.completer;
+        import argparse.internal.completer;
         import std.sumtype: match;
 
         // dmd fails with core.exception.OutOfMemoryError@core\lifetime.d(137): Memory allocation failed

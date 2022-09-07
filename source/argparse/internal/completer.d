@@ -1,4 +1,4 @@
-module argparse.completer;
+module argparse.internal.completer;
 
 import argparse;
 
@@ -16,7 +16,7 @@ private template defaultCommandName(COMMAND)
 }
 
 
-package struct Complete(COMMAND)
+package(argparse) struct Complete(COMMAND)
 {
     @(Command("init")
     .Description("Print initialization script for shell completion.")

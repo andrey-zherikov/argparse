@@ -1,4 +1,4 @@
-module argparse.parser;
+module argparse.internal.parser;
 
 import argparse;
 import argparse.internal;
@@ -328,7 +328,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package static Result callParser(Config origConfig, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
+package(argparse) static Result callParser(Config origConfig, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 {
     import argparse.ansi: detectSupport;
 

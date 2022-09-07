@@ -1,8 +1,8 @@
 module argparse.internal;
 
 import argparse;
-import argparse.help;
-import argparse.parser;
+import argparse.internal.help;
+import argparse.internal.parser;
 
 import std.traits;
 import std.sumtype: SumType, match;
@@ -15,7 +15,7 @@ package enum DEFAULT_COMMAND = "";
 /// Internal API
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct LazyString
+package(argparse) struct LazyString
 {
     SumType!(string, string delegate()) value;
 
@@ -1020,7 +1020,7 @@ private void initCommandArguments(COMMAND)(ref CommandArguments!COMMAND cmd, Con
     cmd.completeSuggestion.sort;
 }
 
-package auto commandArguments(COMMAND, Config config1)()
+package(argparse) auto commandArguments(COMMAND, Config config1)()
 {
     Config config = config1;
 
@@ -1293,12 +1293,12 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct ValueParseFunctions(alias PreProcess,
-                                   alias PreValidation,
-                                   alias Parse,
-                                   alias Validation,
-                                   alias Action,
-                                   alias NoValueAction)
+package(argparse) struct ValueParseFunctions(alias PreProcess,
+                                             alias PreValidation,
+                                             alias Parse,
+                                             alias Validation,
+                                             alias Action,
+                                             alias NoValueAction)
 {
     alias changePreProcess   (alias func) = ValueParseFunctions!(      func, PreValidation, Parse, Validation, Action, NoValueAction);
     alias changePreValidation(alias func) = ValueParseFunctions!(PreProcess,          func, Parse, Validation, Action, NoValueAction);
@@ -1958,7 +1958,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct Validators
+package(argparse) struct Validators
 {
     template ValueInList(alias values, TYPE)
     {

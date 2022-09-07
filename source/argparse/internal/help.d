@@ -1,4 +1,4 @@
-module argparse.help;
+module argparse.internal.help;
 
 import argparse;
 import argparse.internal;
@@ -10,7 +10,7 @@ import std.sumtype: SumType, match;
 /// Help styling options
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct Style
+package(argparse) struct Style
 {
     TextStyle programName;
     TextStyle subcommandName;
