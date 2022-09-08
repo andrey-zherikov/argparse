@@ -5,6 +5,7 @@ import argparse.internal;
 import argparse.internal.parser: callParser;
 import argparse.internal.help: Style;
 import argparse.internal.lazystring;
+import argparse.internal.arguments;
 import argparse.ansi;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -186,57 +187,6 @@ struct Result
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct ArgumentInfo
-{
-    import std.typecons: Nullable;
-
-    package:
-
-    string[] names;
-
-    LazyString description;
-    string placeholder;
-
-    bool hideFromHelp = false;      // if true then this argument is not printed on help page
-
-    bool required;
-
-    Nullable!uint position;
-
-    @property bool positional() const { return !position.isNull; }
-
-    Nullable!ulong minValuesCount;
-    Nullable!ulong maxValuesCount;
-
-    auto checkValuesCount(string argName, ulong count) const
-    {
-        immutable min = minValuesCount.get;
-        immutable max = maxValuesCount.get;
-
-        // override for boolean flags
-        if(allowBooleanNegation && count == 1)
-            return Result.Success;
-
-        if(min == max && count != min)
-        {
-            return Result.Error("argument ",argName,": expected ",min,min == 1 ? " value" : " values");
-        }
-        if(count < min)
-        {
-            return Result.Error("argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
-        }
-        if(count > max)
-        {
-            return Result.Error("argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
-        }
-
-        return Result.Success;
-    }
-
-    bool allowBooleanNegation = true;
-    bool ignoreInDefaultCommand;
-}
-
 package string formatAllowedValues(alias names)()
 {
     import std.conv: to;
@@ -245,41 +195,6 @@ package string formatAllowedValues(alias names)()
     return "{%s}".format(names.to!(string[]).join(','));
 }
 
-
-unittest
-{
-    auto info(int min, int max)
-    {
-        ArgumentInfo info;
-        info.allowBooleanNegation = false;
-        info.minValuesCount = min;
-        info.maxValuesCount = max;
-        return info;
-    }
-
-    assert(info(2,4).checkValuesCount("", 1).isError("expected at least 2 values"));
-    assert(info(2,4).checkValuesCount("", 2));
-    assert(info(2,4).checkValuesCount("", 3));
-    assert(info(2,4).checkValuesCount("", 4));
-    assert(info(2,4).checkValuesCount("", 5).isError("expected at most 4 values"));
-
-    assert(info(2,2).checkValuesCount("", 1).isError("expected 2 values"));
-    assert(info(2,2).checkValuesCount("", 2));
-    assert(info(2,2).checkValuesCount("", 3).isError("expected 2 values"));
-
-    assert(info(1,1).checkValuesCount("", 0).isError("expected 1 value"));
-    assert(info(1,1).checkValuesCount("", 1));
-    assert(info(1,1).checkValuesCount("", 2).isError("expected 1 value"));
-
-    assert(info(0,1).checkValuesCount("", 0));
-    assert(info(0,1).checkValuesCount("", 1));
-    assert(info(0,1).checkValuesCount("", 2).isError("expected at most 1 value"));
-
-    assert(info(1,2).checkValuesCount("", 0).isError("expected at least 1 value"));
-    assert(info(1,2).checkValuesCount("", 1));
-    assert(info(1,2).checkValuesCount("", 2));
-    assert(info(1,2).checkValuesCount("", 3).isError("expected at most 2 values"));
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -475,13 +390,6 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct Group
-{
-    package string name;
-    package LazyString description;
-    package size_t[] arguments;
-}
-
 public auto ref Description(T : Group)(auto ref T group, string text)
 {
     group.description = text;
@@ -511,18 +419,6 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct RestrictionGroup
-{
-    package string location;
-
-    package enum Type { together, exclusive }
-    package Type type;
-
-    package size_t[] arguments;
-
-    package bool required;
-}
-
 public auto ref Required(T : RestrictionGroup)(auto ref T group)
 {
     group.required = true;
@@ -544,12 +440,8 @@ public auto MutuallyExclusive(string file=__FILE__, uint line = __LINE__)()
 
 unittest
 {
-    assert(!RestrictionGroup.init.required);
     assert(RestrictionGroup.init.Required.required);
-}
 
-unittest
-{
     auto t = RequiredTogether();
     assert(t.location.length > 0);
     assert(t.type == RestrictionGroup.Type.together);

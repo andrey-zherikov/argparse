@@ -3,6 +3,7 @@ module argparse.internal.help;
 import argparse;
 import argparse.internal;
 import argparse.internal.lazystring;
+import argparse.internal.arguments;
 import argparse.ansi;
 
 import std.sumtype: SumType, match;
