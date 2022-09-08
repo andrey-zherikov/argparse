@@ -4,6 +4,7 @@ module argparse;
 import argparse.internal;
 import argparse.internal.parser: callParser;
 import argparse.internal.help: Style;
+import argparse.internal.lazystring;
 import argparse.ansi;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
