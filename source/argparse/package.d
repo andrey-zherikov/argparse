@@ -710,7 +710,7 @@ unittest
         @(NamedArgument("2"))
         int a;
     }
-    static assert(!__traits(compiles, { CommandArguments!T1(Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(T1, Config.init); }));
 
     struct T2
     {
@@ -719,21 +719,21 @@ unittest
         @(NamedArgument("1"))
         int b;
     }
-    static assert(!__traits(compiles, { CommandArguments!T1(Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(T2, Config.init); }));
 
     struct T3
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(0)) int b;
     }
-    static assert(!__traits(compiles, { CommandArguments!T3(Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(T3, Config.init); }));
 
     struct T4
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(2)) int b;
     }
-    static assert(!__traits(compiles, { CommandArguments!T4(Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(T4, Config.init); }));
 }
 
 unittest
