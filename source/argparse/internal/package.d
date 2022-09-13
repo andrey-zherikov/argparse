@@ -1,16 +1,16 @@
 module argparse.internal;
 
-import argparse;
+import argparse : Param, RawParam, Result, Config, ArgumentUDA, NamedArgument, TrailingArguments, AnsiStylingArgument, Default, formatAllowedValues;
 import argparse.internal.help;
 import argparse.internal.parser;
 import argparse.internal.lazystring;
 import argparse.internal.arguments;
+import argparse.internal.subcommands;
 
 import std.traits;
 import std.sumtype: SumType, match;
 
 
-package enum DEFAULT_COMMAND = "";
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -232,55 +232,6 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package alias ParseSubCommandFunction(RECEIVER) = Result delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver);
-package alias InitSubCommandFunction(RECEIVER) = Result delegate(ref RECEIVER receiver);
-
-package auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(scope const CommandArguments!RECEIVER* parentArguments)
-{
-    return delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver)
-    {
-        auto target = &__traits(getMember, receiver, symbol);
-
-        alias parse = (ref COMMAND_TYPE cmdTarget)
-        {
-            static if(!is(COMMAND_TYPE == Default!TYPE, TYPE))
-                alias TYPE = COMMAND_TYPE;
-
-            auto command = commandArguments!(TYPE, info)(config, parentArguments);
-
-            return parser.parse!completionMode(command, isDefaultCmd, cmdTarget, arg);
-        };
-
-
-        static if(typeof(*target).Types.length == 1)
-            return (*target).match!parse;
-        else
-        {
-            return (*target).match!(parse,
-            (_)
-            {
-                assert(false, "This should never happen");
-                return Result.Failure;
-            }
-            );
-        }
-    };
-}
-
-package alias ParsingSubCommandInit(COMMAND_TYPE, RECEIVER, alias symbol) =
-    delegate(ref RECEIVER receiver)
-    {
-        auto target = &__traits(getMember, receiver, symbol);
-
-        static if(typeof(*target).Types.length > 1)
-            if((*target).match!((COMMAND_TYPE t) => false, _ => true))
-                *target = COMMAND_TYPE.init;
-
-        return Result.Success;
-    };
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 private auto checkDuplicates(alias sortedRange, string errorMsg)() {
     static if(sortedRange.length >= 2)
     {
@@ -369,11 +320,9 @@ package bool checkPositionalIndexes(T)()
 
 package struct CommandArguments(RECEIVER)
 {
-    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1,
-    "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
+    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1, "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
 
-    private enum _validate = checkArgumentNames!RECEIVER &&
-    checkPositionalIndexes!RECEIVER;
+    private enum _validate = checkArgumentNames!RECEIVER && checkPositionalIndexes!RECEIVER;
 
     const CommandInfo info;
     const(string)[] parentNames;
@@ -386,14 +335,9 @@ package struct CommandArguments(RECEIVER)
     alias void delegate(ref RECEIVER receiver, const Config* config) ParseFinalizer;
     ParseFinalizer[] parseFinalizers;
 
-    uint level; // (sub-)command level, 0 = top level
 
     // sub commands
-    size_t[string] subCommandsByName;
-    CommandInfo[] subCommands;
-    ParseSubCommandFunction!RECEIVER[] parseSubCommands;
-    ParseSubCommandFunction!RECEIVER[] completeSubCommands;
-    InitSubCommandFunction !RECEIVER[] initSubCommands;
+    SubCommands!RECEIVER subCommands;
 
     // completion
     string[] completeSuggestion;
@@ -409,7 +353,7 @@ package struct CommandArguments(RECEIVER)
     {
         this.info = info;
 
-        level = 0;
+        subCommands.level = 0;
         arguments = Arguments(caseSensitive);
     }
     private this(PARENT)(bool caseSensitive, CommandInfo info, const PARENT* parentArguments)
@@ -417,7 +361,7 @@ package struct CommandArguments(RECEIVER)
         this.info = info;
 
         parentNames = parentArguments.parentNames ~ parentArguments.info.names[0];
-        level = parentArguments.level + 1;
+        subCommands.level = parentArguments.subCommands.level + 1;
         arguments = Arguments(caseSensitive, &parentArguments.arguments);
     }
 
@@ -465,16 +409,7 @@ package struct CommandArguments(RECEIVER)
 
     auto findSubCommand(string name) const
     {
-        struct Result
-        {
-            uint level = uint.max;
-            ParseSubCommandFunction!RECEIVER parse;
-            ParseSubCommandFunction!RECEIVER complete;
-            InitSubCommandFunction !RECEIVER initialize;
-        }
-
-        auto p = arguments.convertCase(name) in subCommandsByName;
-        return !p ? Result.init : Result(level+1, parseSubCommands[*p], completeSubCommands[*p], initSubCommands[*p]);
+        return subCommands.find(arguments.convertCase(name));
     }
 
     package void setTrailingArgs(ref RECEIVER receiver, ref string[] rawArgs) const
@@ -505,7 +440,7 @@ package struct CommandArguments(RECEIVER)
 
 private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA  ).length == 0 &&
                                             getSymbolsByUDA!(COMMAND, NamedArgument).length == 0 &&
-                                            getSymbolsByUDA!(COMMAND, SubCommands  ).length == 0;
+                                            getSymbolsByUDA!(COMMAND, argparse.SubCommands  ).length == 0;
 
 private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
 
@@ -550,7 +485,7 @@ private void addSubCommands(COMMAND)(ref CommandArguments!COMMAND cmd)
 {
     import std.sumtype: isSumType;
 
-    enum isSubCommand(alias mem) = hasUDA!(mem, SubCommands) ||
+    enum isSubCommand(alias mem) = hasUDA!(mem, argparse.SubCommands) ||
                                    hasNoMembersWithUDA!COMMAND && !isOpFunction!mem && isSumType!(typeof(mem));
 
     static foreach(sym; __traits(allMembers, COMMAND))
@@ -562,52 +497,15 @@ private void addSubCommands(COMMAND)(ref CommandArguments!COMMAND cmd)
         {
             static assert(isSumType!(typeof(mem)), COMMAND.stringof~"."~sym~" must have 'SumType' type");
 
-            static assert(getUDAs!(mem, SubCommands).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
+            static assert(getUDAs!(mem, argparse.SubCommands).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
 
             static foreach(TYPE; typeof(mem).Types)
-                addSubCommand!(TYPE, sym)(cmd);
+                cmd.subCommands.add!(sym, TYPE)(cmd.arguments.convertCase, &cmd);
         }
     }}
 }
 
-private void addSubCommand(SUBCOMMAND, alias symbol, COMMAND)(ref CommandArguments!COMMAND cmd)
-{
-    enum defaultCommand = is(SUBCOMMAND == Default!COMMAND_TYPE, COMMAND_TYPE);
-    static if(!defaultCommand)
-        alias COMMAND_TYPE = SUBCOMMAND;
-
-    //static assert(getUDAs!(member, Group).length <= 1,
-    //    "Member "~COMMAND.stringof~"."~symbol~" has multiple 'Group' UDAs");
-
-    //static if(getUDAs!(member, Group).length > 0)
-    //    args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingArgument!(symbol, uda, info, COMMAND));
-    //else
-    //arguments.addSubCommand!(info);
-
-    immutable index = cmd.subCommands.length;
-
-    enum info = getCommandInfo!(COMMAND_TYPE, COMMAND_TYPE.stringof);
-
-    static foreach(name; info.names)
-    {
-        assert(!(name in cmd.subCommandsByName), "Duplicated name of subcommand: "~name);
-        cmd.subCommandsByName[cmd.arguments.convertCase(name)] = index;
-    }
-
-    static if(defaultCommand)
-    {
-        assert(!(DEFAULT_COMMAND in cmd.subCommandsByName), "Multiple default subcommands: "~COMMAND.stringof~"."~symbol);
-        cmd.subCommandsByName[DEFAULT_COMMAND] = index;
-    }
-
-    cmd.subCommands ~= info;
-    //group.arguments ~= index;
-    cmd.parseSubCommands    ~= ParsingSubCommandArgument!(SUBCOMMAND, info, COMMAND, symbol, false)(&cmd);
-    cmd.completeSubCommands ~= ParsingSubCommandArgument!(SUBCOMMAND, info, COMMAND, symbol, true)(&cmd);
-    cmd.initSubCommands     ~= ParsingSubCommandInit!(SUBCOMMAND, COMMAND, symbol);
-}
-
-private template getCommandInfo(COMMAND, string name = "")
+package template getCommandInfo(COMMAND, string name = "")
 {
     enum udas = getUDAs!(COMMAND, CommandInfo);
     static assert(udas.length <= 1, COMMAND.stringof~" has more that one @Command UDA");
@@ -636,7 +534,7 @@ private void initCommandArguments(COMMAND)(ref CommandArguments!COMMAND cmd, Con
         cmd.completeArguments ~= ParsingArgument!("", helpArgument, helpArgument.info, COMMAND, true);
     }
 
-    cmd.completeSuggestion = cmd.arguments.argsNamed.keys.map!(_ => getArgumentName(_, config.namedArgChar)).array ~ cmd.subCommandsByName.keys.array;
+    cmd.completeSuggestion = cmd.arguments.argsNamed.keys.map!(_ => getArgumentName(_, config.namedArgChar)).array ~ cmd.subCommands.byName.keys.array;
     cmd.completeSuggestion.sort;
 }
 

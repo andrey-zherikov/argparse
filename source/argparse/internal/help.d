@@ -1,9 +1,10 @@
 module argparse.internal.help;
 
 import argparse;
-import argparse.internal;
+import argparse.internal: CommandArguments, commandArguments, getArgumentName;
 import argparse.internal.lazystring;
 import argparse.internal.arguments;
+import argparse.internal.subcommands: CommandInfo;
 import argparse.ansi;
 
 import std.sumtype: SumType, match;
@@ -420,6 +421,8 @@ unittest
         enum info = {
             ArgumentInfo info;
             info.placeholder = "v";
+            info.minValuesCount = 1;
+            info.maxValuesCount = 1;
             static if (positional)
                 info.position = 0;
             return info;
@@ -428,7 +431,7 @@ unittest
         import std.array: appender;
         auto a = appender!string;
         Style style;
-        printInvocation(_ => a.put(_), style, applyDefaults!(info, int, "foo"), ["f".getArgumentName(Config.init.namedArgChar),"foo".getArgumentName(Config.init.namedArgChar)]);
+        printInvocation(_ => a.put(_), style, info, ["f".getArgumentName(Config.init.namedArgChar),"foo".getArgumentName(Config.init.namedArgChar)]);
         return a[];
     }
 
@@ -458,6 +461,8 @@ unittest
             info.names ~= "foo";
             info.placeholder = "v";
             info.required = required;
+            info.minValuesCount = 1;
+            info.maxValuesCount = 1;
             static if (positional)
                 info.position = 0;
             return info;
@@ -466,7 +471,7 @@ unittest
         import std.array: appender;
         auto a = appender!string;
         Style style;
-        printUsage(_ => a.put(_), _ => getArgumentName(_, Config.init.namedArgChar), style, applyDefaults!(info, int, "foo"));
+        printUsage(_ => a.put(_), _ => getArgumentName(_, Config.init.namedArgChar), style, info);
         return a[];
     }
 
@@ -627,7 +632,7 @@ private auto getSection(T)(string delegate(string) getArgumentName, const ref St
 
     // sub commands
     if(cmd.subCommands.length > 0)
-        sections ~= getSection(style, cmd.subCommands);
+        sections ~= getSection(style, cmd.subCommands.info);
 
     sections ~= getSections(getArgumentName, style, &cmd.arguments);
 

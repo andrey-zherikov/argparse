@@ -1,6 +1,7 @@
 module argparse.internal.completer;
 
 import argparse;
+import argparse.internal.subcommands: CommandInfo;
 
 import std.traits: getUDAs;
 import std.sumtype: SumType;

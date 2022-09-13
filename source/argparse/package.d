@@ -6,6 +6,7 @@ import argparse.internal.parser: callParser;
 import argparse.internal.help: Style;
 import argparse.internal.lazystring;
 import argparse.internal.arguments;
+import argparse.internal.subcommands: CommandInfo;
 import argparse.ansi;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -463,15 +464,6 @@ struct Default(COMMAND)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package struct CommandInfo
-{
-    package string[] names = [""];
-    package LazyString usage;
-    package LazyString description;
-    package LazyString shortDescription;
-    package LazyString epilog;
-}
 
 public auto ref Usage(T : CommandInfo)(auto ref T cmd, string text)
 {
