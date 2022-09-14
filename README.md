@@ -811,6 +811,11 @@ Would result in this help fragment:
   maximum,max    Print the maximum
 ```
 
+If `Command` has no names listed then the name of the type is used as a command name:
+```
+  MaxCmd         Print the maximum
+```
+
 ### Default subcommand
 
 The default command is a command that is ran when user doesn't specify any command in the command line.
@@ -824,18 +829,18 @@ SumType!(sum, min, Default!max) cmd;
 
 ### Command
 
-`Command` UDA provides few customizations that affect help text. It can be used for top-level command and subcommands
+`Command` UDA provides few customizations that affect help text. It can be used for **top-level command** and **subcommands**.
 
 - Program name (i.e. the name of top-level command) and subcommand name can be provided to `Command` UDA as a parameter. 
-  If program name is not provided then `Runtime.args[0]` is used. If subcommand name is not provided then the name of
+  If program name is not provided then `Runtime.args[0]` (a.k.a. `argv[0]` from `main` function) is used. If subcommand name is not provided then the name of
   the type that represents the command is used.
 - `Usage` - allows custom usage text. By default, the parser calculates the usage message from the arguments it contains
   but this can be overridden with `Usage` call. If the custom text contains `%(PROG)` then it will be replaced by the
   command/program name.
 - `Description` - used to provide a description of what the command/program does and how it works. In help messages, the
   description is displayed between the usage string and the list of the command arguments.
-- `ShortDescription` - used to provide a brief description of what the command/program does. It is displayed in
-  "Available commands" section on help screen of the parent command.
+- `ShortDescription` - used to provide a brief description of what the subcommand does. It is applicable to subcommands only
+  and is displayed in "Available commands" section on help screen of the parent command.
 - `Epilog` - custom text that is printed after the list of the arguments.
 
 `Usage`, `Description`, `ShortDescription` and `Epilog` modifiers take either `string` or `string delegate()` value -

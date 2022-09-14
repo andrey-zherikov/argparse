@@ -945,7 +945,12 @@ package struct CommandArguments(RECEIVER)
             //    "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
 
             static if(getUDAs!(COMMAND_TYPE, CommandInfo).length > 0)
-                enum info = getUDAs!(COMMAND_TYPE, CommandInfo)[0];
+                enum info = {
+                    auto info = getUDAs!(COMMAND_TYPE, CommandInfo)[0];
+                    if(info.names.length == 0 || info.names[0] == "")
+                        info.names = [COMMAND_TYPE.stringof];
+                    return info;
+                }();
             else
                 enum info = CommandInfo([COMMAND_TYPE.stringof]);
 
