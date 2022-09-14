@@ -488,7 +488,7 @@ private void printUsage(T)(void delegate(string) sink, string delegate(string) g
     import std.algorithm: map;
     import std.array: join;
 
-    string progName = style.programName((cmd.parentNames ~ cmd.info.names[0]).map!(_ => _.length > 0 ? _ : getProgramName()).join(" "));
+    string progName = style.programName((cmd.parentNames ~ (cmd.info.names.length > 0 ? cmd.info.names[0] : "")).map!(_ => _.length > 0 ? _ : getProgramName()).join(" "));
 
     sink("Usage: ");
 
