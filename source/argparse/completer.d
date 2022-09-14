@@ -7,14 +7,59 @@ import std.sumtype: SumType;
 
 
 
-private template defaultCommandName(COMMAND)
+private string defaultCommandName(COMMAND)()
 {
-    static if(getUDAs!(COMMAND, CommandInfo).length > 0)
-        enum defaultCommandName = getUDAs!(COMMAND, CommandInfo)[0].names[0];
+    static if(getUDAs!(COMMAND, CommandInfo).length > 0 || getUDAs!(COMMAND, Command).length > 0)
+    {
+        static if(getUDAs!(COMMAND, CommandInfo).length > 0)
+            enum names = getUDAs!(COMMAND, CommandInfo)[0].names;
+        else
+            enum names = CommandInfo.init.names;
+
+        static if(names.length > 0 && names[0] != "")
+            return names[0];
+        else
+        {
+            import core.runtime: Runtime;
+            import std.path: baseName;
+            return Runtime.args[0].baseName;
+        }
+    }
     else
-        enum defaultCommandName = COMMAND.stringof;
+        return COMMAND.stringof;
 }
 
+unittest
+{
+    struct T {}
+    assert(defaultCommandName!T == "T");
+}
+
+unittest
+{
+    @Command("name","alias")
+    struct T {}
+    assert(defaultCommandName!T == "name");
+}
+
+unittest
+{
+    import core.runtime: Runtime;
+    import std.path: baseName;
+
+    @Command
+    struct T {}
+    import std.stdio: writeln,stderr; stderr.writeln("===== ", defaultCommandName!T);
+    assert(defaultCommandName!T == Runtime.args[0].baseName);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// DMD 2.100.2 fails with 'Illegal instruction' if delegate is put directly into NamedArgument.Description
+private alias Complete_Init_CommandName_Description(COMMAND) = delegate ()
+{
+    return "Command name. Default value: "~defaultCommandName!COMMAND~".";
+};
 
 package struct Complete(COMMAND)
 {
@@ -39,8 +84,9 @@ package struct Complete(COMMAND)
         @(NamedArgument.Description("Path to completer. Default value: path to this executable."))
         string completerPath; // path to this binary
 
-        @(NamedArgument.Description("Command name. Default value: "~defaultCommandName!COMMAND~"."))
-        string commandName = defaultCommandName!COMMAND;   // command to complete
+        // DMD 2.100.2 fails with 'Illegal instruction' if delegate is put directly here
+        @(NamedArgument.Description(Complete_Init_CommandName_Description!COMMAND))
+        string commandName;   // command to complete
 
         void execute(Config config)()
         {
@@ -53,7 +99,9 @@ package struct Complete(COMMAND)
             }
 
             string commandNameArg;
-            if(commandName != defaultCommandName!COMMAND)
+            if(commandName == "")
+                commandName = defaultCommandName!COMMAND;
+            else if(commandName != defaultCommandName!COMMAND)
                 commandNameArg = " --commandName "~commandName;
 
             if(bash)

@@ -55,6 +55,7 @@ struct MaxCmd
     int[] numbers;
 }
 
+@(Command.Description("Description of main program"))
 struct Program
 {
     // Common arguments
