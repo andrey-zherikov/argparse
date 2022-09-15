@@ -66,13 +66,13 @@ package struct Section
         return title.length == 0 || entries.match!(_ => _.length) == 0;
     }
 
-    private ulong maxItemNameLength() const
+    private ulong maxItemNameLength(ulong limit) const
     {
-        import std.algorithm: maxElement, map;
+        import std.algorithm: maxElement, map, filter;
 
         return entries.match!(
-                (const ref Section[] _) => _.map!(_ => _.maxItemNameLength()).maxElement(0),
-                (const ref Item[] _) => _.map!(_ => getUnstyledTextLength(_.name)).maxElement(0));
+                (const ref Section[] _) => _.map!(_ => _.maxItemNameLength(limit)).maxElement(0),
+                (const ref Item[] _) => _.map!(_ => getUnstyledTextLength(_.name)).filter!(_ => _ <= limit).maxElement(0));
     }
 }
 
@@ -644,7 +644,7 @@ private auto getSection(T)(string delegate(string) getArgumentName, const ref St
 
 package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, Config* config)
 {
-    import std.algorithm: min, each;
+    import std.algorithm: each;
 
     bool enableStyling = config.stylingMode == Config.StylingMode.on ||
         config.stylingMode == Config.StylingMode.autodetect && detectSupport();
@@ -653,7 +653,7 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 
     auto section = getSection(_ => helpStyle.namedArgumentName(getArgumentName(_, config.namedArgChar)), helpStyle, cmd);
 
-    immutable helpPosition = min(section.maxItemNameLength() + 4, 24);
+    immutable helpPosition = section.maxItemNameLength(20) + 4;
     immutable indent = spaces(helpPosition + 2);
 
     print(enableStyling ? sink : (string _) { _.getUnstyledText.each!sink; }, section, "", indent);
@@ -702,18 +702,18 @@ unittest
         "custom description\n\n"~
         "Required arguments:\n"~
         "  -f {apple,pear}, --fruit {apple,pear}\n"~
-        "                          This is a help text for fruit. Very very very very\n"~
-        "                          very very very very very very very very very very very\n"~
-        "                          very very very very long text\n"~
-        "  param0                  This is a help text for param0. Very very very very\n"~
-        "                          very very very very very very very very very very very\n"~
-        "                          very very very very long text\n"~
+        "                   This is a help text for fruit. Very very very very very very\n"~
+        "                   very very very very very very very very very very very very\n"~
+        "                   very long text\n"~
+        "  param0           This is a help text for param0. Very very very very very very\n"~
+        "                   very very very very very very very very very very very very\n"~
+        "                   very long text\n"~
         "  {q,a}\n\n"~
         "Optional arguments:\n"~
         "  -s S\n"~
         "  -p VALUE\n"~
         "  -i {1,4,16,8}\n"~
-        "  -h, --help              Show this help message and exit\n\n"~
+        "  -h, --help       Show this help message and exit\n\n"~
         "custom epilog\n");
 }
 
@@ -803,11 +803,11 @@ unittest
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~
-        "  cmd1                    Perform cmd 1\n"~
+        "  cmd1          Perform cmd 1\n"~
         "  very-long-command-name-2\n"~
-        "                          Perform cmd 2\n\n"~
+        "                Perform cmd 2\n\n"~
         "Optional arguments:\n"~
         "  -c C\n"~
         "  -d D\n"~
-        "  -h, --help              Show this help message and exit\n\n");
+        "  -h, --help    Show this help message and exit\n\n");
 }
