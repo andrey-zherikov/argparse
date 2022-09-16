@@ -1,7 +1,7 @@
 import argparse;
 
 // If struct has no UDA then all members are named arguments
-static struct Basic
+struct Basic
 {
     // Basic data types are supported:
         // --name argument

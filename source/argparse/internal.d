@@ -1195,7 +1195,16 @@ if(!is(T == void))
         );
     }
     else
-        static assert(false, "Type is not supported: " ~ T.stringof);
+    {
+        alias DefaultValueParseFunctions = ValueParseFunctions!(
+            void,   // pre process
+            void,   // pre validate
+            void,   // parse
+            void,   // validate
+            void,   // action
+            void    // no-value action
+        );
+    }
 }
 
 unittest

@@ -51,7 +51,7 @@ considered arguments with the same name as the name of member:
 ```d
 import argparse;
 
-static struct Basic
+struct Basic
 {
     // Basic data types are supported:
         // --name argument
@@ -127,7 +127,7 @@ Optional arguments:
 For more sophisticated CLI usage, `argparse` provides few UDAs:
 
 ```d
-static struct Advanced
+struct Advanced
 {
     // Positional arguments are required by default
     @PositionalArgument(0)
@@ -1081,7 +1081,7 @@ If you want to determine whether `--color` argument was specified in command lin
 data member:
 
 ```d
-static struct Arguments
+struct Arguments
 {
     static auto color = ansiStylingArgument;
 }
@@ -1323,7 +1323,7 @@ An argument can be bound to a function with one of the following signatures
   command line and the set of values specified in command line is provided into parameter.
 
 ```d
-static struct T
+struct T
 {
     int a;
 
@@ -1331,6 +1331,25 @@ static struct T
 }
 
 assert(CLI!T.parseArgs!((T t) { assert(t == T(4)); })(["-a","-a","-a","-a"]) == 0);
+```
+
+### Custom types
+
+Any arbitrary type can be used to receive command line argument values. `argparse` supports this use case - you just need
+to provide parsing function:
+
+```d
+struct Value
+{
+    string a;
+}
+struct T
+{
+    @(NamedArgument.Parse!((string s) { return Value(s); }))
+    Value s;
+}
+
+assert(CLI!T.parseArgs!((T t) { assert(t == T(Value("foo"))); return 12345; })(["-s","foo"]) == 12345);
 ```
 
 ## Argument parsing customization

@@ -1251,7 +1251,17 @@ public auto PreValidation(alias func, T)(auto ref ArgumentUDA!T uda)
 
 public auto Parse(alias func, T)(auto ref ArgumentUDA!T uda)
 {
-    return ArgumentUDA!(uda.parsingFunc.changeParse!func)(uda.tupleof);
+    auto desc = ArgumentUDA!(uda.parsingFunc.changeParse!func)(uda.tupleof);
+
+    static if(__traits(compiles, { func(string.init); }))
+        desc.info.minValuesCount = desc.info.maxValuesCount = 1;
+    else
+    {
+        desc.info.minValuesCount = 0;
+        desc.info.maxValuesCount = ulong.max;
+    }
+
+    return desc;
 }
 
 public auto Validation(alias func, T)(auto ref ArgumentUDA!T uda)
@@ -1284,6 +1294,24 @@ unittest
     auto uda = NamedArgument().Parse!({});
     assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, FUNC, void, void, void)), alias FUNC));
     assert(!is(FUNC == void));
+}
+
+unittest
+{
+    auto uda = NamedArgument().Parse!((string _) => _);
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, FUNC, void, void, void)), alias FUNC));
+    assert(!is(FUNC == void));
+    assert(uda.info.minValuesCount == 1);
+    assert(uda.info.maxValuesCount == 1);
+}
+
+unittest
+{
+    auto uda = NamedArgument().Parse!((string[] _) => _);
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, FUNC, void, void, void)), alias FUNC));
+    assert(!is(FUNC == void));
+    assert(uda.info.minValuesCount == 0);
+    assert(uda.info.maxValuesCount == ulong.max);
 }
 
 unittest
@@ -1575,6 +1603,18 @@ unittest
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T(4)); return 12345; })(["-a","-a","-a","-a"]) == 12345);
+}
+
+unittest
+{
+    struct Value { string a; }
+    struct T
+    {
+        @(NamedArgument.Parse!((string s) { return Value(s); }))
+        Value s;
+    }
+
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(Value("foo"))); return 12345; })(["-s","foo"]) == 12345);
 }
 
 
