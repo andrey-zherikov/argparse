@@ -1,7 +1,7 @@
 import argparse;
 import argparse.ansi;
 
-static struct Advanced
+struct Advanced
 {
     // Positional arguments are required by default
     @PositionalArgument(0)
@@ -21,6 +21,13 @@ static struct Advanced
 
     @NamedArgument(["b","banana","ban"])
     int banana;
+
+    // Custom types can also be used with custon parsing function
+    struct CustomType {
+        double d;
+    }
+    @(NamedArgument.Parse!((string value) { import std.conv: to; return CustomType(value.to!double); }))
+    CustomType custom;
 
     @(NamedArgument.Description(green.bold.underline("Colorize")~" the output. If value is omitted then '"~red("always")~"' is used."))
     static auto color = ansiStylingArgument;
