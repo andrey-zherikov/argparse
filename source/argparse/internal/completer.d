@@ -32,19 +32,6 @@ private string defaultCommandName(COMMAND)()
 
 unittest
 {
-    struct T {}
-    assert(defaultCommandName!T == "T");
-}
-
-unittest
-{
-    @Command("name","alias")
-    struct T {}
-    assert(defaultCommandName!T == "name");
-}
-
-unittest
-{
     import core.runtime: Runtime;
     import std.path: baseName;
 
