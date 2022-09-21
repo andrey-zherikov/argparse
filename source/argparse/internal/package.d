@@ -505,20 +505,6 @@ private void addSubCommands(COMMAND)(ref CommandArguments!COMMAND cmd)
     }}
 }
 
-package template getCommandInfo(COMMAND, string name = "")
-{
-    enum udas = getUDAs!(COMMAND, CommandInfo);
-    static assert(udas.length <= 1, COMMAND.stringof~" has more that one @Command UDA");
-
-    static if(udas.length > 0)
-        enum getCommandInfo = udas[0];
-    else
-        enum getCommandInfo = CommandInfo([name]);
-
-    static assert(name == "" || getCommandInfo.names.length > 0 && getCommandInfo.names[0].length > 0, "Command "~COMMAND.stringof~" must have name");
-}
-
-
 private void initCommandArguments(COMMAND)(ref CommandArguments!COMMAND cmd, Config* config)
 {
     import std.algorithm: sort, map;

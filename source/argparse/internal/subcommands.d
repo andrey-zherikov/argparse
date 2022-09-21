@@ -1,7 +1,7 @@
 module argparse.internal.subcommands;
 
 import argparse: Config, Result, Default;
-import argparse.internal: CommandArguments, commandArguments, getCommandInfo;
+import argparse.internal: CommandArguments, commandArguments;
 import argparse.internal.parser: Parser;
 import argparse.internal.lazystring;
 
@@ -24,8 +24,25 @@ package(argparse) struct CommandInfo
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package alias InitSubCommandFunction (RECEIVER) = Result delegate(ref RECEIVER receiver);
-package alias ParseSubCommandFunction(RECEIVER) = Result delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver);
+package template getCommandInfo(COMMAND, string name = "")
+{
+    import std.traits: getUDAs;
+
+    enum udas = getUDAs!(COMMAND, CommandInfo);
+    static assert(udas.length <= 1, COMMAND.stringof~" has more that one @Command UDA");
+
+    static if(udas.length > 0)
+        enum getCommandInfo = udas[0];
+    else
+        enum getCommandInfo = CommandInfo([name]);
+
+    static assert(name == "" || getCommandInfo.names.length > 0 && getCommandInfo.names[0].length > 0, "Command "~COMMAND.stringof~" must have name");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private alias InitSubCommandFunction (RECEIVER) = Result delegate(ref RECEIVER receiver);
+private alias ParseSubCommandFunction(RECEIVER) = Result delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -105,7 +122,7 @@ package struct SubCommands(RECEIVER)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(scope const CommandArguments!RECEIVER* parentArguments)
+private auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(scope const CommandArguments!RECEIVER* parentArguments)
 {
     return delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver)
     {
@@ -137,7 +154,7 @@ package auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER,
     };
 }
 
-package alias ParsingSubCommandInit(COMMAND_TYPE, RECEIVER, alias symbol) =
+private alias ParsingSubCommandInit(COMMAND_TYPE, RECEIVER, alias symbol) =
     delegate(ref RECEIVER receiver)
     {
         auto target = &__traits(getMember, receiver, symbol);
