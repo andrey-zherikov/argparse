@@ -36,7 +36,7 @@ package(argparse) struct Style
 
 unittest
 {
-    import std.stdio:writeln;
+    import std.stdio: writeln;
 
     Style.Default.argumentGroupTitle("bbb").writeln;
     Style.Default.namedArgumentName("bbb").writeln;

@@ -171,7 +171,6 @@ struct Result
     package static auto Error(A...)(A args)
     {
         import std.conv: text;
-        import std.stdio: stderr, writeln;
 
         return Result(1, Status.failure, text!A(args));
     }

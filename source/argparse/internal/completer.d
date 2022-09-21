@@ -37,7 +37,7 @@ unittest
 
     @Command
     struct T {}
-    import std.stdio: writeln,stderr; stderr.writeln("===== ", defaultCommandName!T);
+
     assert(defaultCommandName!T == Runtime.args[0].baseName);
 }
 
