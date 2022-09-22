@@ -42,7 +42,7 @@ package template getCommandInfo(COMMAND, string name = "")
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private alias InitSubCommandFunction (RECEIVER) = Result delegate(ref RECEIVER receiver);
-private alias ParseSubCommandFunction(RECEIVER) = Result delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver);
+private alias ParseSubCommandFunction(RECEIVER) = Result delegate(ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,7 +66,7 @@ package struct SubCommands(RECEIVER)
 
     auto length() const { return info.length; }
 
-    void add(alias symbol, SUBCOMMAND, COMMAND)(string function(string str) convertCase, scope const CommandArguments!COMMAND* parentArguments)
+    void add(Config config, alias symbol, SUBCOMMAND, COMMAND)(string function(string str) convertCase, scope const CommandArguments!COMMAND* parentArguments)
     {
         enum defaultCommand = is(SUBCOMMAND == Default!COMMAND_TYPE, COMMAND_TYPE);
         static if(!defaultCommand)
@@ -100,8 +100,8 @@ package struct SubCommands(RECEIVER)
         info ~= cmdInfo;
         handlers ~= Handlers(
                 ParsingSubCommandInit!(SUBCOMMAND, COMMAND, symbol),
-                ParsingSubCommandArgument!(SUBCOMMAND, cmdInfo, COMMAND, symbol, false)(parentArguments),
-                ParsingSubCommandArgument!(SUBCOMMAND, cmdInfo, COMMAND, symbol, true)(parentArguments)
+                ParsingSubCommandArgument!(config, SUBCOMMAND, cmdInfo, COMMAND, symbol, false)(parentArguments),
+                ParsingSubCommandArgument!(config, SUBCOMMAND, cmdInfo, COMMAND, symbol, true)(parentArguments)
             );
     }
 
@@ -122,9 +122,9 @@ package struct SubCommands(RECEIVER)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(scope const CommandArguments!RECEIVER* parentArguments)
+private auto ParsingSubCommandArgument(Config config, COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(scope const CommandArguments!RECEIVER* parentArguments)
 {
-    return delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver)
+    return delegate(ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver)
     {
         auto target = &__traits(getMember, receiver, symbol);
 
@@ -133,7 +133,7 @@ private auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER,
             static if(!is(COMMAND_TYPE == Default!TYPE, TYPE))
                 alias TYPE = COMMAND_TYPE;
 
-            auto command = commandArguments!(TYPE, info)(config, parentArguments);
+            auto command = commandArguments!(config, TYPE, info)(parentArguments);
 
             return parser.parse!completionMode(command, isDefaultCmd, cmdTarget, arg);
         };

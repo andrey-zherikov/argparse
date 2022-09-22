@@ -481,7 +481,7 @@ private void addArguments(COMMAND)(ref CommandArguments!COMMAND cmd)
     }}
 }
 
-private void addSubCommands(COMMAND)(ref CommandArguments!COMMAND cmd)
+private void addSubCommands(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
 {
     import std.sumtype: isSumType;
 
@@ -500,18 +500,18 @@ private void addSubCommands(COMMAND)(ref CommandArguments!COMMAND cmd)
             static assert(getUDAs!(mem, argparse.SubCommands).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
 
             static foreach(TYPE; typeof(mem).Types)
-                cmd.subCommands.add!(sym, TYPE)(cmd.arguments.convertCase, &cmd);
+                cmd.subCommands.add!(config, sym, TYPE, COMMAND)(cmd.arguments.convertCase, &cmd);
         }
     }}
 }
 
-private void initCommandArguments(COMMAND)(ref CommandArguments!COMMAND cmd, Config* config)
+private void initCommandArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
 {
     import std.algorithm: sort, map;
     import std.array: array;
 
     addArguments(cmd);
-    addSubCommands(cmd);
+    addSubCommands!config(cmd);
 
     if(config.addHelp)
     {
@@ -524,24 +524,22 @@ private void initCommandArguments(COMMAND)(ref CommandArguments!COMMAND cmd, Con
     cmd.completeSuggestion.sort;
 }
 
-package(argparse) auto commandArguments(COMMAND, Config config1)()
+package(argparse) auto commandArguments(Config config, COMMAND)()
 {
-    Config config = config1;
-
     checkArgumentName!COMMAND(config.namedArgChar);
 
     auto cmd = CommandArguments!COMMAND(config.caseSensitive, getCommandInfo!COMMAND);
-    initCommandArguments(cmd, &config);
+    initCommandArguments!config(cmd);
 
     return cmd;
 }
 
-package auto commandArguments(COMMAND, CommandInfo info, PARENT)(Config* config, const PARENT* parentArguments)
+package auto commandArguments(Config config, COMMAND, CommandInfo info, PARENT)(const PARENT* parentArguments)
 {
     checkArgumentName!COMMAND(config.namedArgChar);
 
     auto cmd = CommandArguments!COMMAND(config.caseSensitive, info, parentArguments);
-    initCommandArguments(cmd, config);
+    initCommandArguments!config(cmd);
 
     return cmd;
 }

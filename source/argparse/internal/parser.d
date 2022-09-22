@@ -91,7 +91,7 @@ package struct Parser
         if(found.level < cmdStack.length)
             cmdStack.length = found.level;
 
-        cmdStack ~= CmdParser((const ref arg) => found.parse(config, this, arg, false, receiver), (const ref arg) => found.complete(config, this, arg, false, receiver));
+        cmdStack ~= CmdParser((const ref arg) => found.parse(this, arg, false, receiver), (const ref arg) => found.complete(this, arg, false, receiver));
 
         found.initialize(receiver);
         args.popFront();
@@ -286,7 +286,7 @@ package struct Parser
         auto found = cmd.findSubCommand(DEFAULT_COMMAND);
         if(found.parse !is null)
         {
-            auto p = CmdParser((const ref arg) => found.parse(config, this, arg, true, receiver));
+            auto p = CmdParser((const ref arg) => found.parse(this, arg, true, receiver));
             p.isDefault = true;
             cmdStack ~= p;
             found.initialize(receiver);
@@ -338,7 +338,7 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
 
     auto parser = Parser(&config, args);
 
-    auto command = commandArguments!(COMMAND, origConfig);
+    auto command = commandArguments!(origConfig, COMMAND);
     auto res = parser.parseAll!completionMode(command, receiver);
 
     static if(!completionMode)

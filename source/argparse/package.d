@@ -561,7 +561,7 @@ unittest
         return config;
     }();
 
-    auto a = commandArguments!(T, config);
+    auto a = commandArguments!(config, T);
     assert(a.arguments.requiredGroup.arguments == [2,4]);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -580,7 +580,7 @@ unittest
         return config;
     }();
 
-    auto a = commandArguments!(T, config);
+    auto a = commandArguments!(config, T);
     assert(a.arguments.requiredGroup.arguments == []);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -594,7 +594,7 @@ unittest
         @(NamedArgument("2"))
         int a;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(T1, Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T1); }));
 
     struct T2
     {
@@ -603,21 +603,21 @@ unittest
         @(NamedArgument("1"))
         int b;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(T2, Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T2); }));
 
     struct T3
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(0)) int b;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(T3, Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T3); }));
 
     struct T4
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(2)) int b;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(T4, Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T4); }));
 }
 
 unittest
@@ -661,7 +661,7 @@ unittest
         int no_c;
     }
 
-    auto p = commandArguments!(params, Config.init);
+    auto p = commandArguments!(Config.init, params);
     assert(p.findNamedArgument("a").arg is null);
     assert(p.findNamedArgument("b").arg !is null);
     assert(p.findNamedArgument("boo").arg !is null);

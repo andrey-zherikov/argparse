@@ -691,7 +691,7 @@ unittest
         auto a = appender!string;
         Config config;
         config.stylingMode = Config.StylingMode.off;
-        printHelp(_ => a.put(_), commandArguments!(T, Config.init), &config);
+        printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
         return a[];
     }
 
@@ -749,7 +749,7 @@ unittest
     auto a = appender!string;
     Config config;
     config.stylingMode = Config.StylingMode.off;
-    printHelp(_ => a.put(_), commandArguments!(T, Config.init), &config);
+    printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
         "group1:\n"~
@@ -799,7 +799,7 @@ unittest
     auto a = appender!string;
     Config config;
     config.stylingMode = Config.StylingMode.off;
-    printHelp(_ => a.put(_), commandArguments!(T, Config.init), &config);
+    printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~
