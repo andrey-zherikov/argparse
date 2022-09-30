@@ -1,6 +1,6 @@
 module argparse.internal.parser;
 
-import argparse: Config, Result;
+import argparse.api: Config, Result;
 import argparse.internal;
 import argparse.internal.subcommands;
 

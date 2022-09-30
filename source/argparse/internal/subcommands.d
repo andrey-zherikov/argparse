@@ -1,6 +1,7 @@
 module argparse.internal.subcommands;
 
-import argparse: Config, Result, Default;
+import argparse: Default;
+import argparse.api: Config, Result;
 import argparse.internal: CommandArguments, commandArguments;
 import argparse.internal.parser: Parser;
 import argparse.internal.lazystring;

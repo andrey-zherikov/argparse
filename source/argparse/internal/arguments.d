@@ -4,7 +4,7 @@ import argparse.internal: getArgumentName, CommandArguments;
 import argparse.internal.utils: partiallyApply;
 import argparse.internal.lazystring;
 
-import argparse: Result, Config, RawParam;
+import argparse.api: Config, Result, RawParam;
 
 import std.typecons: Nullable;
 
