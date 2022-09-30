@@ -1,6 +1,6 @@
 module argparse.internal.completer;
 
-import argparse;
+import argparse : Config, CLI, Command, SubCommands, Default, Description, ShortDescription, MutuallyExclusive, NamedArgument, TrailingArguments;
 import argparse.internal.subcommands: CommandInfo;
 
 import std.traits: getUDAs;

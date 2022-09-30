@@ -1,12 +1,18 @@
 module argparse.internal.help;
 
-import argparse;
+import argparse: Config, Result, Description, Optional, NumberOfValues;
 import argparse.internal: CommandArguments, commandArguments, getArgumentName;
 import argparse.internal.lazystring;
-import argparse.internal.arguments;
+import argparse.internal.arguments: ArgumentInfo, Arguments;
 import argparse.internal.subcommands: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
+
 import argparse.ansi;
+
+version(unittest)
+{
+    import argparse;
+}
 
 import std.sumtype: SumType, match;
 

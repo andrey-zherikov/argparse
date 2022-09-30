@@ -1,11 +1,10 @@
 module argparse;
 
 
-import argparse.internal;
+import argparse.internal: ValueParseFunctions, Validators, commandArguments, Parsers;
 import argparse.internal.parser: callParser;
 import argparse.internal.help: Style;
-import argparse.internal.lazystring;
-import argparse.internal.arguments;
+import argparse.internal.arguments: ArgumentInfo, Group, RestrictionGroup;
 import argparse.internal.subcommands: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.ansi;
