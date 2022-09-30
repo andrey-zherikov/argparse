@@ -55,7 +55,7 @@ package(argparse) struct Complete(COMMAND)
     .Description("Print initialization script for shell completion.")
     .ShortDescription("Print initialization script.")
     )
-    struct Init
+    private struct InitCmd
     {
         @MutuallyExclusive
         {
@@ -136,7 +136,7 @@ package(argparse) struct Complete(COMMAND)
     @(Command("complete")
     .Description("Print completion.")
     )
-    struct Complete
+    private struct CompleteCmd
     {
         @MutuallyExclusive
         {
@@ -192,5 +192,5 @@ package(argparse) struct Complete(COMMAND)
     }
 
     @SubCommands
-    SumType!(Init, Default!Complete) cmd;
+    SumType!(InitCmd, Default!CompleteCmd) cmd;
 }
