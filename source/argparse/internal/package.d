@@ -1,12 +1,13 @@
 module argparse.internal;
 
-import argparse : Param, RawParam, Result, Config, NamedArgument, TrailingArguments, AnsiStylingArgument, Default, formatAllowedValues;
+import argparse : Param, RawParam, Result, Config, NamedArgument, TrailingArguments, Default, formatAllowedValues;
 import argparse.internal.help;
 import argparse.internal.parser;
 import argparse.internal.lazystring;
 import argparse.internal.arguments;
 import argparse.internal.subcommands;
 import argparse.internal.argumentuda;
+import argparse.internal.hooks: Hook;
 
 import std.traits;
 import std.sumtype: SumType, match;
@@ -370,13 +371,14 @@ package struct CommandArguments(RECEIVER)
     {
         alias member = __traits(getMember, RECEIVER, symbol);
 
-        static if(is(typeof(member) == AnsiStylingArgument))
+        static if(__traits(compiles, getUDAs!(typeof(member), Hook.ParsingDone)) && getUDAs!(typeof(member), Hook.ParsingDone).length > 0)
         {
-            parseFinalizers ~= (ref RECEIVER receiver, const Config* config)
-                {
-                    auto target = &__traits(getMember, receiver, symbol);
-                    AnsiStylingArgument.finalize(*target, config);
-                };
+            static foreach(hook; getUDAs!(typeof(member), Hook.ParsingDone))
+                parseFinalizers ~= (ref RECEIVER receiver, const Config* config)
+                    {
+                        auto target = &__traits(getMember, receiver, symbol);
+                        hook(*target, config);
+                    };
         }
 
         enum info = applyDefaults!(uda.info, typeof(member), symbol);
@@ -679,17 +681,6 @@ if(!is(T == void))
             Actions.CallFunctionNoParam!T   // no-value action
         );
     }
-    else static if(is(T == AnsiStylingArgument))
-    {
-        alias DefaultValueParseFunctions = ValueParseFunctions!(
-            void,   // pre process
-            void,   // pre validate
-            Parsers.PassThrough,   // parse
-            void,   // validate
-            AnsiStylingArgument.action,   // action
-            AnsiStylingArgument.action    // no-value action
-        );
-    }
     else
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
@@ -990,7 +981,7 @@ unittest
 // void action(ref DEST receiver)
 // bool action(ref DEST receiver, Param!void param)
 // void action(ref DEST receiver, Param!void param)
-private struct NoValueActionFunc(alias F, T)
+package(argparse) struct NoValueActionFunc(alias F, T)
 {
     static bool opCall(ref T receiver, Param!void param)
     {
@@ -1310,7 +1301,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private struct Parsers
+package(argparse) struct Parsers
 {
     static auto Convert(T)(string value)
     {

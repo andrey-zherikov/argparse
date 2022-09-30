@@ -1,12 +1,13 @@
 module argparse;
 
 
-import argparse.internal: ValueParseFunctions, Validators, commandArguments, Parsers;
+import argparse.internal: ValueParseFunctions, Validators, commandArguments, Parsers, NoValueActionFunc;
 import argparse.internal.parser: callParser;
 import argparse.internal.help: Style;
 import argparse.internal.arguments: ArgumentInfo, Group, RestrictionGroup;
 import argparse.internal.subcommands: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
+import argparse.internal.hooks: Hooks;
 import argparse.ansi;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -862,6 +863,8 @@ unittest
     assert(CLI!T.parseArgs!((_) {assert(false);})(["--help"]) == 0);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 template CLI(Config config, COMMANDS...)
 {
     mixin template main(alias newMain)
@@ -1148,11 +1151,16 @@ public auto Action(alias func, T)(auto ref ArgumentUDA!T uda)
     return ArgumentUDA!(uda.parsingFunc.changeAction!func)(uda.tupleof);
 }
 
-public auto AllowNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
+public auto ActionNoValue(alias func, T)(auto ref ArgumentUDA!T uda)
 {
-    auto desc = ArgumentUDA!(uda.parsingFunc.changeNoValueAction!(() { return valueToUse; }))(uda.tupleof);
+    auto desc = ArgumentUDA!(uda.parsingFunc.changeNoValueAction!func)(uda.tupleof);
     desc.info.minValuesCount = 0;
     return desc;
+}
+
+public auto AllowNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
+{
+    return uda.ActionNoValue!(() => valueToUse);
 }
 
 
@@ -1491,6 +1499,7 @@ unittest
     assert(CLI!T.parseArgs!((T t) { assert(t == T(Value("foo"))); return 12345; })(["-s","foo"]) == 12345);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 auto Command(string[] name...)
 {
@@ -1621,8 +1630,12 @@ unittest
 .Description("Colorize the output. If value is omitted then 'always' is used.")
 .AllowedValues!(["always","auto","never"])
 .NumberOfValues(0, 1)
+.Parse!(Parsers.PassThrough)
+.Action!(AnsiStylingArgument.action)
+.ActionNoValue!(AnsiStylingArgument.action)
 )
-package struct AnsiStylingArgument
+@(Hooks.onParsingDone!(AnsiStylingArgument.finalize))
+private struct AnsiStylingArgument
 {
     Config.StylingMode stylingMode = Config.StylingMode.autodetect;
 
@@ -1634,11 +1647,11 @@ package struct AnsiStylingArgument
         return stylingMode.to!string;
     }
 
-    package void set(const Config* config, Config.StylingMode mode)
+    void set(const Config* config, Config.StylingMode mode)
     {
         config.setStylingMode(stylingMode = mode);
     }
-    package static void action(ref AnsiStylingArgument receiver, RawParam param)
+    static void action(ref AnsiStylingArgument receiver, RawParam param)
     {
         switch(param.value[0])
         {
@@ -1648,11 +1661,11 @@ package struct AnsiStylingArgument
             default:
         }
     }
-    package static void action(ref AnsiStylingArgument receiver, Param!void param)
+    static void action(ref AnsiStylingArgument receiver, Param!void param)
     {
         receiver.set(param.config, Config.StylingMode.on);
     }
-    package static void finalize(ref AnsiStylingArgument receiver, const Config* config)
+    static void finalize(ref AnsiStylingArgument receiver, const Config* config)
     {
         receiver.set(config, config.stylingMode);
     }
