@@ -1,11 +1,12 @@
 module argparse.internal;
 
-import argparse : Param, RawParam, Result, Config, ArgumentUDA, NamedArgument, TrailingArguments, AnsiStylingArgument, Default, formatAllowedValues;
+import argparse : Param, RawParam, Result, Config, NamedArgument, TrailingArguments, AnsiStylingArgument, Default, formatAllowedValues;
 import argparse.internal.help;
 import argparse.internal.parser;
 import argparse.internal.lazystring;
 import argparse.internal.arguments;
 import argparse.internal.subcommands;
+import argparse.internal.argumentuda;
 
 import std.traits;
 import std.sumtype: SumType, match;
@@ -365,11 +366,9 @@ package struct CommandArguments(RECEIVER)
         arguments = Arguments(caseSensitive, &parentArguments.arguments);
     }
 
-    private void addArgument(alias symbol)()
+    private void addArgument(alias symbol, alias uda)()
     {
         alias member = __traits(getMember, RECEIVER, symbol);
-
-        enum uda = getArgumentUDA!(RECEIVER, symbol);
 
         static if(is(typeof(member) == AnsiStylingArgument))
         {
@@ -444,26 +443,8 @@ private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUD
 
 private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
 
-private template getArgumentUDA(TYPE, alias symbol)
-{
-    alias member = __traits(getMember, TYPE, symbol);
-    enum udas = getUDAs!(member, ArgumentUDA);
-    static assert(udas.length <= 1, "Member "~TYPE.stringof~"."~symbol~" has multiple '*Argument' UDAs");
 
-    static if(udas.length > 0)
-        enum originalUDA = udas[0];
-    else
-        enum originalUDA = NamedArgument();
-
-    static if(is(typeof(member) == AnsiStylingArgument))
-    {
-        enum getArgumentUDA = originalUDA.addDefaults(getUDAs!(AnsiStylingArgument, ArgumentUDA)[0]);
-    }
-    else
-        alias getArgumentUDA = originalUDA;
-}
-
-private void addArguments(COMMAND)(ref CommandArguments!COMMAND cmd)
+private void addArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
 {
     import std.sumtype: isSumType;
 
@@ -477,7 +458,7 @@ private void addArguments(COMMAND)(ref CommandArguments!COMMAND cmd)
 
         // skip types
         static if(!is(mem) && isArgument!mem)
-            cmd.addArgument!sym;
+            cmd.addArgument!(sym, getArgumentUDA!(config, COMMAND, sym, NamedArgument));
     }}
 }
 
@@ -510,7 +491,7 @@ private void initCommandArguments(Config config, COMMAND)(ref CommandArguments!C
     import std.algorithm: sort, map;
     import std.array: array;
 
-    addArguments(cmd);
+    addArguments!config(cmd);
     addSubCommands!config(cmd);
 
     if(config.addHelp)

@@ -7,6 +7,7 @@ import argparse.internal.help: Style;
 import argparse.internal.lazystring;
 import argparse.internal.arguments;
 import argparse.internal.subcommands: CommandInfo;
+import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.ansi;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -197,29 +198,6 @@ package string formatAllowedValues(alias names)()
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package struct ArgumentUDA(ValueParseFunctions)
-{
-    package ArgumentInfo info;
-
-    package alias parsingFunc = ValueParseFunctions;
-
-    package auto addDefaults(T)(ArgumentUDA!T uda)
-    {
-        auto newInfo = info;
-
-        if(newInfo.names.length == 0) newInfo.names = uda.info.names;
-        if(newInfo.placeholder.length == 0) newInfo.placeholder = uda.info.placeholder;
-        if(!newInfo.description.isSet()) newInfo.description = uda.info.description;
-        if(newInfo.position.isNull()) newInfo.position = uda.info.position;
-        if(newInfo.minValuesCount.isNull()) newInfo.minValuesCount = uda.info.minValuesCount;
-        if(newInfo.maxValuesCount.isNull()) newInfo.maxValuesCount = uda.info.maxValuesCount;
-
-        return ArgumentUDA!(parsingFunc.addDefaults!(uda.parsingFunc))(newInfo);
-    }
-}
-
-private enum bool isArgumentUDA(T) = (is(typeof(T.info) == ArgumentInfo) && is(T.parsingFunc));
 
 public auto ref Description(T)(auto ref ArgumentUDA!T uda, string text)
 {

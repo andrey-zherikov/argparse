@@ -5,6 +5,7 @@ import argparse.internal: CommandArguments, commandArguments, getArgumentName;
 import argparse.internal.lazystring;
 import argparse.internal.arguments;
 import argparse.internal.subcommands: CommandInfo;
+import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.ansi;
 
 import std.sumtype: SumType, match;
