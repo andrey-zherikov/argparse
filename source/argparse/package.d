@@ -3,7 +3,7 @@ module argparse;
 
 import argparse.internal: ValueParseFunctions, Validators, commandArguments, Parsers, NoValueActionFunc;
 import argparse.internal.parser: callParser;
-import argparse.internal.help: Style;
+import argparse.internal.style: Style;
 import argparse.internal.arguments: ArgumentInfo, Group, RestrictionGroup;
 import argparse.internal.subcommands: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;

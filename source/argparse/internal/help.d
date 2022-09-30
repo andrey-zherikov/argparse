@@ -6,6 +6,7 @@ import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
 import argparse.internal.subcommands: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
+import argparse.internal.style;
 
 import argparse.ansi;
 
@@ -15,40 +16,6 @@ version(unittest)
 }
 
 import std.sumtype: SumType, match;
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Help styling options
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package(argparse) struct Style
-{
-    TextStyle programName;
-    TextStyle subcommandName;
-    TextStyle argumentGroupTitle;
-    TextStyle namedArgumentName;
-    TextStyle namedArgumentValue;
-    TextStyle positionalArgumentValue;
-
-    enum None = Style.init;
-
-    enum Default = Style(
-        bold,           // programName
-        bold,           // subcommandName
-        bold.underline, // argumentGroupTitle
-        lightYellow,    // namedArgumentName
-        italic,         // namedArgumentValue
-        lightYellow,    // positionalArgumentValue
-    );
-}
-
-unittest
-{
-    import std.stdio: writeln;
-
-    Style.Default.argumentGroupTitle("bbb").writeln;
-    Style.Default.namedArgumentName("bbb").writeln;
-    Style.Default.namedArgumentValue("bbb").writeln;
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Help elements
