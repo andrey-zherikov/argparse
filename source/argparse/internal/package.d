@@ -1,6 +1,6 @@
 module argparse.internal;
 
-import argparse : NamedArgument, TrailingArguments, Default, formatAllowedValues;
+import argparse : NamedArgument, TrailingArguments, Default;
 import argparse.api: Config, Result, Param, RawParam;
 import argparse.internal.help;
 import argparse.internal.parser;
@@ -9,6 +9,7 @@ import argparse.internal.arguments;
 import argparse.internal.subcommands;
 import argparse.internal.argumentuda;
 import argparse.internal.hooks: Hook;
+import argparse.internal.utils: formatAllowedValues, EnumMembersAsStrings;
 
 import std.traits;
 import std.sumtype: SumType, match;
@@ -51,28 +52,6 @@ package mixin template ForwardMemberFunction(string dest)
 {
     import std.array: split;
     mixin("auto "~dest.split('.')[$-1]~"(Args...)(auto ref Args args) inout { import core.lifetime: forward; return "~dest~"(forward!args); }");
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package template EnumMembersAsStrings(E)
-{
-    enum EnumMembersAsStrings = {
-        import std.traits: EnumMembers;
-        alias members = EnumMembers!E;
-
-        typeof(__traits(identifier, members[0]))[] res;
-        static foreach (i, _; members)
-            res ~= __traits(identifier, members[i]);
-
-        return res;
-    }();
-}
-
-unittest
-{
-    enum E { abc, def, ghi }
-    assert(EnumMembersAsStrings!E == ["abc", "def", "ghi"]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -216,7 +195,6 @@ unittest
 unittest
 {
     enum E { a=1, b=1, c }
-    static assert(EnumMembersAsStrings!E == ["a","b","c"]);
 
     auto createInfo(string placeholder = "")()
     {

@@ -8,18 +8,10 @@ import argparse.internal.arguments: ArgumentInfo, Group, RestrictionGroup;
 import argparse.internal.subcommands: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.hooks: Hooks;
+import argparse.internal.utils: formatAllowedValues;
 
 public import argparse.api;
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package string formatAllowedValues(alias names)()
-{
-    import std.conv: to;
-    import std.array: join;
-    import std.format: format;
-    return "{%s}".format(names.to!(string[]).join(','));
-}
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

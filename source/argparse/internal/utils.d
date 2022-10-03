@@ -26,3 +26,40 @@ package auto partiallyApply(alias fun,C...)(C context)
     }.opCall;
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package(argparse) string formatAllowedValues(alias names)()
+{
+    import std.conv: to;
+    import std.array: join;
+    import std.format: format;
+    return "{%s}".format(names.to!(string[]).join(','));
+}
+
+unittest
+{
+    assert(formatAllowedValues!(["abc", "def", "ghi"]) == "{abc,def,ghi}");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package template EnumMembersAsStrings(E)
+{
+    enum EnumMembersAsStrings = {
+        import std.traits: EnumMembers;
+        alias members = EnumMembers!E;
+
+        typeof(__traits(identifier, members[0]))[] res;
+        static foreach (i, _; members)
+            res ~= __traits(identifier, members[i]);
+
+        return res;
+    }();
+}
+
+unittest
+{
+    enum E { abc, def, ghi }
+    assert(EnumMembersAsStrings!E == ["abc", "def", "ghi"]);
+}
+
