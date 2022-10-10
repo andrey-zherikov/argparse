@@ -367,13 +367,13 @@ package struct Arguments
 
 package alias ParseFunction(RECEIVER) = Result delegate(Config* config, const ref CommandArguments!RECEIVER cmd, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
 
-package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIVER, bool completionMode) =
+package alias ParsingArgument(alias symbol, alias uda, RECEIVER, bool completionMode) =
     delegate(Config* config, const ref CommandArguments!RECEIVER cmd, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
     {
         static if(completionMode)
         {
             if(rawValue is null)
-                consumeValuesFromCLI(rawArgs, info.minValuesCount.get, info.maxValuesCount.get, config.namedArgChar);
+                consumeValuesFromCLI(rawArgs, uda.info.minValuesCount.get, uda.info.maxValuesCount.get, config.namedArgChar);
 
             return Result.Success;
         }
@@ -381,9 +381,9 @@ package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIV
         {
             try
             {
-                auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, info.minValuesCount.get, info.maxValuesCount.get, config.namedArgChar);
+                auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, uda.info.minValuesCount.get, uda.info.maxValuesCount.get, config.namedArgChar);
 
-                auto res = info.checkValuesCount(argName, rawValues.length);
+                auto res = uda.info.checkValuesCount(argName, rawValues.length);
                 if(!res)
                     return res;
 
