@@ -280,7 +280,7 @@ private void addArguments(Config config, COMMAND)(ref CommandArguments!COMMAND c
 
         // skip types
         static if(!is(mem) && isArgument!mem)
-            cmd.addArgument!(sym, getArgumentUDA!(config, COMMAND, sym, NamedArgument));
+            cmd.addArgument!(sym, getMemberArgumentUDA!(config, COMMAND, sym, NamedArgument));
     }}
 }
 
