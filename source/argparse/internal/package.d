@@ -210,13 +210,22 @@ package struct CommandArguments(RECEIVER)
             return restrictions;
         }();
 
-        static assert(getUDAs!(member, Group).length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
-        static if(getUDAs!(member, Group).length > 0)
-            arguments.addArgument!(uda.info, restrictions, getUDAs!(member, Group)[0]);
+        addArgumentImpl!(symbol, uda, restrictions, getUDAs!(member, Group));
+    }
+
+    private void addArgumentImpl(alias symbol, alias uda, RestrictionGroup[] restrictions = [], groups...)()
+    {
+        static assert(groups.length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
+        static if(groups.length > 0)
+            arguments.addArgument!(uda.info, restrictions, groups[0]);
         else
             arguments.addArgument!(uda.info, restrictions);
 
-        parseArguments    ~= ParsingArgument!(symbol, uda, RECEIVER, false);
+        static if(__traits(compiles, { parseArguments ~= uda.parsingFunc.parse!RECEIVER; }))
+            parseArguments ~= uda.parsingFunc.parse!RECEIVER;
+        else
+            parseArguments    ~= ParsingArgument!(symbol, uda, RECEIVER, false);
+
         completeArguments ~= ParsingArgument!(symbol, uda, RECEIVER, true);
     }
 
