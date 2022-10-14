@@ -1,6 +1,6 @@
 module argparse.internal.help;
 
-import argparse: Description, Optional, NumberOfValues;
+import argparse: Description, Optional;
 import argparse.api: Config, Result;
 import argparse.internal: CommandArguments, commandArguments, getArgumentName;
 import argparse.internal.lazystring;
@@ -148,10 +148,11 @@ private void print(void delegate(string) sink, const ref Section section, string
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package enum helpArgument = {
+package auto HelpArgumentUDA()
+{
     struct HelpArgumentParsingFunction
     {
-        static auto parse(T)()
+        static auto getParseFunc(T)()
         {
             return delegate(Config* config, const ref CommandArguments!T cmd, string argName, ref T receiver, string rawValue, ref string[] rawArgs)
             {
@@ -165,20 +166,20 @@ package enum helpArgument = {
         }
     }
 
-    auto uda = ArgumentUDA!(HelpArgumentParsingFunction)(ArgumentInfo(["h","help"]))
-        .Description("Show this help message and exit")
-        .Optional()
-        .NumberOfValues(0);
-
-    uda.info.allowBooleanNegation = false;
-    uda.info.ignoreInDefaultCommand = true;
-
-    return uda;
-}();
+    ArgumentUDA!(HelpArgumentParsingFunction) desc;
+    desc.info.names = ["h","help"];
+    desc.info.description = "Show this help message and exit";
+    desc.info.required = false;
+    desc.info.minValuesCount = 0;
+    desc.info.maxValuesCount = 0;
+    desc.info.allowBooleanNegation = false;
+    desc.info.ignoreInDefaultCommand = true;
+    return desc;
+}
 
 private bool isHelpArgument(string name)
 {
-    static foreach(n; helpArgument.info.names)
+    static foreach(n; HelpArgumentUDA().info.names)
         if(n == name)
             return true;
 

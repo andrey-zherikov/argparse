@@ -221,10 +221,10 @@ package struct CommandArguments(RECEIVER)
         else
             arguments.addArgument!(uda.info, restrictions);
 
-        static if(__traits(compiles, { parseArguments ~= uda.parsingFunc.parse!RECEIVER; }))
-            parseArguments ~= uda.parsingFunc.parse!RECEIVER;
+        static if(__traits(compiles, { parseArguments ~= uda.parsingFunc.getParseFunc!RECEIVER; }))
+            parseArguments ~= uda.parsingFunc.getParseFunc!RECEIVER;
         else
-            parseArguments    ~= ParsingArgument!(symbol, uda, RECEIVER, false);
+            parseArguments ~= ParsingArgument!(symbol, uda, RECEIVER, false);
 
         completeArguments ~= ParsingArgument!(symbol, uda, RECEIVER, true);
     }
@@ -326,11 +326,7 @@ private void initCommandArguments(Config config, COMMAND)(ref CommandArguments!C
     addSubCommands!config(cmd);
 
     if(config.addHelp)
-    {
-        cmd.arguments.addArgument!(helpArgument.info);
-        cmd.parseArguments ~= helpArgument.parsingFunc.parse!COMMAND;
-        cmd.completeArguments ~= ParsingArgument!("", helpArgument, COMMAND, true);
-    }
+        cmd.addArgumentImpl!(null, getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA()));
 
     cmd.completeSuggestion = cmd.arguments.argsNamed.keys.map!(_ => getArgumentName(_, config.namedArgChar)).array ~ cmd.subCommands.byName.keys.array;
     cmd.completeSuggestion.sort;
