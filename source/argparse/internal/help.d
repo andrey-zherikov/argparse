@@ -2,7 +2,7 @@ module argparse.internal.help;
 
 import argparse: Description, Optional;
 import argparse.api: Config, Result;
-import argparse.internal: CommandArguments, commandArguments, getArgumentName;
+import argparse.internal: CommandArguments, commandArguments;
 import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
 import argparse.internal.subcommands: CommandInfo;
@@ -379,7 +379,7 @@ private void printInvocation(NAMES)(void delegate(string) sink, const ref Style 
             if(i > 0)
                 sink(", ");
 
-            sink(name);
+            sink(style.namedArgumentName(name));
 
             if(info.maxValuesCount.get > 0)
             {
@@ -407,7 +407,7 @@ unittest
         import std.array: appender;
         auto a = appender!string;
         Style style;
-        printInvocation(_ => a.put(_), style, info, ["f".getArgumentName(Config.init.namedArgChar),"foo".getArgumentName(Config.init.namedArgChar)]);
+        printInvocation(_ => a.put(_), style, info, ["-f","--foo"]);
         return a[];
     }
 
@@ -417,12 +417,12 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(void delegate(string) sink, string delegate(string) getArgumentName, const ref Style style, in ArgumentInfo info)
+private void printUsage(void delegate(string) sink, const ref Style style, in ArgumentInfo info)
 {
     if(!info.required)
         sink("[");
 
-    printInvocation(sink, style, info, [ getArgumentName(info.names[0]) ]);
+    printInvocation(sink, style, info, [ info.displayName ]);
 
     if(!info.required)
         sink("]");
@@ -435,6 +435,7 @@ unittest
         enum info = {
             ArgumentInfo info;
             info.names ~= "foo";
+            info.displayNames ~= "--foo";
             info.placeholder = "v";
             info.required = required;
             info.minValuesCount = 1;
@@ -447,7 +448,7 @@ unittest
         import std.array: appender;
         auto a = appender!string;
         Style style;
-        printUsage(_ => a.put(_), _ => getArgumentName(_, Config.init.namedArgChar), style, info);
+        printUsage(_ => a.put(_), style, info);
         return a[];
     }
 
@@ -459,7 +460,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(T)(void delegate(string) sink, string delegate(string) getArgumentName, const ref Style style, in CommandArguments!T cmd)
+private void printUsage(T)(void delegate(string) sink, const ref Style style, in CommandArguments!T cmd)
 {
     import std.algorithm: map;
     import std.array: join;
@@ -480,7 +481,7 @@ private void printUsage(T)(void delegate(string) sink, string delegate(string) g
             .each!((ref _)
             {
                 sink(" ");
-                printUsage(sink, getArgumentName, style, _);
+                printUsage(sink, style, _);
             });
 
         sink(progName);
@@ -499,7 +500,7 @@ private void printUsage(T)(void delegate(string) sink, string delegate(string) g
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto getSections(string delegate(string) getArgumentName, const ref Style style, const(Arguments)* arguments)
+private auto getSections(const ref Style style, const(Arguments)* arguments)
 {
     import std.algorithm: filter, map;
     import std.array: appender, array;
@@ -526,7 +527,7 @@ private auto getSections(string delegate(string) getArgumentName, const ref Styl
     alias getItem = (ref _)
     {
         auto invocation = appender!string;
-        printInvocation(_ => invocation.put(_), style, _, _.names.map!getArgumentName);
+        printInvocation(_ => invocation.put(_), style, _, _.displayNames);
 
         return Item(invocation[], _.description);
     };
@@ -596,13 +597,13 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
     return section;
 }
 
-private auto getSection(T)(string delegate(string) getArgumentName, const ref Style style, in CommandArguments!T cmd)
+private auto getSection(T)(const ref Style style, in CommandArguments!T cmd)
 {
     import std.array: appender;
 
     auto usage = appender!string;
 
-    printUsage(_ => usage.put(_), getArgumentName, style, cmd);
+    printUsage(_ => usage.put(_), style, cmd);
 
     Section[] sections;
 
@@ -610,7 +611,7 @@ private auto getSection(T)(string delegate(string) getArgumentName, const ref St
     if(cmd.subCommands.length > 0)
         sections ~= getSection(style, cmd.subCommands.info);
 
-    sections ~= getSections(getArgumentName, style, &cmd.arguments);
+    sections ~= getSections(style, &cmd.arguments);
 
     auto section = Section(usage[], cmd.info.description, cmd.info.epilog);
     section.entries = sections;
@@ -627,7 +628,7 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 
     auto helpStyle = enableStyling ? config.helpStyle : Style.None;
 
-    auto section = getSection(_ => helpStyle.namedArgumentName(getArgumentName(_, config.namedArgChar)), helpStyle, cmd);
+    auto section = getSection(helpStyle, cmd);
 
     immutable helpPosition = section.maxItemNameLength(20) + 4;
     immutable indent = spaces(helpPosition + 2);

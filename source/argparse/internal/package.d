@@ -21,33 +21,6 @@ import std.sumtype: SumType, match;
 /// Internal API
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package string getArgumentName(string name, char namedArgChar)
-{
-    import std.conv: text;
-
-    return name.length == 1 ?
-        text(namedArgChar, name) :
-        text(namedArgChar, namedArgChar, name);
-}
-
-package string getArgumentName(in ArgumentInfo info, char namedArgChar)
-{
-    return info.positional ? info.placeholder : info.names[0].getArgumentName(namedArgChar);
-}
-
-unittest
-{
-    auto info = ArgumentInfo(["f","b"]);
-    info.position = 0;
-    info.placeholder = "FF";
-    assert(getArgumentName(info, Config.init.namedArgChar) == "FF");
-
-    assert(ArgumentInfo(["f","b"]).getArgumentName(Config.init.namedArgChar) == "-f");
-    assert(ArgumentInfo(["foo","boo"]).getArgumentName(Config.init.namedArgChar) == "--foo");
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 package mixin template ForwardMemberFunction(string dest)
 {
     import std.array: split;
@@ -319,7 +292,7 @@ private void addSubCommands(Config config, COMMAND)(ref CommandArguments!COMMAND
 
 private void initCommandArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
 {
-    import std.algorithm: sort, map;
+    import std.algorithm: sort, map, joiner;
     import std.array: array;
 
     addArguments!config(cmd);
@@ -328,7 +301,7 @@ private void initCommandArguments(Config config, COMMAND)(ref CommandArguments!C
     if(config.addHelp)
         cmd.addArgumentImpl!(null, getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA()));
 
-    cmd.completeSuggestion = cmd.arguments.argsNamed.keys.map!(_ => getArgumentName(_, config.namedArgChar)).array ~ cmd.subCommands.byName.keys.array;
+    cmd.completeSuggestion = cmd.arguments.arguments.map!(_ => _.displayNames).joiner.array ~ cmd.subCommands.byName.keys;
     cmd.completeSuggestion.sort;
 }
 

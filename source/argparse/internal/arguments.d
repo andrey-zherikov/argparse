@@ -1,6 +1,6 @@
 module argparse.internal.arguments;
 
-import argparse.internal: getArgumentName, CommandArguments;
+import argparse.internal: CommandArguments;
 import argparse.internal.utils: partiallyApply;
 import argparse.internal.lazystring;
 
@@ -13,6 +13,12 @@ import std.typecons: Nullable;
 package(argparse) struct ArgumentInfo
 {
     string[] names;
+    string[] displayNames;    // names prefixed with Config.namedArgChar
+
+    string displayName() const
+    {
+        return displayNames[0];
+    }
 
     LazyString description;
     string placeholder;
@@ -104,7 +110,7 @@ package struct Restrictions
         {
             return (index in cliArgs) ?
                 Result.Success :
-                Result.Error("The following argument is required: ", info.getArgumentName(config.namedArgChar));
+                Result.Error("The following argument is required: ", info.displayName);
         })(index);
     }
 
@@ -127,8 +133,7 @@ package struct Restrictions
                 missedIndex = index;
 
             if(foundIndex != size_t.max && missedIndex != size_t.max)
-                return Result.Error("Missed argument '", allArgs[missedIndex].getArgumentName(config.namedArgChar),
-                                    "' - it is required by argument '", allArgs[foundIndex].getArgumentName(config.namedArgChar),"'");
+                return Result.Error("Missed argument '", allArgs[missedIndex].displayName, "' - it is required by argument '", allArgs[foundIndex].displayName);
         }
 
         return Result.Success;
@@ -147,8 +152,7 @@ package struct Restrictions
                 if(foundIndex == size_t.max)
                     foundIndex = index;
                 else
-                    return Result.Error("Argument '", allArgs[foundIndex].getArgumentName(config.namedArgChar),
-                                        "' is not allowed with argument '", allArgs[index].getArgumentName(config.namedArgChar),"'");
+                    return Result.Error("Argument '", allArgs[foundIndex].displayName, "' is not allowed with argument '", allArgs[index].displayName,"'");
             }
 
         return Result.Success;
@@ -166,7 +170,7 @@ package struct Restrictions
             if(index in cliArgs)
                 return Result.Success;
 
-        return Result.Error("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].getArgumentName(config.namedArgChar)).join("', '"), "'");
+        return Result.Error("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].displayName).join("', '"), "'");
     }
 }
 
