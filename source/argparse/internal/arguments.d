@@ -216,19 +216,17 @@ package struct Arguments
 
     const Arguments* parentArguments;
 
-    Group[] groups;
-    enum requiredGroupIndex = 0;
-    enum optionalGroupIndex = 1;
-
+    Group[] userGroups;
     size_t[string] groupsByName;
+
+    enum requiredGroupName = "Required arguments";
+    enum optionalGroupName = "Optional arguments";
+    Group requiredGroup = Group(requiredGroupName);
+    Group optionalGroup = Group(optionalGroupName);
 
     Restriction[] restrictions;
     RestrictionGroup[] restrictionGroups;
 
-    @property ref Group requiredGroup() { return groups[requiredGroupIndex]; }
-    @property ref const(Group) requiredGroup() const { return groups[requiredGroupIndex]; }
-    @property ref Group optionalGroup() { return groups[optionalGroupIndex]; }
-    @property ref const(Group) optionalGroup() const { return groups[optionalGroupIndex]; }
 
     @property auto positionalArguments() const { return argsPositional; }
 
@@ -236,20 +234,25 @@ package struct Arguments
     this(bool caseSensitive, const Arguments* parentArguments = null)
     {
         this.parentArguments = parentArguments;
-
-        groups = [ Group("Required arguments"), Group("Optional arguments") ];
     }
 
     void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions, Group group)()
     {
-        auto index = (group.name in groupsByName);
-        if(index !is null)
-            addArgument!(info, restrictions)(groups[*index]);
+        static if(group.name == requiredGroupName)
+            addArgument!(info, restrictions)(requiredGroup);
+        else static if(group.name == optionalGroupName)
+            addArgument!(info, restrictions)(optionalGroup);
         else
         {
-            groupsByName[group.name] = groups.length;
-            groups ~= group;
-            addArgument!(info, restrictions)(groups[$-1]);
+            auto index = (group.name in groupsByName);
+            if(index !is null)
+                addArgument!(info, restrictions)(userGroups[*index]);
+            else
+            {
+                groupsByName[group.name] = userGroups.length;
+                userGroups ~= group;
+                addArgument!(info, restrictions)(userGroups[$-1]);
+            }
         }
     }
 

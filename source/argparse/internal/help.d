@@ -538,7 +538,7 @@ private auto getSections(const ref Style style, const(Arguments)* arguments)
     for(; arguments; arguments = arguments.parentArguments)
     {
         //user-defined groups first, then required args and then optional args
-        foreach(ref group; chain(arguments.groups[2..$], [arguments.requiredGroup, arguments.optionalGroup]))
+        foreach(ref group; chain(arguments.userGroups, [arguments.requiredGroup, arguments.optionalGroup]))
         {
             auto p = (group.name in sectionMap);
             ulong index;
