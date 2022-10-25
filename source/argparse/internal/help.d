@@ -177,6 +177,17 @@ package auto HelpArgumentUDA()
     return desc;
 }
 
+unittest
+{
+    auto h = HelpArgumentUDA();
+    assert(h.info.names == ["h","help"]);
+    assert(!h.info.required);
+    assert(h.info.minValuesCount == 0);
+    assert(h.info.maxValuesCount == 0);
+    assert(!h.info.allowBooleanNegation);
+    assert(h.info.ignoreInDefaultCommand);
+}
+
 private bool isHelpArgument(string name)
 {
     static foreach(n; HelpArgumentUDA().info.names)
