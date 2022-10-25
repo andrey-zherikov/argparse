@@ -64,8 +64,8 @@ package struct Parser
         immutable string value        = idxAssignChar < 0 ? null : arg[idxAssignChar + 1 .. $];
 
         return arg[1] == config.namedArgChar
-        ? Argument(NamedLong (nameWithDash[2..$], nameWithDash, value))
-        : Argument(NamedShort(nameWithDash[1..$], nameWithDash, value));
+        ? Argument(NamedLong (config.convertCase(nameWithDash[2..$]), nameWithDash, value))
+        : Argument(NamedShort(config.convertCase(nameWithDash[1..$]), nameWithDash, value));
     }
 
     auto parseArgument(T, PARSE)(const ref CommandArguments!T cmd, PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
@@ -83,7 +83,7 @@ package struct Parser
     {
         import std.range: front, popFront;
 
-        auto found = cmd.findSubCommand(args.front);
+        auto found = cmd.findSubCommand(config.convertCase(args.front));
         if(found.parse is null)
             return Result.UnknownArgument;
 

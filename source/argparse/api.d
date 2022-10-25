@@ -44,6 +44,13 @@ struct Config
      */
     bool caseSensitive = true;
 
+    package string convertCase(string str) const
+    {
+        import std.uni: toUpper;
+
+        return caseSensitive ? str : str.toUpper;
+    }
+
     /**
         Single-letter arguments can be bundled together, i.e. "-abc" is the same as "-a -b -c".
         Disabled by default.

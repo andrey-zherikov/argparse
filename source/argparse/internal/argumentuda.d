@@ -99,7 +99,7 @@ package template getArgumentUDA(Config config, MEMBERTYPE, string defaultName)
     auto finalize(alias initUDA)()
     {
         import std.array: array;
-        import std.algorithm: map;
+        import std.algorithm: map, each;
         import std.conv: text;
 
         auto uda = initUDA;
@@ -131,6 +131,9 @@ package template getArgumentUDA(Config config, MEMBERTYPE, string defaultName)
 
             uda.info.displayNames = uda.info.names.map!toDisplayName.array;
         }
+
+        static if(!config.caseSensitive)
+            uda.info.names.each!((ref _) => _ = config.convertCase(_));
 
         static if(initUDA.info.minValuesCount.isNull) uda.info.minValuesCount = defaultValuesCount!MEMBERTYPE.min;
         static if(initUDA.info.maxValuesCount.isNull) uda.info.maxValuesCount = defaultValuesCount!MEMBERTYPE.max;

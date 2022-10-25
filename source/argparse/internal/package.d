@@ -143,20 +143,20 @@ package struct CommandArguments(RECEIVER)
 
 
 
-    private this(bool caseSensitive, CommandInfo info)
+    private this(CommandInfo info)
     {
         this.info = info;
 
         subCommands.level = 0;
-        arguments = Arguments(caseSensitive);
+        arguments = Arguments(false);
     }
-    private this(PARENT)(bool caseSensitive, CommandInfo info, const PARENT* parentArguments)
+    private this(PARENT)(CommandInfo info, const PARENT* parentArguments)
     {
         this.info = info;
 
         parentNames = parentArguments.parentNames ~ parentArguments.info.displayNames[0];
         subCommands.level = parentArguments.subCommands.level + 1;
-        arguments = Arguments(caseSensitive, &parentArguments.arguments);
+        arguments = Arguments(false, &parentArguments.arguments);
     }
 
     private void addArgument(alias symbol, alias uda)()
@@ -209,7 +209,7 @@ package struct CommandArguments(RECEIVER)
 
     auto findSubCommand(string name) const
     {
-        return subCommands.find(arguments.convertCase(name));
+        return subCommands.find(name);
     }
 
     package void setTrailingArgs(ref RECEIVER receiver, ref string[] rawArgs) const
@@ -282,7 +282,7 @@ private void addSubCommands(Config config, COMMAND)(ref CommandArguments!COMMAND
             static assert(getUDAs!(mem, argparse.SubCommands).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
 
             static foreach(TYPE; typeof(mem).Types)
-                cmd.subCommands.add!(config, sym, TYPE, COMMAND)(cmd.arguments.convertCase, &cmd);
+                cmd.subCommands.add!(config, sym, TYPE, COMMAND)(&cmd);
         }
     }}
 }
@@ -303,7 +303,7 @@ package(argparse) auto commandArguments(Config config, COMMAND)()
 {
     checkArgumentName!COMMAND(config.namedArgChar);
 
-    auto cmd = CommandArguments!COMMAND(config.caseSensitive, getCommandInfo!COMMAND);
+    auto cmd = CommandArguments!COMMAND(getCommandInfo!(config, COMMAND));
     initCommandArguments!config(cmd);
 
     return cmd;
@@ -313,7 +313,7 @@ package auto commandArguments(Config config, COMMAND, CommandInfo info, PARENT)(
 {
     checkArgumentName!COMMAND(config.namedArgChar);
 
-    auto cmd = CommandArguments!COMMAND(config.caseSensitive, info, parentArguments);
+    auto cmd = CommandArguments!COMMAND(info, parentArguments);
     initCommandArguments!config(cmd);
 
     return cmd;

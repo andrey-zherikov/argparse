@@ -206,8 +206,6 @@ unittest
 
 package struct Arguments
 {
-    immutable string function(string str) convertCase;
-
     ArgumentInfo[] arguments;
 
     // named arguments
@@ -237,15 +235,6 @@ package struct Arguments
 
     this(bool caseSensitive, const Arguments* parentArguments = null)
     {
-        if(caseSensitive)
-            convertCase = s => s;
-        else
-            convertCase = (string str)
-            {
-                import std.uni : toUpper;
-                return str.toUpper;
-            };
-
         this.parentArguments = parentArguments;
 
         groups = [ Group("Required arguments"), Group("Optional arguments") ];
@@ -289,7 +278,7 @@ package struct Arguments
             static foreach(name; info.names)
             {
                 assert(!(name in argsNamed), "Duplicated argument name: "~name);
-                argsNamed[convertCase(name)] = index;
+                argsNamed[name] = index;
             }
 
         arguments ~= info;
@@ -363,7 +352,7 @@ package struct Arguments
 
     auto findNamedArgument(string name) const
     {
-        return findArgumentImpl(convertCase(name) in argsNamed);
+        return findArgumentImpl(name in argsNamed);
     }
 }
 

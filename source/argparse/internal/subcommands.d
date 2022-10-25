@@ -26,13 +26,19 @@ package(argparse) struct CommandInfo
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package template getCommandInfo(COMMAND, string name = "")
+package template getCommandInfo(Config config, COMMAND, string name = "")
 {
     auto finalize(alias initUDA)()
     {
         auto uda = initUDA;
 
         uda.displayNames = uda.names;
+
+        static if(!config.caseSensitive)
+        {
+            import std.algorithm: each;
+            uda.names.each!((ref _) => _ = config.convertCase(_));
+        }
 
         return uda;
     }
@@ -77,7 +83,7 @@ package struct SubCommands(RECEIVER)
 
     auto length() const { return info.length; }
 
-    void add(Config config, alias symbol, SUBCOMMAND, COMMAND)(string function(string str) convertCase, scope const CommandArguments!COMMAND* parentArguments)
+    void add(Config config, alias symbol, SUBCOMMAND, COMMAND)(scope const CommandArguments!COMMAND* parentArguments)
     {
         enum defaultCommand = is(SUBCOMMAND == Default!COMMAND_TYPE, COMMAND_TYPE);
         static if(!defaultCommand)
@@ -93,13 +99,12 @@ package struct SubCommands(RECEIVER)
 
         immutable index = length;
 
-        enum cmdInfo = getCommandInfo!(COMMAND_TYPE, COMMAND_TYPE.stringof);
+        enum cmdInfo = getCommandInfo!(config, COMMAND_TYPE, COMMAND_TYPE.stringof);
 
         static foreach(name; cmdInfo.names)
         {{
-            auto n = convertCase(name);
-            assert(!(n in byName), "Duplicated name of subcommand: "~n);
-            byName[n] = index;
+            assert(!(name in byName), "Duplicated name of subcommand: "~name);
+            byName[name] = index;
         }}
 
         static if(defaultCommand)
