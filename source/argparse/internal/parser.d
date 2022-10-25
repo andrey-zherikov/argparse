@@ -38,7 +38,6 @@ package struct Parser
     {
         Result delegate(const ref Argument) parse;
         Result delegate(const ref Argument) complete;
-        const(string)[] completeSuggestion;
         bool isDefault;
     }
     CmdParser[] cmdStack;
@@ -103,15 +102,18 @@ package struct Parser
     {
         static if(completionMode)
         {
-            import std.range: front, popFront;
-            import std.algorithm: filter;
-            import std.string:startsWith;
-            import std.array:array;
+            import std.range: chain;
+            import std.algorithm: filter, map;
+            import std.string: startsWith;
+            import std.array: array, join;
+
             if(args.length == 1)
             {
-                // last arg means we need to provide args and subcommands
-                auto A = args[0] == "" ? cmd.completeSuggestion : cmd.completeSuggestion.filter!(_ => _.startsWith(args[0])).array;
-                return Result(0, Result.Status.success, "", A);
+                auto suggestions = chain(cmd.arguments.arguments.map!(_ => _.displayNames).join, cmd.subCommands.byName.keys);
+
+                // empty last arg means that we need to provide all args and subcommands, otherwise they are filtered
+                return Result(0, Result.Status.success, "",
+                            args[0] == "" ? suggestions.array : suggestions.filter!(_ => _.startsWith(args[0])).array);
             }
         }
 
@@ -280,8 +282,7 @@ package struct Parser
         (const ref arg)
         {
             return parse!completionMode(cmd, false, receiver, arg);
-        },
-        cmd.completeSuggestion);
+        });
 
         auto found = cmd.findSubCommand(DEFAULT_COMMAND);
         if(found.parse !is null)

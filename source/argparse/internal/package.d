@@ -136,9 +136,6 @@ package struct CommandArguments(RECEIVER)
     // sub commands
     SubCommands!RECEIVER subCommands;
 
-    // completion
-    string[] completeSuggestion;
-
 
     mixin ForwardMemberFunction!"arguments.findPositionalArgument";
     mixin ForwardMemberFunction!"arguments.findNamedArgument";
@@ -300,9 +297,6 @@ private void initCommandArguments(Config config, COMMAND)(ref CommandArguments!C
 
     if(config.addHelp)
         cmd.addArgumentImpl!(null, getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA()));
-
-    cmd.completeSuggestion = cmd.arguments.arguments.map!(_ => _.displayNames).joiner.array ~ cmd.subCommands.byName.keys;
-    cmd.completeSuggestion.sort;
 }
 
 package(argparse) auto commandArguments(Config config, COMMAND)()
