@@ -17,6 +17,7 @@ package enum DEFAULT_COMMAND = "";
 package(argparse) struct CommandInfo
 {
     string[] names = [""];
+    string[] displayNames;
     LazyString usage;
     LazyString description;
     LazyString shortDescription;
@@ -27,15 +28,24 @@ package(argparse) struct CommandInfo
 
 package template getCommandInfo(COMMAND, string name = "")
 {
+    auto finalize(alias initUDA)()
+    {
+        auto uda = initUDA;
+
+        uda.displayNames = uda.names;
+
+        return uda;
+    }
+
     import std.traits: getUDAs;
 
     enum udas = getUDAs!(COMMAND, CommandInfo);
     static assert(udas.length <= 1, COMMAND.stringof~" has more that one @Command UDA");
 
     static if(udas.length > 0)
-        enum getCommandInfo = udas[0];
+        enum getCommandInfo = finalize!(udas[0]);
     else
-        enum getCommandInfo = CommandInfo([name]);
+        enum getCommandInfo = finalize!(CommandInfo([name]));
 
     static assert(name == "" || getCommandInfo.names.length > 0 && getCommandInfo.names[0].length > 0, "Command "~COMMAND.stringof~" must have name");
 }

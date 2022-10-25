@@ -157,7 +157,7 @@ package struct CommandArguments(RECEIVER)
     {
         this.info = info;
 
-        parentNames = parentArguments.parentNames ~ parentArguments.info.names[0];
+        parentNames = parentArguments.parentNames ~ parentArguments.info.displayNames[0];
         subCommands.level = parentArguments.subCommands.level + 1;
         arguments = Arguments(caseSensitive, &parentArguments.arguments);
     }

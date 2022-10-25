@@ -465,7 +465,7 @@ private void printUsage(T)(void delegate(string) sink, const ref Style style, in
     import std.algorithm: map;
     import std.array: join;
 
-    string progName = style.programName((cmd.parentNames ~ (cmd.info.names.length > 0 ? cmd.info.names[0] : "")).map!(_ => _.length > 0 ? _ : getProgramName()).join(" "));
+    string progName = style.programName((cmd.parentNames ~ (cmd.info.displayNames.length > 0 ? cmd.info.displayNames[0] : "")).map!(_ => _.length > 0 ? _ : getProgramName()).join(" "));
 
     sink("Usage: ");
 
@@ -575,12 +575,12 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
         //if(_.hideFromHelp)
         //    return false;
 
-        return _.names.length > 0 && _.names[0].length > 0;
+        return _.displayNames.length > 0 && _.displayNames[0].length > 0;
     };
 
     alias getItem = (ref _)
     {
-        return Item(_.names.map!(_ => style.subcommandName(_)).join(","), LazyString(() {
+        return Item(_.displayNames.map!(_ => style.subcommandName(_)).join(","), LazyString(() {
             auto shortDescription = _.shortDescription.get;
             return shortDescription.length > 0 ? shortDescription : _.description.get;
         }));
