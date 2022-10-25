@@ -148,7 +148,6 @@ package struct CommandArguments(RECEIVER)
         this.info = info;
 
         subCommands.level = 0;
-        arguments = Arguments(false);
     }
     private this(PARENT)(CommandInfo info, const PARENT* parentArguments)
     {
@@ -156,7 +155,7 @@ package struct CommandArguments(RECEIVER)
 
         parentNames = parentArguments.parentNames ~ parentArguments.info.displayNames[0];
         subCommands.level = parentArguments.subCommands.level + 1;
-        arguments = Arguments(false, &parentArguments.arguments);
+        arguments = Arguments(&parentArguments.arguments);
     }
 
     private void addArgument(alias symbol, alias uda)()

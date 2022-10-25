@@ -231,7 +231,7 @@ package struct Arguments
     @property auto positionalArguments() const { return argsPositional; }
 
 
-    this(bool caseSensitive, const Arguments* parentArguments = null)
+    this(const Arguments* parentArguments)
     {
         this.parentArguments = parentArguments;
     }
