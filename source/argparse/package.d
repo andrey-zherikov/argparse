@@ -1,302 +1,20 @@
 module argparse;
 
 
-import argparse.internal;
-import argparse.parser: callParser;
-import argparse.help: Style;
-import argparse.ansi;
+import argparse.internal: ValueParseFunctions, Validators, commandArguments, Parsers, NoValueActionFunc;
+import argparse.internal.parser: callParser;
+import argparse.internal.style: Style;
+import argparse.internal.arguments: ArgumentInfo, Group, RestrictionGroup;
+import argparse.internal.subcommands: CommandInfo;
+import argparse.internal.argumentuda: ArgumentUDA;
+import argparse.internal.hooks: Hooks;
+import argparse.internal.utils: formatAllowedValues;
+
+public import argparse.api;
+
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Public API
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-struct Config
-{
-    /**
-       The assignment character used in options with parameters.
-       Defaults to '='.
-     */
-    char assignChar = '=';
-
-    /**
-       When set to char.init, parameters to array and associative array receivers are
-       treated as an individual argument. That is, only one argument is appended or
-       inserted per appearance of the option switch. If `arraySep` is set to
-       something else, then each parameter is first split by the separator, and the
-       individual pieces are treated as arguments to the same option.
-
-       Defaults to char.init
-     */
-    char arraySep = char.init;
-
-    /**
-       The option character.
-       Defaults to '-'.
-     */
-    char namedArgChar = '-';
-
-    /**
-       The string that conventionally marks the end of all options.
-       Assigning an empty string to `endOfArgs` effectively disables it.
-       Defaults to "--".
-     */
-    string endOfArgs = "--";
-
-    /**
-       If set then argument names are case-sensitive.
-       Defaults to true.
-     */
-    bool caseSensitive = true;
-
-    /**
-        Single-letter arguments can be bundled together, i.e. "-abc" is the same as "-a -b -c".
-        Disabled by default.
-     */
-    bool bundling = false;
-
-    /**
-       Add a -h/--help option to the parser.
-       Defaults to true.
-     */
-    bool addHelp = true;
-
-    /**
-       Styling and coloring mode.
-       Defaults to auto-detectection of the capability.
-     */
-    enum StylingMode { autodetect, on, off }
-    StylingMode stylingMode = StylingMode.autodetect;
-
-    package void delegate(StylingMode)[] setStylingModeHandlers;
-    package void setStylingMode(StylingMode mode) const
-    {
-        foreach(dg; setStylingModeHandlers)
-            dg(mode);
-    }
-
-    /**
-       Help style.
-     */
-    Style helpStyle = Style.Default;
-
-    /**
-       Delegate that processes error messages if they happen during argument parsing.
-       By default all errors are printed to stderr.
-     */
-    package void delegate(string s) nothrow errorHandlerFunc;
-
-    @property auto errorHandler(void function(string s) nothrow func)
-    {
-        return errorHandlerFunc = (string msg) { func(msg); };
-    }
-
-    @property auto errorHandler(void delegate(string s) nothrow func)
-    {
-        return errorHandlerFunc = func;
-    }
-
-
-    package void onError(A...)(A args) const nothrow
-    {
-        import std.conv: text;
-        import std.stdio: stderr, writeln;
-
-        try
-        {
-            if(errorHandlerFunc)
-                errorHandlerFunc(text!A(args));
-            else
-                stderr.writeln("Error: ", args);
-        }
-        catch(Exception e)
-        {
-            throw new Error(e.msg);
-        }
-    }
-}
-
-unittest
-{
-    Config.init.onError("--just testing error func--",1,2.3,false);
-    Config c;
-    c.errorHandler = (string s){};
-    c.onError("--just testing error func--",1,2.3,false);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-struct Param(VALUE_TYPE)
-{
-    const Config* config;
-    string name;
-
-    static if(!is(VALUE_TYPE == void))
-        VALUE_TYPE value;
-}
-
-alias RawParam = Param!(string[]);
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-struct Result
-{
-    int  resultCode;
-
-    package enum Status { failure, success, unknownArgument };
-    package Status status;
-
-    package string errorMsg;
-
-    package const(string)[] suggestions;
-
-    package static enum Failure = Result(1, Status.failure);
-    package static enum Success = Result(0, Status.success);
-    package static enum UnknownArgument = Result(0, Status.unknownArgument);
-
-    bool opCast(type)() const if (is(type == bool))
-    {
-        return status == Status.success;
-    }
-
-    package static auto Error(A...)(A args)
-    {
-        import std.conv: text;
-        import std.stdio: stderr, writeln;
-
-        return Result(1, Status.failure, text!A(args));
-    }
-
-    version(unittest)
-    {
-        package bool isError(string text)
-        {
-            import std.algorithm: canFind;
-            return (!cast(bool) this) && errorMsg.canFind(text);
-        }
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package struct ArgumentInfo
-{
-    import std.typecons: Nullable;
-
-    package:
-
-    string[] names;
-
-    LazyString description;
-    string placeholder;
-
-    bool hideFromHelp = false;      // if true then this argument is not printed on help page
-
-    bool required;
-
-    Nullable!uint position;
-
-    @property bool positional() const { return !position.isNull; }
-
-    Nullable!ulong minValuesCount;
-    Nullable!ulong maxValuesCount;
-
-    auto checkValuesCount(string argName, ulong count) const
-    {
-        immutable min = minValuesCount.get;
-        immutable max = maxValuesCount.get;
-
-        // override for boolean flags
-        if(allowBooleanNegation && count == 1)
-            return Result.Success;
-
-        if(min == max && count != min)
-        {
-            return Result.Error("argument ",argName,": expected ",min,min == 1 ? " value" : " values");
-        }
-        if(count < min)
-        {
-            return Result.Error("argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
-        }
-        if(count > max)
-        {
-            return Result.Error("argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
-        }
-
-        return Result.Success;
-    }
-
-    bool allowBooleanNegation = true;
-    bool ignoreInDefaultCommand;
-}
-
-package string formatAllowedValues(alias names)()
-{
-    import std.conv: to;
-    import std.array: join;
-    import std.format: format;
-    return "{%s}".format(names.to!(string[]).join(','));
-}
-
-
-unittest
-{
-    auto info(int min, int max)
-    {
-        ArgumentInfo info;
-        info.allowBooleanNegation = false;
-        info.minValuesCount = min;
-        info.maxValuesCount = max;
-        return info;
-    }
-
-    assert(info(2,4).checkValuesCount("", 1).isError("expected at least 2 values"));
-    assert(info(2,4).checkValuesCount("", 2));
-    assert(info(2,4).checkValuesCount("", 3));
-    assert(info(2,4).checkValuesCount("", 4));
-    assert(info(2,4).checkValuesCount("", 5).isError("expected at most 4 values"));
-
-    assert(info(2,2).checkValuesCount("", 1).isError("expected 2 values"));
-    assert(info(2,2).checkValuesCount("", 2));
-    assert(info(2,2).checkValuesCount("", 3).isError("expected 2 values"));
-
-    assert(info(1,1).checkValuesCount("", 0).isError("expected 1 value"));
-    assert(info(1,1).checkValuesCount("", 1));
-    assert(info(1,1).checkValuesCount("", 2).isError("expected 1 value"));
-
-    assert(info(0,1).checkValuesCount("", 0));
-    assert(info(0,1).checkValuesCount("", 1));
-    assert(info(0,1).checkValuesCount("", 2).isError("expected at most 1 value"));
-
-    assert(info(1,2).checkValuesCount("", 0).isError("expected at least 1 value"));
-    assert(info(1,2).checkValuesCount("", 1));
-    assert(info(1,2).checkValuesCount("", 2));
-    assert(info(1,2).checkValuesCount("", 3).isError("expected at most 2 values"));
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package struct ArgumentUDA(ValueParseFunctions)
-{
-    package ArgumentInfo info;
-
-    package alias parsingFunc = ValueParseFunctions;
-
-    package auto addDefaults(T)(ArgumentUDA!T uda)
-    {
-        auto newInfo = info;
-
-        if(newInfo.names.length == 0) newInfo.names = uda.info.names;
-        if(newInfo.placeholder.length == 0) newInfo.placeholder = uda.info.placeholder;
-        if(!newInfo.description.isSet()) newInfo.description = uda.info.description;
-        if(newInfo.position.isNull()) newInfo.position = uda.info.position;
-        if(newInfo.minValuesCount.isNull()) newInfo.minValuesCount = uda.info.minValuesCount;
-        if(newInfo.maxValuesCount.isNull()) newInfo.maxValuesCount = uda.info.maxValuesCount;
-
-        return ArgumentUDA!(parsingFunc.addDefaults!(uda.parsingFunc))(newInfo);
-    }
-}
-
-private enum bool isArgumentUDA(T) = (is(typeof(T.info) == ArgumentInfo) && is(T.parsingFunc));
 
 public auto ref Description(T)(auto ref ArgumentUDA!T uda, string text)
 {
@@ -467,13 +185,6 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct Group
-{
-    package string name;
-    package LazyString description;
-    package size_t[] arguments;
-}
-
 public auto ref Description(T : Group)(auto ref T group, string text)
 {
     group.description = text;
@@ -503,18 +214,6 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct RestrictionGroup
-{
-    package string location;
-
-    package enum Type { together, exclusive }
-    package Type type;
-
-    package size_t[] arguments;
-
-    package bool required;
-}
-
 public auto ref Required(T : RestrictionGroup)(auto ref T group)
 {
     group.required = true;
@@ -536,12 +235,8 @@ public auto MutuallyExclusive(string file=__FILE__, uint line = __LINE__)()
 
 unittest
 {
-    assert(!RestrictionGroup.init.required);
     assert(RestrictionGroup.init.Required.required);
-}
 
-unittest
-{
     auto t = RequiredTogether();
     assert(t.location.length > 0);
     assert(t.type == RestrictionGroup.Type.together);
@@ -563,15 +258,6 @@ struct Default(COMMAND)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package struct CommandInfo
-{
-    package string[] names = [""];
-    package LazyString usage;
-    package LazyString description;
-    package LazyString shortDescription;
-    package LazyString epilog;
-}
 
 public auto ref Usage(T : CommandInfo)(auto ref T cmd, string text)
 {
@@ -664,10 +350,13 @@ unittest
         int f;
     }
 
-    Config config;
-    config.addHelp = false;
+    enum config = {
+        Config config;
+        config.addHelp = false;
+        return config;
+    }();
 
-    auto a = CommandArguments!T(&config);
+    auto a = commandArguments!(config, T);
     assert(a.arguments.requiredGroup.arguments == [2,4]);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -680,10 +369,13 @@ unittest
         int a,b,c,d,e,f;
     }
 
-    Config config;
-    config.addHelp = false;
+    enum config = {
+        Config config;
+        config.addHelp = false;
+        return config;
+    }();
 
-    auto a = CommandArguments!T(&config);
+    auto a = commandArguments!(config, T);
     assert(a.arguments.requiredGroup.arguments == []);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -697,7 +389,7 @@ unittest
         @(NamedArgument("2"))
         int a;
     }
-    static assert(!__traits(compiles, { CommandArguments!T1(Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T1); }));
 
     struct T2
     {
@@ -706,21 +398,21 @@ unittest
         @(NamedArgument("1"))
         int b;
     }
-    static assert(!__traits(compiles, { CommandArguments!T1(Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T2); }));
 
     struct T3
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(0)) int b;
     }
-    static assert(!__traits(compiles, { CommandArguments!T3(Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T3); }));
 
     struct T4
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(2)) int b;
     }
-    static assert(!__traits(compiles, { CommandArguments!T4(Config.init); }));
+    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T4); }));
 }
 
 unittest
@@ -764,8 +456,7 @@ unittest
         int no_c;
     }
 
-    Config config;
-    auto p = CommandArguments!params(&config);
+    auto p = commandArguments!(Config.init, params);
     assert(p.findNamedArgument("a").arg is null);
     assert(p.findNamedArgument("b").arg !is null);
     assert(p.findNamedArgument("boo").arg !is null);
@@ -989,6 +680,8 @@ unittest
     assert(CLI!T.parseArgs!((_) {assert(false);})(["--help"]) == 0);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 template CLI(Config config, COMMANDS...)
 {
     mixin template main(alias newMain)
@@ -1091,7 +784,7 @@ template CLI(Config config, COMMAND)
 
     int complete(string[] args)
     {
-        import argparse.completer;
+        import argparse.internal.completer;
         import std.sumtype: match;
 
         // dmd fails with core.exception.OutOfMemoryError@core\lifetime.d(137): Memory allocation failed
@@ -1106,7 +799,8 @@ template CLI(Config config, COMMAND)
 
         if(res && unrecognizedArgs.length > 0)
         {
-            config.onError("Unrecognized arguments: ", unrecognizedArgs);
+            import std.conv: to;
+            config.onError("Unrecognized arguments: "~unrecognizedArgs.to!string);
             return 1;
         }
 
@@ -1274,11 +968,16 @@ public auto Action(alias func, T)(auto ref ArgumentUDA!T uda)
     return ArgumentUDA!(uda.parsingFunc.changeAction!func)(uda.tupleof);
 }
 
-public auto AllowNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
+public auto ActionNoValue(alias func, T)(auto ref ArgumentUDA!T uda)
 {
-    auto desc = ArgumentUDA!(uda.parsingFunc.changeNoValueAction!(() { return valueToUse; }))(uda.tupleof);
+    auto desc = ArgumentUDA!(uda.parsingFunc.changeNoValueAction!func)(uda.tupleof);
     desc.info.minValuesCount = 0;
     return desc;
+}
+
+public auto AllowNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
+{
+    return uda.ActionNoValue!(() => valueToUse);
 }
 
 
@@ -1360,13 +1059,13 @@ public auto Counter(T)(auto ref ArgumentUDA!T uda)
 {
     struct CounterParsingFunction
     {
-        static bool parse(T)(ref T receiver, const ref RawParam param)
+        static Result parse(T)(ref T receiver, const ref RawParam param)
         {
             assert(param.value.length == 0);
 
             ++receiver;
 
-            return true;
+            return Result.Success;
         }
     }
 
@@ -1617,6 +1316,7 @@ unittest
     assert(CLI!T.parseArgs!((T t) { assert(t == T(Value("foo"))); return 12345; })(["-s","foo"]) == 12345);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 auto Command(string[] name...)
 {
@@ -1747,8 +1447,12 @@ unittest
 .Description("Colorize the output. If value is omitted then 'always' is used.")
 .AllowedValues!(["always","auto","never"])
 .NumberOfValues(0, 1)
+.Parse!(Parsers.PassThrough)
+.Action!(AnsiStylingArgument.action)
+.ActionNoValue!(AnsiStylingArgument.action)
 )
-package struct AnsiStylingArgument
+@(Hooks.onParsingDone!(AnsiStylingArgument.finalize))
+private struct AnsiStylingArgument
 {
     Config.StylingMode stylingMode = Config.StylingMode.autodetect;
 
@@ -1760,11 +1464,11 @@ package struct AnsiStylingArgument
         return stylingMode.to!string;
     }
 
-    package void set(const Config* config, Config.StylingMode mode)
+    void set(const Config* config, Config.StylingMode mode)
     {
         config.setStylingMode(stylingMode = mode);
     }
-    package static void action(ref AnsiStylingArgument receiver, RawParam param)
+    static void action(ref AnsiStylingArgument receiver, RawParam param)
     {
         switch(param.value[0])
         {
@@ -1774,11 +1478,11 @@ package struct AnsiStylingArgument
             default:
         }
     }
-    package static void action(ref AnsiStylingArgument receiver, Param!void param)
+    static void action(ref AnsiStylingArgument receiver, Param!void param)
     {
         receiver.set(param.config, Config.StylingMode.on);
     }
-    package static void finalize(ref AnsiStylingArgument receiver, const Config* config)
+    static void finalize(ref AnsiStylingArgument receiver, const Config* config)
     {
         receiver.set(config, config.stylingMode);
     }

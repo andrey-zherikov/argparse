@@ -1,116 +1,24 @@
 module argparse.internal;
 
-import argparse;
-import argparse.help;
-import argparse.parser;
+import argparse : NamedArgument, TrailingArguments, Default;
+import argparse.api: Config, Result, Param, RawParam;
+import argparse.internal.help;
+import argparse.internal.parser;
+import argparse.internal.lazystring;
+import argparse.internal.arguments;
+import argparse.internal.subcommands;
+import argparse.internal.argumentuda;
+import argparse.internal.hooks: Hook;
+import argparse.internal.utils: formatAllowedValues, EnumMembersAsStrings;
 
 import std.traits;
 import std.sumtype: SumType, match;
 
 
-package enum DEFAULT_COMMAND = "";
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Internal API
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package struct LazyString
-{
-    SumType!(string, string delegate()) value;
-
-    this(string s) { value = s; }
-    this(string delegate() dg) { value = dg; }
-
-    void opAssign(string s) { value = s; }
-    void opAssign(string delegate() dg) { value = dg; }
-
-    @property string get() const
-    {
-        return value.match!(
-            (string _) => _,
-            (dg) => dg()
-        );
-    }
-
-    bool isSet() const
-    {
-        return value.match!(
-                (string s) => s.length > 0,
-                (dg) => dg != null
-        );
-    }
-}
-
-unittest
-{
-    LazyString s;
-    assert(!s.isSet());
-    s = "asd";
-    assert(s.isSet());
-    assert(s.get == "asd");
-    s = () => "qwe";
-    assert(s.isSet());
-    assert(s.get == "qwe");
-    assert(LazyString("asd").get == "asd");
-    assert(LazyString(() => "asd").get == "asd");
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package string getArgumentName(string name, Config* config)
-{
-    import std.conv: text;
-
-    return name.length == 1 ?
-        text(config.namedArgChar, name) :
-        text(config.namedArgChar, config.namedArgChar, name);
-}
-
-package string getArgumentName(in ArgumentInfo info, Config* config)
-{
-    return info.positional ? info.placeholder : info.names[0].getArgumentName(config);
-}
-
-unittest
-{
-    Config config;
-
-    auto info = ArgumentInfo(["f","b"]);
-    info.position = 0;
-    info.placeholder = "FF";
-    assert(getArgumentName(info, &config) == "FF");
-
-    assert(ArgumentInfo(["f","b"]).getArgumentName(&config) == "-f");
-    assert(ArgumentInfo(["foo","boo"]).getArgumentName(&config) == "--foo");
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// Have to do this magic because closures are not supported in CFTE
-// DMD v2.098.0 prints "Error: closures are not yet supported in CTFE"
-package auto partiallyApply(alias fun,C...)(C context)
-{
-    import std.traits: ParameterTypeTuple;
-    import core.lifetime: move, forward;
-
-    return &new class(move(context))
-    {
-        C context;
-
-        this(C ctx)
-        {
-            foreach(i, ref c; context)
-                c = move(ctx[i]);
-        }
-
-        auto opCall(ParameterTypeTuple!fun[context.length..$] args) const
-        {
-            return fun(context, forward!args);
-        }
-    }.opCall;
-}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package mixin template ForwardMemberFunction(string dest)
@@ -118,548 +26,6 @@ package mixin template ForwardMemberFunction(string dest)
     import std.array: split;
     mixin("auto "~dest.split('.')[$-1]~"(Args...)(auto ref Args args) inout { import core.lifetime: forward; return "~dest~"(forward!args); }");
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package auto consumeValuesFromCLI(ref string[] args, ulong minValuesCount, ulong maxValuesCount, char namedArgChar)
-{
-    import std.range: empty, front, popFront;
-
-    string[] values;
-
-    if(minValuesCount > 0)
-    {
-        if(minValuesCount < args.length)
-        {
-            values = args[0..minValuesCount];
-            args = args[minValuesCount..$];
-        }
-        else
-        {
-            values = args;
-            args = [];
-        }
-    }
-
-    while(!args.empty &&
-    values.length < maxValuesCount &&
-    (args.front.length == 0 || args.front[0] != namedArgChar))
-    {
-        values ~= args.front;
-        args.popFront();
-    }
-
-    return values;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package template EnumMembersAsStrings(E)
-{
-    enum EnumMembersAsStrings = {
-        import std.traits: EnumMembers;
-        alias members = EnumMembers!E;
-
-        typeof(__traits(identifier, members[0]))[] res;
-        static foreach (i, _; members)
-            res ~= __traits(identifier, members[i]);
-
-        return res;
-    }();
-}
-
-unittest
-{
-    enum E { abc, def, ghi }
-    assert(EnumMembersAsStrings!E == ["abc", "def", "ghi"]);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package alias Restriction = Result delegate(Config* config, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs);
-
-package struct Restrictions
-{
-    static Restriction RequiredArg(ArgumentInfo info)(size_t index)
-    {
-        return partiallyApply!((size_t index, Config* config, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs)
-        {
-            return (index in cliArgs) ?
-                Result.Success :
-                Result.Error("The following argument is required: ", info.getArgumentName(config));
-        })(index);
-    }
-
-    static Result RequiredTogether(Config* config,
-                                   in bool[size_t] cliArgs,
-                                   in ArgumentInfo[] allArgs,
-                                   in size_t[] restrictionArgs)
-{
-        size_t foundIndex = size_t.max;
-        size_t missedIndex = size_t.max;
-
-        foreach(index; restrictionArgs)
-        {
-            if(index in cliArgs)
-            {
-                if(foundIndex == size_t.max)
-                    foundIndex = index;
-            }
-            else if(missedIndex == size_t.max)
-                missedIndex = index;
-
-            if(foundIndex != size_t.max && missedIndex != size_t.max)
-                return Result.Error("Missed argument '", allArgs[missedIndex].getArgumentName(config),
-                                    "' - it is required by argument '", allArgs[foundIndex].getArgumentName(config),"'");
-        }
-
-        return Result.Success;
-    }
-
-    static Result MutuallyExclusive(Config* config,
-                                    in bool[size_t] cliArgs,
-                                    in ArgumentInfo[] allArgs,
-                                    in size_t[] restrictionArgs)
-    {
-        size_t foundIndex = size_t.max;
-
-        foreach(index; restrictionArgs)
-            if(index in cliArgs)
-            {
-                if(foundIndex == size_t.max)
-                    foundIndex = index;
-                else
-                    return Result.Error("Argument '", allArgs[foundIndex].getArgumentName(config),
-                                        "' is not allowed with argument '", allArgs[index].getArgumentName(config),"'");
-            }
-
-        return Result.Success;
-    }
-
-    static Result RequiredAnyOf(Config* config,
-                                in bool[size_t] cliArgs,
-                                in ArgumentInfo[] allArgs,
-                                in size_t[] restrictionArgs)
-    {
-        import std.algorithm: map;
-        import std.array: join;
-
-        foreach(index; restrictionArgs)
-            if(index in cliArgs)
-                return Result.Success;
-
-        return Result.Error("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].getArgumentName(config)).join("', '"), "'");
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package struct Arguments
-{
-    immutable string function(string str) convertCase;
-
-    ArgumentInfo[] arguments;
-
-    // named arguments
-    size_t[string] argsNamed;
-
-    // positional arguments
-    size_t[] argsPositional;
-
-    const Arguments* parentArguments;
-
-    Group[] groups;
-    enum requiredGroupIndex = 0;
-    enum optionalGroupIndex = 1;
-
-    size_t[string] groupsByName;
-
-    Restriction[] restrictions;
-    RestrictionGroup[] restrictionGroups;
-
-    @property ref Group requiredGroup() { return groups[requiredGroupIndex]; }
-    @property ref const(Group) requiredGroup() const { return groups[requiredGroupIndex]; }
-    @property ref Group optionalGroup() { return groups[optionalGroupIndex]; }
-    @property ref const(Group) optionalGroup() const { return groups[optionalGroupIndex]; }
-
-    @property auto positionalArguments() const { return argsPositional; }
-
-
-    this(bool caseSensitive, const Arguments* parentArguments = null)
-    {
-        if(caseSensitive)
-            convertCase = s => s;
-        else
-            convertCase = (string str)
-            {
-                import std.uni : toUpper;
-                return str.toUpper;
-            };
-
-        this.parentArguments = parentArguments;
-
-        groups = [ Group("Required arguments"), Group("Optional arguments") ];
-    }
-
-    void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions, Group group)()
-    {
-        auto index = (group.name in groupsByName);
-        if(index !is null)
-            addArgument!(info, restrictions)(groups[*index]);
-        else
-        {
-            groupsByName[group.name] = groups.length;
-            groups ~= group;
-            addArgument!(info, restrictions)(groups[$-1]);
-        }
-    }
-
-    void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions = [])()
-    {
-        static if(info.required)
-            addArgument!(info, restrictions)(requiredGroup);
-        else
-            addArgument!(info, restrictions)(optionalGroup);
-    }
-
-    private void addArgument(ArgumentInfo info, RestrictionGroup[] argRestrictions = [])( ref Group group)
-    {
-        static assert(info.names.length > 0);
-
-        immutable index = arguments.length;
-
-        static if(info.positional)
-        {
-            if(argsPositional.length <= info.position.get)
-                argsPositional.length = info.position.get + 1;
-
-            argsPositional[info.position.get] = index;
-        }
-        else
-            static foreach(name; info.names)
-            {
-                assert(!(name in argsNamed), "Duplicated argument name: "~name);
-                argsNamed[convertCase(name)] = index;
-            }
-
-        arguments ~= info;
-        group.arguments ~= index;
-
-        static if(info.required)
-            restrictions ~= Restrictions.RequiredArg!info(index);
-
-        static foreach(restriction; argRestrictions)
-            addRestriction!(info, restriction)(index);
-    }
-
-    void addRestriction(ArgumentInfo info, RestrictionGroup restriction)(size_t argIndex)
-    {
-        auto groupIndex = (restriction.location in groupsByName);
-        auto index = groupIndex !is null
-        ? *groupIndex
-        : {
-            auto index = groupsByName[restriction.location] = restrictionGroups.length;
-            restrictionGroups ~= restriction;
-
-            static if(restriction.required)
-                restrictions ~= (a,b,c) => Restrictions.RequiredAnyOf(a, b, c, restrictionGroups[index].arguments);
-
-            enum checkFunc =
-            {
-                final switch(restriction.type)
-                {
-                    case RestrictionGroup.Type.together:  return &Restrictions.RequiredTogether;
-                    case RestrictionGroup.Type.exclusive: return &Restrictions.MutuallyExclusive;
-                }
-            }();
-
-            restrictions ~= (a,b,c) => checkFunc(a, b, c, restrictionGroups[index].arguments);
-
-            return index;
-        }();
-
-        restrictionGroups[index].arguments ~= argIndex;
-    }
-
-
-    Result checkRestrictions(in bool[size_t] cliArgs, Config* config) const
-    {
-        foreach(restriction; restrictions)
-        {
-            auto res = restriction(config, cliArgs, arguments);
-            if(!res)
-                return res;
-        }
-
-        return Result.Success;
-    }
-
-
-    auto findArgumentImpl(const size_t* pIndex) const
-    {
-        struct Result
-        {
-            size_t index = size_t.max;
-            const(ArgumentInfo)* arg;
-        }
-
-        return pIndex ? Result(*pIndex, &arguments[*pIndex]) : Result.init;
-    }
-
-    auto findPositionalArgument(size_t position) const
-    {
-        return findArgumentImpl(position < argsPositional.length ? &argsPositional[position] : null);
-    }
-
-    auto findNamedArgument(string name) const
-    {
-        return findArgumentImpl(convertCase(name) in argsNamed);
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private template defaultValuesCount(T)
-if(!is(T == void))
-{
-    static if(isBoolean!T)
-    {
-        enum min = 0;
-        enum max = 0;
-    }
-    else static if(isSomeString!T || isScalarType!T)
-    {
-        enum min = 1;
-        enum max = 1;
-    }
-    else static if(isStaticArray!T)
-    {
-        enum min = 1;
-        enum max = T.length;
-    }
-    else static if(isArray!T || isAssociativeArray!T)
-    {
-        enum min = 1;
-        enum max = ulong.max;
-    }
-    else static if(is(T == function))
-    {
-        // ... function()
-        static if(__traits(compiles, { T(); }))
-        {
-            enum min = 0;
-            enum max = 0;
-        }
-        // ... function(string value)
-        else static if(__traits(compiles, { T(string.init); }))
-        {
-            enum min = 1;
-            enum max = 1;
-        }
-        // ... function(string[] value)
-        else static if(__traits(compiles, { T([string.init]); }))
-        {
-            enum min = 0;
-            enum max = ulong.max;
-        }
-        // ... function(RawParam param)
-        else static if(__traits(compiles, { T(RawParam.init); }))
-        {
-            enum min = 1;
-            enum max = ulong.max;
-        }
-        else
-            static assert(false, "Unsupported callback: " ~ T.stringof);
-    }
-    else
-        static assert(false, "Type is not supported: " ~ T.stringof);
-}
-
-
-package auto applyDefaults(ArgumentInfo origInfo, TYPE, alias symbol)()
-{
-    auto info = origInfo;
-
-    static if(!isBoolean!TYPE)
-        info.allowBooleanNegation = false;
-
-    static if(origInfo.placeholder.length == 0)
-    {
-        static if(is(TYPE == enum))
-            info.placeholder = formatAllowedValues!(EnumMembersAsStrings!TYPE);
-        else static if(origInfo.positional)
-            info.placeholder = symbol;
-        else
-        {
-            import std.uni : toUpper;
-            info.placeholder = symbol.toUpper;
-        }
-    }
-
-    static if(origInfo.names.length == 0)
-        info.names = [ symbol ];
-
-    static if(is(typeof(*TYPE) == function) || is(typeof(*TYPE) == delegate))
-        alias countType = typeof(*TYPE);
-    else
-        alias countType = TYPE;
-
-    static if(origInfo.minValuesCount.isNull) info.minValuesCount = defaultValuesCount!countType.min;
-    static if(origInfo.maxValuesCount.isNull) info.maxValuesCount = defaultValuesCount!countType.max;
-
-    return info;
-}
-
-unittest
-{
-    auto createInfo(string placeholder = "")()
-    {
-        ArgumentInfo info;
-        info.allowBooleanNegation = true;
-        info.position = 0;
-        info.placeholder = placeholder;
-        return info;
-    }
-    assert(createInfo().allowBooleanNegation); // make codecov happy
-
-    auto res = applyDefaults!(createInfo(), int, "default-name");
-    assert(!res.allowBooleanNegation);
-    assert(res.names == [ "default-name" ]);
-    assert(res.minValuesCount == defaultValuesCount!int.min);
-    assert(res.maxValuesCount == defaultValuesCount!int.max);
-    assert(res.placeholder == "default-name");
-
-    res = applyDefaults!(createInfo!"myvalue", int, "default-name");
-    assert(res.placeholder == "myvalue");
-}
-
-unittest
-{
-    auto createInfo(string placeholder = "")()
-    {
-        ArgumentInfo info;
-        info.allowBooleanNegation = true;
-        info.placeholder = placeholder;
-        return info;
-    }
-    assert(createInfo().allowBooleanNegation); // make codecov happy
-
-    auto res = applyDefaults!(createInfo(), bool, "default_name");
-    assert(res.allowBooleanNegation);
-    assert(res.names == ["default_name"]);
-    assert(res.minValuesCount == defaultValuesCount!bool.min);
-    assert(res.maxValuesCount == defaultValuesCount!bool.max);
-    assert(res.placeholder == "DEFAULT_NAME");
-
-    res = applyDefaults!(createInfo!"myvalue", bool, "default_name");
-    assert(res.placeholder == "myvalue");
-}
-
-unittest
-{
-    enum E { a=1, b=1, c }
-    static assert(EnumMembersAsStrings!E == ["a","b","c"]);
-
-    auto createInfo(string placeholder = "")()
-    {
-        ArgumentInfo info;
-        info.placeholder = placeholder;
-        return info;
-    }
-    assert(createInfo().allowBooleanNegation); // make codecov happy
-
-    auto res = applyDefaults!(createInfo(), E, "default-name");
-    assert(res.placeholder == "{a,b,c}");
-
-    res = applyDefaults!(createInfo!"myvalue", E, "default-name");
-    assert(res.placeholder == "myvalue");
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package alias ParseFunction(RECEIVER) = Result delegate(Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
-package alias ParseSubCommandFunction(RECEIVER) = Result delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver);
-package alias InitSubCommandFunction(RECEIVER) = Result delegate(ref RECEIVER receiver);
-
-package alias ParsingArgument(alias symbol, alias uda, ArgumentInfo info, RECEIVER, bool completionMode) =
-    delegate(Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
-    {
-        static if(completionMode)
-        {
-            if(rawValue is null)
-                consumeValuesFromCLI(rawArgs, info.minValuesCount.get, info.maxValuesCount.get, config.namedArgChar);
-
-            return Result.Success;
-        }
-        else
-        {
-            try
-            {
-                auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, info.minValuesCount.get, info.maxValuesCount.get, config.namedArgChar);
-
-                auto res = info.checkValuesCount(argName, rawValues.length);
-                if(!res)
-                    return res;
-
-                auto param = RawParam(config, argName, rawValues);
-
-                auto target = &__traits(getMember, receiver, symbol);
-
-                static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                    return uda.parsingFunc.parse(target, param) ? Result.Success : Result.Failure;
-                else
-                    return uda.parsingFunc.parse(*target, param) ? Result.Success : Result.Failure;
-            }
-            catch(Exception e)
-            {
-                return Result.Error(argName, ": ", e.msg);
-            }
-        }
-    };
-
-package auto ParsingSubCommandArgument(COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(scope const CommandArguments!RECEIVER* parentArguments)
-{
-    return delegate(Config* config, ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver)
-    {
-        auto target = &__traits(getMember, receiver, symbol);
-
-        alias parse = (ref COMMAND_TYPE cmdTarget)
-        {
-            static if(!is(COMMAND_TYPE == Default!TYPE, TYPE))
-                alias TYPE = COMMAND_TYPE;
-
-            auto command = CommandArguments!TYPE(config, info, parentArguments);
-
-            return parser.parse!completionMode(command, isDefaultCmd, cmdTarget, arg);
-        };
-
-
-        static if(typeof(*target).Types.length == 1)
-            return (*target).match!parse;
-        else
-        {
-            return (*target).match!(parse,
-            (_)
-            {
-                assert(false, "This should never happen");
-                return Result.Failure;
-            }
-            );
-        }
-    };
-}
-
-package alias ParsingSubCommandInit(COMMAND_TYPE, RECEIVER, alias symbol) =
-    delegate(ref RECEIVER receiver)
-    {
-        auto target = &__traits(getMember, receiver, symbol);
-
-        static if(typeof(*target).Types.length > 1)
-            if((*target).match!((COMMAND_TYPE t) => false, _ => true))
-                *target = COMMAND_TYPE.init;
-
-        return Result.Success;
-    };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -751,15 +117,11 @@ package bool checkPositionalIndexes(T)()
 
 package struct CommandArguments(RECEIVER)
 {
-    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1,
-    "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
+    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1, "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
 
-    private enum _validate = checkArgumentNames!RECEIVER &&
-    checkPositionalIndexes!RECEIVER;
+    private enum _validate = checkArgumentNames!RECEIVER && checkPositionalIndexes!RECEIVER;
 
-    static assert(getUDAs!(RECEIVER, CommandInfo).length <= 1);
-
-    CommandInfo info;
+    const CommandInfo info;
     const(string)[] parentNames;
 
     Arguments arguments;
@@ -770,17 +132,9 @@ package struct CommandArguments(RECEIVER)
     alias void delegate(ref RECEIVER receiver, const Config* config) ParseFinalizer;
     ParseFinalizer[] parseFinalizers;
 
-    uint level; // (sub-)command level, 0 = top level
 
     // sub commands
-    size_t[string] subCommandsByName;
-    CommandInfo[] subCommands;
-    ParseSubCommandFunction!RECEIVER[] parseSubCommands;
-    ParseSubCommandFunction!RECEIVER[] completeSubCommands;
-    InitSubCommandFunction !RECEIVER[] initSubCommands;
-
-    // completion
-    string[] completeSuggestion;
+    SubCommands!RECEIVER subCommands;
 
 
     mixin ForwardMemberFunction!"arguments.findPositionalArgument";
@@ -789,122 +143,34 @@ package struct CommandArguments(RECEIVER)
 
 
 
-    this(Config* config)
-    {
-        static if(getUDAs!(RECEIVER, CommandInfo).length > 0)
-            CommandInfo info = getUDAs!(RECEIVER, CommandInfo)[0];
-        else
-            CommandInfo info;
-
-        this(config, info);
-    }
-
-    this(PARENT = void)(Config* config, CommandInfo info, const PARENT* parentArguments = null)
+    private this(CommandInfo info)
     {
         this.info = info;
 
-        checkArgumentName!RECEIVER(config.namedArgChar);
-
-        static if(is(PARENT == void))
-        {
-            level = 0;
-            arguments = Arguments(config.caseSensitive);
-        }
-        else
-        {
-            parentNames = parentArguments.parentNames ~ parentArguments.info.names[0];
-            level = parentArguments.level + 1;
-            arguments = Arguments(config.caseSensitive, &parentArguments.arguments);
-        }
-
-        fillArguments();
-
-        if(config.addHelp)
-        {
-            arguments.addArgument!helpArgument;
-            parseArguments ~= delegate (Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
-            {
-                import std.stdio: stdout;
-
-                auto output = stdout.lockingTextWriter();
-                printHelp(_ => output.put(_), this, config);
-
-                return Result(0);
-            };
-            completeArguments ~= delegate (Config* config, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
-            {
-                return Result.Success;
-            };
-        }
-
-
-        import std.algorithm: sort, map;
-        import std.range: join;
-        import std.array: array;
-
-        completeSuggestion = arguments.argsNamed.keys.map!(_ => getArgumentName(_, config)).array;
-        completeSuggestion ~= subCommandsByName.keys.array;
-        completeSuggestion.sort;
+        subCommands.level = 0;
     }
-
-    private void fillArguments()
+    private this(PARENT)(CommandInfo info, const PARENT* parentArguments)
     {
-        enum hasNoUDAs = getSymbolsByUDA!(RECEIVER, ArgumentUDA  ).length == 0 &&
-        getSymbolsByUDA!(RECEIVER, NamedArgument).length == 0 &&
-        getSymbolsByUDA!(RECEIVER, SubCommands  ).length == 0;
+        this.info = info;
 
-        static foreach(sym; __traits(allMembers, RECEIVER))
-        {{
-            alias mem = __traits(getMember, RECEIVER, sym);
-
-            static if(!is(mem)) // skip types
-            {
-                static if(hasUDA!(mem, ArgumentUDA) || hasUDA!(mem, NamedArgument))
-                    addArgument!sym;
-                else static if(hasUDA!(mem, SubCommands))
-                    addSubCommands!sym;
-                else static if(hasNoUDAs &&
-                    // skip "op*" functions
-                    !(is(typeof(mem) == function) && sym.length > 2 && sym[0..2] == "op"))
-                    {
-                        import std.sumtype: isSumType;
-
-                        static if(isSumType!(typeof(mem)))
-                            addSubCommands!sym;
-                        else
-                            addArgument!sym;
-                    }
-            }
-        }}
+        parentNames = parentArguments.parentNames ~ parentArguments.info.displayNames[0];
+        subCommands.level = parentArguments.subCommands.level + 1;
+        arguments = Arguments(&parentArguments.arguments);
     }
 
-    private void addArgument(alias symbol)()
+    private void addArgument(alias symbol, alias uda)()
     {
         alias member = __traits(getMember, RECEIVER, symbol);
 
-        static assert(getUDAs!(member, ArgumentUDA).length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple '*Argument' UDAs");
-
-        static assert(getUDAs!(member, Group).length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
-
-        static if(getUDAs!(member, ArgumentUDA).length > 0)
-            enum originalUDA = getUDAs!(member, ArgumentUDA)[0];
-        else
-            enum originalUDA = NamedArgument();
-
-        static if(is(typeof(member) == AnsiStylingArgument))
+        static if(__traits(compiles, getUDAs!(typeof(member), Hook.ParsingDone)) && getUDAs!(typeof(member), Hook.ParsingDone).length > 0)
         {
-            enum uda = originalUDA.addDefaults(getUDAs!(AnsiStylingArgument, ArgumentUDA)[0]);
-
-            parseFinalizers ~= (ref RECEIVER receiver, const Config* config)
-                {
-                    auto target = &__traits(getMember, receiver, symbol);
-                    AnsiStylingArgument.finalize(*target, config);
-                };
+            static foreach(hook; getUDAs!(typeof(member), Hook.ParsingDone))
+                parseFinalizers ~= (ref RECEIVER receiver, const Config* config)
+                    {
+                        auto target = &__traits(getMember, receiver, symbol);
+                        hook(*target, config);
+                    };
         }
-        else
-            alias uda = originalUDA;
-
-        enum info = applyDefaults!(uda.info, typeof(member), symbol);
 
         enum restrictions = {
             RestrictionGroup[] restrictions;
@@ -913,74 +179,23 @@ package struct CommandArguments(RECEIVER)
             return restrictions;
         }();
 
-        static if(getUDAs!(member, Group).length > 0)
-            arguments.addArgument!(info, restrictions, getUDAs!(member, Group)[0]);
-        else
-            arguments.addArgument!(info, restrictions);
-
-        parseArguments    ~= ParsingArgument!(symbol, uda, info, RECEIVER, false);
-        completeArguments ~= ParsingArgument!(symbol, uda, info, RECEIVER, true);
+        addArgumentImpl!(symbol, uda, restrictions, getUDAs!(member, Group));
     }
 
-    private void addSubCommands(alias symbol)()
+    private void addArgumentImpl(alias symbol, alias uda, RestrictionGroup[] restrictions = [], groups...)()
     {
-        import std.sumtype: isSumType;
+        static assert(groups.length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
+        static if(groups.length > 0)
+            arguments.addArgument!(uda.info, restrictions, groups[0]);
+        else
+            arguments.addArgument!(uda.info, restrictions);
 
-        alias member = __traits(getMember, RECEIVER, symbol);
+        static if(__traits(compiles, { parseArguments ~= uda.parsingFunc.getParseFunc!RECEIVER; }))
+            parseArguments ~= uda.parsingFunc.getParseFunc!RECEIVER;
+        else
+            parseArguments ~= ParsingArgument!(symbol, uda, RECEIVER, false);
 
-        static assert(isSumType!(typeof(member)), RECEIVER.stringof~"."~symbol~" must have 'SumType' type");
-
-        static assert(getUDAs!(member, SubCommands).length <= 1,
-        "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'SubCommands' UDAs");
-
-        static foreach(TYPE; typeof(member).Types)
-        {{
-            enum defaultCommand = is(TYPE == Default!COMMAND_TYPE, COMMAND_TYPE);
-            static if(!defaultCommand)
-                alias COMMAND_TYPE = TYPE;
-
-            static assert(getUDAs!(COMMAND_TYPE, CommandInfo).length <= 1);
-
-            //static assert(getUDAs!(member, Group).length <= 1,
-            //    "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
-
-            static if(getUDAs!(COMMAND_TYPE, CommandInfo).length > 0)
-                enum info = {
-                    auto info = getUDAs!(COMMAND_TYPE, CommandInfo)[0];
-                    if(info.names.length == 0 || info.names[0] == "")
-                        info.names = [COMMAND_TYPE.stringof];
-                    return info;
-                }();
-            else
-                enum info = CommandInfo([COMMAND_TYPE.stringof]);
-
-            static assert(info.names.length > 0 && info.names[0].length > 0);
-
-            //static if(getUDAs!(member, Group).length > 0)
-            //    args.addArgument!(info, restrictions, getUDAs!(member, Group)[0])(ParsingArgument!(symbol, uda, info, RECEIVER));
-            //else
-            //arguments.addSubCommand!(info);
-
-            immutable index = subCommands.length;
-
-            static foreach(name; info.names)
-            {
-                assert(!(name in subCommandsByName), "Duplicated name of subcommand: "~name);
-                subCommandsByName[arguments.convertCase(name)] = index;
-            }
-
-            static if(defaultCommand)
-            {
-                assert(!(DEFAULT_COMMAND in subCommandsByName), "Multiple default subcommands: "~RECEIVER.stringof~"."~symbol);
-                subCommandsByName[DEFAULT_COMMAND] = index;
-            }
-
-            subCommands ~= info;
-            //group.arguments ~= index;
-            parseSubCommands    ~= ParsingSubCommandArgument!(TYPE, info, RECEIVER, symbol, false)(&this);
-            completeSubCommands ~= ParsingSubCommandArgument!(TYPE, info, RECEIVER, symbol, true)(&this);
-            initSubCommands     ~= ParsingSubCommandInit!(TYPE, RECEIVER, symbol);
-        }}
+        completeArguments ~= ParsingArgument!(symbol, uda, RECEIVER, true);
     }
 
     auto getParseFunction(bool completionMode)(size_t index) const
@@ -993,16 +208,7 @@ package struct CommandArguments(RECEIVER)
 
     auto findSubCommand(string name) const
     {
-        struct Result
-        {
-            uint level = uint.max;
-            ParseSubCommandFunction!RECEIVER parse;
-            ParseSubCommandFunction!RECEIVER complete;
-            InitSubCommandFunction !RECEIVER initialize;
-        }
-
-        auto p = arguments.convertCase(name) in subCommandsByName;
-        return !p ? Result.init : Result(level+1, parseSubCommands[*p], completeSubCommands[*p], initSubCommands[*p]);
+        return subCommands.find(name);
     }
 
     package void setTrailingArgs(ref RECEIVER receiver, ref string[] rawArgs) const
@@ -1027,6 +233,89 @@ package struct CommandArguments(RECEIVER)
         foreach(dg; parseFinalizers)
             dg(receiver, config);
     }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA  ).length == 0 &&
+                                            getSymbolsByUDA!(COMMAND, NamedArgument).length == 0 &&
+                                            getSymbolsByUDA!(COMMAND, argparse.SubCommands  ).length == 0;
+
+private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
+
+
+private void addArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
+{
+    import std.sumtype: isSumType;
+
+    enum isArgument(alias mem) = hasUDA!(mem, ArgumentUDA) ||
+                                 hasUDA!(mem, NamedArgument) ||
+                                 hasNoMembersWithUDA!COMMAND && !isOpFunction!mem && !isSumType!(typeof(mem));
+
+    static foreach(sym; __traits(allMembers, COMMAND))
+    {{
+        alias mem = __traits(getMember, COMMAND, sym);
+
+        // skip types
+        static if(!is(mem) && isArgument!mem)
+            cmd.addArgument!(sym, getMemberArgumentUDA!(config, COMMAND, sym, NamedArgument));
+    }}
+}
+
+private void addSubCommands(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
+{
+    import std.sumtype: isSumType;
+
+    enum isSubCommand(alias mem) = hasUDA!(mem, argparse.SubCommands) ||
+                                   hasNoMembersWithUDA!COMMAND && !isOpFunction!mem && isSumType!(typeof(mem));
+
+    static foreach(sym; __traits(allMembers, COMMAND))
+    {{
+        alias mem = __traits(getMember, COMMAND, sym);
+
+        // skip types
+        static if(!is(mem) && isSubCommand!mem)
+        {
+            static assert(isSumType!(typeof(mem)), COMMAND.stringof~"."~sym~" must have 'SumType' type");
+
+            static assert(getUDAs!(mem, argparse.SubCommands).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
+
+            static foreach(TYPE; typeof(mem).Types)
+                cmd.subCommands.add!(config, sym, TYPE, COMMAND)(&cmd);
+        }
+    }}
+}
+
+private void initCommandArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
+{
+    import std.algorithm: sort, map, joiner;
+    import std.array: array;
+
+    addArguments!config(cmd);
+    addSubCommands!config(cmd);
+
+    if(config.addHelp)
+        cmd.addArgumentImpl!(null, getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA()));
+}
+
+package(argparse) auto commandArguments(Config config, COMMAND)()
+{
+    checkArgumentName!COMMAND(config.namedArgChar);
+
+    auto cmd = CommandArguments!COMMAND(getCommandInfo!(config, COMMAND));
+    initCommandArguments!config(cmd);
+
+    return cmd;
+}
+
+package auto commandArguments(Config config, COMMAND, CommandInfo info, PARENT)(const PARENT* parentArguments)
+{
+    checkArgumentName!COMMAND(config.namedArgChar);
+
+    auto cmd = CommandArguments!COMMAND(info, parentArguments);
+    initCommandArguments!config(cmd);
+
+    return cmd;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1183,17 +472,6 @@ if(!is(T == void))
             Actions.CallFunctionNoParam!T   // no-value action
         );
     }
-    else static if(is(T == AnsiStylingArgument))
-    {
-        alias DefaultValueParseFunctions = ValueParseFunctions!(
-            void,   // pre process
-            void,   // pre validate
-            Parsers.PassThrough,   // parse
-            void,   // validate
-            AnsiStylingArgument.action,   // action
-            AnsiStylingArgument.action    // no-value action
-        );
-    }
     else
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
@@ -1289,12 +567,12 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct ValueParseFunctions(alias PreProcess,
-                                   alias PreValidation,
-                                   alias Parse,
-                                   alias Validation,
-                                   alias Action,
-                                   alias NoValueAction)
+package(argparse) struct ValueParseFunctions(alias PreProcess,
+                                             alias PreValidation,
+                                             alias Parse,
+                                             alias Validation,
+                                             alias Action,
+                                             alias NoValueAction)
 {
     alias changePreProcess   (alias func) = ValueParseFunctions!(      func, PreValidation, Parse, Validation, Action, NoValueAction);
     alias changePreValidation(alias func) = ValueParseFunctions!(PreProcess,          func, Parse, Validation, Action, NoValueAction);
@@ -1346,11 +624,11 @@ package struct ValueParseFunctions(alias PreProcess,
     //  - if there is no value:
     //      - action if no value
     // Requirement: rawValues.length must be correct
-    static bool parse(T)(ref T receiver, RawParam param)
+    static Result parse(T)(ref T receiver, RawParam param)
     {
         return addDefaults!(DefaultValueParseFunctions!T).parseImpl(receiver, param);
     }
-    static bool parseImpl(T)(ref T receiver, ref RawParam rawParam)
+    static Result parseImpl(T)(ref T receiver, ref RawParam rawParam)
     {
         alias ParseType(T)     = .ParseType!(Parse, T);
 
@@ -1362,28 +640,30 @@ package struct ValueParseFunctions(alias PreProcess,
 
         if(rawParam.value.length == 0)
         {
-            return noValueAction!T(receiver, Param!void(rawParam.config, rawParam.name));
+            return noValueAction!T(receiver, Param!void(rawParam.config, rawParam.name)) ? Result.Success : Result.Failure;
         }
         else
         {
             static if(!is(PreProcess == void))
                 PreProcess(rawParam);
 
-            if(!preValidation(rawParam))
-                return false;
+            Result res = preValidation(rawParam);
+            if(!res)
+                return res;
 
             auto parsedParam = Param!(ParseType!T)(rawParam.config, rawParam.name);
 
             if(!parse!T(parsedParam.value, rawParam))
-                return false;
+                return Result.Failure;
 
-            if(!validation!T(parsedParam))
-                return false;
+            res = validation!T(parsedParam);
+            if(!res)
+                return res;
 
             if(!action!T(receiver, parsedParam))
-                return false;
+                return Result.Failure;
 
-            return true;
+            return Result.Success;
         }
     }
 }
@@ -1394,31 +674,55 @@ package struct ValueParseFunctions(alias PreProcess,
 // bool validate(T value)
 // bool validate(T[i] value)
 // bool validate(Param!T param)
+// Result validate(T value)
+// Result validate(T[i] value)
+// Result validate(Param!T param)
 private struct ValidateFunc(alias F, T, string funcName="Validation")
 {
-    static bool opCall(Param!T param)
+    static Result opCall(Param!T param)
     {
         static if(is(F == void))
         {
-            return true;
+            return Result.Success;
+        }
+        else static if(__traits(compiles, { Result res = F(param); }))
+        {
+            // Result validate(Param!T param)
+            return F(param);
         }
         else static if(__traits(compiles, { F(param); }))
         {
             // bool validate(Param!T param)
-            return cast(bool) F(param);
+            return F(param) ? Result.Success : Result.Failure;
+        }
+        else static if(__traits(compiles, { Result res = F(param.value); }))
+        {
+            // Result validate(T values)
+            return F(param.value);
         }
         else static if(__traits(compiles, { F(param.value); }))
         {
             // bool validate(T values)
-            return cast(bool) F(param.value);
+            return F(param.value) ? Result.Success : Result.Failure;
         }
-        else static if(/*isArray!T &&*/ __traits(compiles, { F(param.value[0]); }))
+        else static if(__traits(compiles, { Result res = F(param.value[0]); }))
+        {
+            // Result validate(T[i] value)
+            foreach(value; param.value)
+            {
+                Result res = F(value);
+                if(!res)
+                    return res;
+            }
+            return Result.Success;
+        }
+        else static if(__traits(compiles, { F(param.value[0]); }))
         {
             // bool validate(T[i] value)
             foreach(value; param.value)
                 if(!F(value))
-                    return false;
-            return true;
+                    return Result.Failure;
+            return Result.Success;
         }
         else
             static assert(false, funcName~" function is not supported for type "~T.stringof~": "~typeof(F).stringof);
@@ -1468,7 +772,7 @@ unittest
 // void action(ref DEST receiver)
 // bool action(ref DEST receiver, Param!void param)
 // void action(ref DEST receiver, Param!void param)
-private struct NoValueActionFunc(alias F, T)
+package(argparse) struct NoValueActionFunc(alias F, T)
 {
     static bool opCall(ref T receiver, Param!void param)
     {
@@ -1788,7 +1092,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private struct Parsers
+package(argparse) struct Parsers
 {
     static auto Convert(T)(string value)
     {
@@ -1928,7 +1232,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct Validators
+package(argparse) struct Validators
 {
     template ValueInList(alias values, TYPE)
     {
@@ -1948,19 +1252,19 @@ package struct Validators
 
             foreach(value; paramValues)
                 if(!(value in valuesAA))
-                {
-                    param.config.onError("Invalid value '", value, "' for argument '", param.name, "'.\nValid argument values are: ", allowedValues);
-                    return false;
-                }
+                    return Result.Error("Invalid value '", value, "' for argument '", param.name, "'.\nValid argument values are: ", allowedValues);
 
-            return true;
+            return Result.Success;
         }
         static auto ValueInList(Param!(TYPE[]) param)
         {
             foreach(ref value; param.value)
-                if(!ValueInList!(values, TYPE)(Param!TYPE(param.config, param.name, value)))
-                    return false;
-            return true;
+            {
+                auto res = ValueInList!(values, TYPE)(Param!TYPE(param.config, param.name, value));
+                if(!res)
+                    return res;
+            }
+            return Result.Success;
         }
     }
 }

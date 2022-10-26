@@ -1,6 +1,9 @@
-module argparse.completer;
+module argparse.internal.completer;
 
-import argparse;
+import argparse : CLI, Command, SubCommands, Default, Description, ShortDescription, MutuallyExclusive, NamedArgument, TrailingArguments;
+import argparse.api: Config;
+
+import argparse.internal.subcommands: CommandInfo;
 
 import std.traits: getUDAs;
 import std.sumtype: SumType;
@@ -31,25 +34,12 @@ private string defaultCommandName(COMMAND)()
 
 unittest
 {
-    struct T {}
-    assert(defaultCommandName!T == "T");
-}
-
-unittest
-{
-    @Command("name","alias")
-    struct T {}
-    assert(defaultCommandName!T == "name");
-}
-
-unittest
-{
     import core.runtime: Runtime;
     import std.path: baseName;
 
     @Command
     struct T {}
-    import std.stdio: writeln,stderr; stderr.writeln("===== ", defaultCommandName!T);
+
     assert(defaultCommandName!T == Runtime.args[0].baseName);
 }
 
@@ -61,13 +51,13 @@ private alias Complete_Init_CommandName_Description(COMMAND) = delegate ()
     return "Command name. Default value: "~defaultCommandName!COMMAND~".";
 };
 
-package struct Complete(COMMAND)
+package(argparse) struct Complete(COMMAND)
 {
     @(Command("init")
     .Description("Print initialization script for shell completion.")
     .ShortDescription("Print initialization script.")
     )
-    struct Init
+    private struct InitCmd
     {
         @MutuallyExclusive
         {
@@ -148,7 +138,7 @@ package struct Complete(COMMAND)
     @(Command("complete")
     .Description("Print completion.")
     )
-    struct Complete
+    private struct CompleteCmd
     {
         @MutuallyExclusive
         {
@@ -204,5 +194,5 @@ package struct Complete(COMMAND)
     }
 
     @SubCommands
-    SumType!(Init, Default!Complete) cmd;
+    SumType!(InitCmd, Default!CompleteCmd) cmd;
 }

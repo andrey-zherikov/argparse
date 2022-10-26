@@ -1,7 +1,8 @@
-module argparse.parser;
+module argparse.internal.parser;
 
-import argparse;
+import argparse.api: Config, Result;
 import argparse.internal;
+import argparse.internal.subcommands;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -37,7 +38,6 @@ package struct Parser
     {
         Result delegate(const ref Argument) parse;
         Result delegate(const ref Argument) complete;
-        const(string)[] completeSuggestion;
         bool isDefault;
     }
     CmdParser[] cmdStack;
@@ -64,13 +64,13 @@ package struct Parser
         immutable string value        = idxAssignChar < 0 ? null : arg[idxAssignChar + 1 .. $];
 
         return arg[1] == config.namedArgChar
-        ? Argument(NamedLong (nameWithDash[2..$], nameWithDash, value))
-        : Argument(NamedShort(nameWithDash[1..$], nameWithDash, value));
+        ? Argument(NamedLong (config.convertCase(nameWithDash[2..$]), nameWithDash, value))
+        : Argument(NamedShort(config.convertCase(nameWithDash[1..$]), nameWithDash, value));
     }
 
-    auto parseArgument(T, PARSE)(PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
+    auto parseArgument(T, PARSE)(const ref CommandArguments!T cmd, PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
     {
-        auto res = parse(config, nameWithDash, receiver, value, args);
+        auto res = parse(config, cmd, nameWithDash, receiver, value, args);
         if(!res)
             return res;
 
@@ -83,14 +83,14 @@ package struct Parser
     {
         import std.range: front, popFront;
 
-        auto found = cmd.findSubCommand(args.front);
+        auto found = cmd.findSubCommand(config.convertCase(args.front));
         if(found.parse is null)
             return Result.UnknownArgument;
 
         if(found.level < cmdStack.length)
             cmdStack.length = found.level;
 
-        cmdStack ~= CmdParser((const ref arg) => found.parse(config, this, arg, false, receiver), (const ref arg) => found.complete(config, this, arg, false, receiver));
+        cmdStack ~= CmdParser((const ref arg) => found.parse(this, arg, false, receiver), (const ref arg) => found.complete(this, arg, false, receiver));
 
         found.initialize(receiver);
         args.popFront();
@@ -102,15 +102,18 @@ package struct Parser
     {
         static if(completionMode)
         {
-            import std.range: front, popFront;
-            import std.algorithm: filter;
-            import std.string:startsWith;
-            import std.array:array;
+            import std.range: chain;
+            import std.algorithm: filter, map;
+            import std.string: startsWith;
+            import std.array: array, join;
+
             if(args.length == 1)
             {
-                // last arg means we need to provide args and subcommands
-                auto A = args[0] == "" ? cmd.completeSuggestion : cmd.completeSuggestion.filter!(_ => _.startsWith(args[0])).array;
-                return Result(0, Result.Status.success, "", A);
+                auto suggestions = chain(cmd.arguments.arguments.map!(_ => _.displayNames).join, cmd.subCommands.byName.keys);
+
+                // empty last arg means that we need to provide all args and subcommands, otherwise they are filtered
+                return Result(0, Result.Status.success, "",
+                            args[0] == "" ? suggestions.array : suggestions.filter!(_ => _.startsWith(args[0])).array);
             }
         }
 
@@ -140,7 +143,7 @@ package struct Parser
         if(foundArg.arg is null)
             return parseSubCommand(cmd, receiver);
 
-        auto res = parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, null, foundArg.arg.names[0], foundArg.index);
+        auto res = parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, null, foundArg.arg.names[0], foundArg.index);
         if(!res)
             return res;
 
@@ -172,7 +175,7 @@ package struct Parser
             return Result.UnknownArgument;
 
         args.popFront();
-        return parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
+        return parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
     }
 
     auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, bool isDefaultCmd, ref T receiver, NamedShort arg)
@@ -186,7 +189,7 @@ package struct Parser
                 return Result.UnknownArgument;
 
             args.popFront();
-            return parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
+            return parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
         }
 
         // Try to parse "-ABC..." where "A","B","C" are different single-letter arguments
@@ -216,7 +219,7 @@ package struct Parser
                 arg.name = "";
             }
 
-            auto res = parseArgument(cmd.getParseFunction!completionMode(foundArg.index), receiver, value, "-"~name, foundArg.index);
+            auto res = parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, value, "-"~name, foundArg.index);
             if(!res)
                 return res;
         }
@@ -279,13 +282,12 @@ package struct Parser
         (const ref arg)
         {
             return parse!completionMode(cmd, false, receiver, arg);
-        },
-        cmd.completeSuggestion);
+        });
 
         auto found = cmd.findSubCommand(DEFAULT_COMMAND);
         if(found.parse !is null)
         {
-            auto p = CmdParser((const ref arg) => found.parse(config, this, arg, true, receiver));
+            auto p = CmdParser((const ref arg) => found.parse(this, arg, true, receiver));
             p.isDefault = true;
             cmdStack ~= p;
             found.initialize(receiver);
@@ -328,7 +330,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package static Result callParser(Config origConfig, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
+package(argparse) static Result callParser(Config origConfig, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 {
     import argparse.ansi: detectSupport;
 
@@ -337,7 +339,7 @@ package static Result callParser(Config origConfig, bool completionMode, COMMAND
 
     auto parser = Parser(&config, args);
 
-    auto command = CommandArguments!COMMAND(&config);
+    auto command = commandArguments!(origConfig, COMMAND);
     auto res = parser.parseAll!completionMode(command, receiver);
 
     static if(!completionMode)

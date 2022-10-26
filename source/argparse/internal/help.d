@@ -1,44 +1,22 @@
-module argparse.help;
+module argparse.internal.help;
 
-import argparse;
-import argparse.internal;
+import argparse: Description, Optional;
+import argparse.api: Config, Result;
+import argparse.internal: CommandArguments, commandArguments;
+import argparse.internal.lazystring;
+import argparse.internal.arguments: ArgumentInfo, Arguments;
+import argparse.internal.subcommands: CommandInfo;
+import argparse.internal.argumentuda: ArgumentUDA;
+import argparse.internal.style;
+
 import argparse.ansi;
 
+version(unittest)
+{
+    import argparse;
+}
+
 import std.sumtype: SumType, match;
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Help styling options
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package struct Style
-{
-    TextStyle programName;
-    TextStyle subcommandName;
-    TextStyle argumentGroupTitle;
-    TextStyle namedArgumentName;
-    TextStyle namedArgumentValue;
-    TextStyle positionalArgumentValue;
-
-    enum None = Style.init;
-
-    enum Default = Style(
-        bold,           // programName
-        bold,           // subcommandName
-        bold.underline, // argumentGroupTitle
-        lightYellow,    // namedArgumentName
-        italic,         // namedArgumentValue
-        lightYellow,    // positionalArgumentValue
-    );
-}
-
-unittest
-{
-    import std.stdio:writeln;
-
-    Style.Default.argumentGroupTitle("bbb").writeln;
-    Style.Default.namedArgumentName("bbb").writeln;
-    Style.Default.namedArgumentValue("bbb").writeln;
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Help elements
@@ -170,20 +148,49 @@ private void print(void delegate(string) sink, const ref Section section, string
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package enum helpArgument = {
-    ArgumentInfo arg;
-    arg.names = ["h","help"];
-    arg.description = "Show this help message and exit";
-    arg.minValuesCount = 0;
-    arg.maxValuesCount = 0;
-    arg.allowBooleanNegation = false;
-    arg.ignoreInDefaultCommand = true;
-    return arg;
-}();
+package auto HelpArgumentUDA()
+{
+    struct HelpArgumentParsingFunction
+    {
+        static auto getParseFunc(T)()
+        {
+            return delegate(Config* config, const ref CommandArguments!T cmd, string argName, ref T receiver, string rawValue, ref string[] rawArgs)
+            {
+                import std.stdio: stdout;
+
+                auto output = stdout.lockingTextWriter();
+                printHelp(_ => output.put(_), cmd, config);
+
+                return Result(0);
+            };
+        }
+    }
+
+    ArgumentUDA!(HelpArgumentParsingFunction) desc;
+    desc.info.names = ["h","help"];
+    desc.info.description = "Show this help message and exit";
+    desc.info.required = false;
+    desc.info.minValuesCount = 0;
+    desc.info.maxValuesCount = 0;
+    desc.info.allowBooleanNegation = false;
+    desc.info.ignoreInDefaultCommand = true;
+    return desc;
+}
+
+unittest
+{
+    auto h = HelpArgumentUDA();
+    assert(h.info.names == ["h","help"]);
+    assert(!h.info.required);
+    assert(h.info.minValuesCount == 0);
+    assert(h.info.maxValuesCount == 0);
+    assert(!h.info.allowBooleanNegation);
+    assert(h.info.ignoreInDefaultCommand);
+}
 
 private bool isHelpArgument(string name)
 {
-    static foreach(n; helpArgument.names)
+    static foreach(n; HelpArgumentUDA().info.names)
         if(n == name)
             return true;
 
@@ -383,7 +390,7 @@ private void printInvocation(NAMES)(void delegate(string) sink, const ref Style 
             if(i > 0)
                 sink(", ");
 
-            sink(name);
+            sink(style.namedArgumentName(name));
 
             if(info.maxValuesCount.get > 0)
             {
@@ -401,6 +408,8 @@ unittest
         enum info = {
             ArgumentInfo info;
             info.placeholder = "v";
+            info.minValuesCount = 1;
+            info.maxValuesCount = 1;
             static if (positional)
                 info.position = 0;
             return info;
@@ -409,9 +418,7 @@ unittest
         import std.array: appender;
         auto a = appender!string;
         Style style;
-        Config config;
-        config.stylingMode = Config.StylingMode.off;
-        printInvocation(_ => a.put(_), style, applyDefaults!(info, int, "foo"), ["f".getArgumentName(&config),"foo".getArgumentName(&config)]);
+        printInvocation(_ => a.put(_), style, info, ["-f","--foo"]);
         return a[];
     }
 
@@ -421,12 +428,12 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(void delegate(string) sink, string delegate(string) getArgumentName, const ref Style style, in ArgumentInfo info)
+private void printUsage(void delegate(string) sink, const ref Style style, in ArgumentInfo info)
 {
     if(!info.required)
         sink("[");
 
-    printInvocation(sink, style, info, [ getArgumentName(info.names[0]) ]);
+    printInvocation(sink, style, info, [ info.displayName ]);
 
     if(!info.required)
         sink("]");
@@ -439,8 +446,11 @@ unittest
         enum info = {
             ArgumentInfo info;
             info.names ~= "foo";
+            info.displayNames ~= "--foo";
             info.placeholder = "v";
             info.required = required;
+            info.minValuesCount = 1;
+            info.maxValuesCount = 1;
             static if (positional)
                 info.position = 0;
             return info;
@@ -449,9 +459,7 @@ unittest
         import std.array: appender;
         auto a = appender!string;
         Style style;
-        Config config;
-        config.stylingMode = Config.StylingMode.off;
-        printUsage(_ => a.put(_), _ => getArgumentName(_, &config), style, applyDefaults!(info, int, "foo"));
+        printUsage(_ => a.put(_), style, info);
         return a[];
     }
 
@@ -463,12 +471,12 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(T)(void delegate(string) sink, string delegate(string) getArgumentName, const ref Style style, in CommandArguments!T cmd)
+private void printUsage(T)(void delegate(string) sink, const ref Style style, in CommandArguments!T cmd)
 {
     import std.algorithm: map;
     import std.array: join;
 
-    string progName = style.programName((cmd.parentNames ~ (cmd.info.names.length > 0 ? cmd.info.names[0] : "")).map!(_ => _.length > 0 ? _ : getProgramName()).join(" "));
+    string progName = style.programName((cmd.parentNames ~ (cmd.info.displayNames.length > 0 ? cmd.info.displayNames[0] : "")).map!(_ => _.length > 0 ? _ : getProgramName()).join(" "));
 
     sink("Usage: ");
 
@@ -484,7 +492,7 @@ private void printUsage(T)(void delegate(string) sink, string delegate(string) g
             .each!((ref _)
             {
                 sink(" ");
-                printUsage(sink, getArgumentName, style, _);
+                printUsage(sink, style, _);
             });
 
         sink(progName);
@@ -503,7 +511,7 @@ private void printUsage(T)(void delegate(string) sink, string delegate(string) g
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto getSections(string delegate(string) getArgumentName, const ref Style style, const(Arguments)* arguments)
+private auto getSections(const ref Style style, const(Arguments)* arguments)
 {
     import std.algorithm: filter, map;
     import std.array: appender, array;
@@ -530,7 +538,7 @@ private auto getSections(string delegate(string) getArgumentName, const ref Styl
     alias getItem = (ref _)
     {
         auto invocation = appender!string;
-        printInvocation(_ => invocation.put(_), style, _, _.names.map!getArgumentName);
+        printInvocation(_ => invocation.put(_), style, _, _.displayNames);
 
         return Item(invocation[], _.description);
     };
@@ -541,7 +549,7 @@ private auto getSections(string delegate(string) getArgumentName, const ref Styl
     for(; arguments; arguments = arguments.parentArguments)
     {
         //user-defined groups first, then required args and then optional args
-        foreach(ref group; chain(arguments.groups[2..$], [arguments.requiredGroup, arguments.optionalGroup]))
+        foreach(ref group; chain(arguments.userGroups, [arguments.requiredGroup, arguments.optionalGroup]))
         {
             auto p = (group.name in sectionMap);
             ulong index;
@@ -578,12 +586,12 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
         //if(_.hideFromHelp)
         //    return false;
 
-        return _.names.length > 0 && _.names[0].length > 0;
+        return _.displayNames.length > 0 && _.displayNames[0].length > 0;
     };
 
     alias getItem = (ref _)
     {
-        return Item(_.names.map!(_ => style.subcommandName(_)).join(","), LazyString(() {
+        return Item(_.displayNames.map!(_ => style.subcommandName(_)).join(","), LazyString(() {
             auto shortDescription = _.shortDescription.get;
             return shortDescription.length > 0 ? shortDescription : _.description.get;
         }));
@@ -600,21 +608,21 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
     return section;
 }
 
-private auto getSection(T)(string delegate(string) getArgumentName, const ref Style style, in CommandArguments!T cmd)
+private auto getSection(T)(const ref Style style, in CommandArguments!T cmd)
 {
     import std.array: appender;
 
     auto usage = appender!string;
 
-    printUsage(_ => usage.put(_), getArgumentName, style, cmd);
+    printUsage(_ => usage.put(_), style, cmd);
 
     Section[] sections;
 
     // sub commands
     if(cmd.subCommands.length > 0)
-        sections ~= getSection(style, cmd.subCommands);
+        sections ~= getSection(style, cmd.subCommands.info);
 
-    sections ~= getSections(getArgumentName, style, &cmd.arguments);
+    sections ~= getSections(style, &cmd.arguments);
 
     auto section = Section(usage[], cmd.info.description, cmd.info.epilog);
     section.entries = sections;
@@ -631,7 +639,7 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 
     auto helpStyle = enableStyling ? config.helpStyle : Style.None;
 
-    auto section = getSection(_ => helpStyle.namedArgumentName(getArgumentName(_, config)), helpStyle, cmd);
+    auto section = getSection(helpStyle, cmd);
 
     immutable helpPosition = section.maxItemNameLength(20) + 4;
     immutable indent = spaces(helpPosition + 2);
@@ -671,7 +679,7 @@ unittest
         auto a = appender!string;
         Config config;
         config.stylingMode = Config.StylingMode.off;
-        printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
+        printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
         return a[];
     }
 
@@ -729,7 +737,7 @@ unittest
     auto a = appender!string;
     Config config;
     config.stylingMode = Config.StylingMode.off;
-    printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
+    printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
         "group1:\n"~
@@ -779,7 +787,7 @@ unittest
     auto a = appender!string;
     Config config;
     config.stylingMode = Config.StylingMode.off;
-    printHelp(_ => a.put(_), CommandArguments!T(&config), &config);
+    printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~
