@@ -1137,7 +1137,7 @@ Boolean types usually represent command line flags. `argparse` supports multiple
 ```d
 struct T
 {
-    @NamedArgument bool b;
+    bool b;
 }
 
 assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b"]) == 0);
@@ -1154,9 +1154,9 @@ Numeric arguments are converted using `std.conv.to`:
 ```d
 struct T
 {
-    @NamedArgument  int i;
-    @NamedArgument  uint u;
-    @NamedArgument  double d;
+    int i;
+    uint u;
+    double d;
 }
 
 assert(CLI!T.parseArgs!((T t) { assert(t == T(-5,8,12.345)); })(["-i","-5","-u","8","-d","12.345"]) == 0);
@@ -1169,7 +1169,7 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T(-5,8,12.345)); })(["-i","-5","-u",
 ```d
 struct T
 {
-    @NamedArgument  string a;
+    string a;
 }
 
 assert(CLI!T.parseArgs!((T t) { assert(t == T("foo")); })(["-a","foo"]) == 0);
@@ -1185,7 +1185,7 @@ struct T
 {
     enum Fruit { apple, pear };
 
-    @NamedArgument Fruit a;
+    Fruit a;
 }
 
 assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.apple)); })(["-a","apple"]) == 0);
@@ -1214,8 +1214,8 @@ command line and then each group is appended to this array:
 ```d
 struct T
 {
-    @NamedArgument int[]   a;
-    @NamedArgument int[][] b;
+    int[]   a;
+    int[][] b;
 }
 
 assert(CLI!T.parseArgs!((T t) { assert(t.a == [1,2,3,4,5]); })(["-a","1","2","3","-a","4","5"]) == 0);
@@ -1227,7 +1227,7 @@ Alternatively you can set `Config.arraySep` to allow multiple elements in one pa
 ```d
 struct T
 {
-    @NamedArgument int[] a;
+    int[] a;
 }
 
 enum cfg = {
@@ -1271,7 +1271,7 @@ command line, or right within the option separated with an "=" sign:
 ```d
 struct T
 {
-    @NamedArgument int[string] a;
+    int[string] a;
 }
 
 assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); })(["-a=foo=3","-a","boo=7"]) == 0);
@@ -1282,7 +1282,7 @@ Alternatively you can set `Config.arraySep` to allow multiple elements in one pa
 ```d
 struct T
 {
-    @NamedArgument int[string] a;
+    int[string] a;
 }
 
 enum cfg = {
@@ -1506,7 +1506,7 @@ Default is `char.init`.
 ```d
 struct T
 {
-    @NamedArgument string[] a;
+    string[] a;
 }
 
 assert(CLI!T.parseArgs!((T t) { assert(t == T(["1,2,3","4","5"])); })(["-a","1,2,3","-a","4","5"]) == 0);

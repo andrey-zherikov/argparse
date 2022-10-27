@@ -1140,7 +1140,6 @@ unittest
     enum Fruit { apple, pear, banana }
     struct T
     {
-        @NamedArgument
         Fruit fruit;
     }
 
@@ -1180,8 +1179,8 @@ unittest
 {
     struct T
     {
-        @NamedArgument int[]   a;
-        @NamedArgument int[][] b;
+        int[]   a;
+        int[][] b;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t.a == [1,2,3,4,5]); return 12345; })(["-a","1","2","3","-a","4","5"]) == 12345);
@@ -1192,7 +1191,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument int[] a;
+        int[] a;
     }
 
     enum cfg = {
@@ -1208,7 +1207,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument int[string] a;
+        int[string] a;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); return 12345; })(["-a=foo=3","-a","boo=7"]) == 12345);
@@ -1218,7 +1217,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument int[string] a;
+        int[string] a;
     }
 
     enum cfg = {
@@ -1237,7 +1236,7 @@ unittest
     {
         enum Fruit { apple, pear };
 
-        @NamedArgument Fruit a;
+        Fruit a;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.apple)); return 12345; })(["-a","apple"]) == 12345);
@@ -1248,7 +1247,7 @@ unittest
 {
     struct T
     {
-        @NamedArgument string[] a;
+        string[] a;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T(["1,2,3","4","5"])); return 12345; })(["-a","1,2,3","-a","4","5"]) == 12345);
