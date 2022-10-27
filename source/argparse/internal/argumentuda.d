@@ -2,7 +2,8 @@ module argparse.internal.argumentuda;
 
 import argparse.api: Config;
 import argparse.internal.arguments: ArgumentInfo;
-import argparse.internal.utils: formatAllowedValues, EnumMembersAsStrings;
+import argparse.internal.utils: formatAllowedValues;
+import argparse.internal.enumhelpers: getEnumValues;
 
 import std.traits;
 
@@ -113,7 +114,7 @@ package template getArgumentUDA(Config config, MEMBERTYPE, string defaultName)
         static if(initUDA.info.placeholder.length == 0)
         {
             static if(is(MEMBERTYPE == enum))
-                uda.info.placeholder = formatAllowedValues!(EnumMembersAsStrings!MEMBERTYPE);
+                uda.info.placeholder = formatAllowedValues!(getEnumValues!MEMBERTYPE);
             else static if(initUDA.info.positional)
                 uda.info.placeholder = defaultName;
             else

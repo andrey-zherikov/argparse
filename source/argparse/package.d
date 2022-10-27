@@ -9,6 +9,7 @@ import argparse.internal.subcommands: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.hooks: Hooks;
 import argparse.internal.utils: formatAllowedValues;
+import argparse.internal.enumhelpers: EnumValue;
 
 public import argparse.api;
 
@@ -1247,6 +1248,24 @@ unittest
 {
     struct T
     {
+        enum Fruit {
+            apple,
+            @ArgumentValue("no-apple","noapple")
+            noapple
+        };
+
+        Fruit a;
+    }
+
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.apple)); return 12345; })(["-a","apple"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.noapple)); return 12345; })(["-a=no-apple"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.noapple)); return 12345; })(["-a","noapple"]) == 12345);
+}
+
+unittest
+{
+    struct T
+    {
         string[] a;
     }
 
@@ -1525,4 +1544,16 @@ unittest
     assert(test("auto")   == Config.StylingMode.autodetect);
     assert(test("never")  == Config.StylingMode.off);
     assert(test("")       == Config.StylingMode.autodetect);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+auto ArgumentValue(string[] name...)
+{
+    return EnumValue(name.dup);
+}
+
+unittest
+{
+    assert(ArgumentValue("a","b").values == ["a","b"]);
 }

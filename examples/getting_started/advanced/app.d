@@ -22,6 +22,15 @@ struct Advanced
     @NamedArgument(["b","banana","ban"])
     int banana;
 
+    // Enums can have a value that is not an identifier
+    enum Enum {
+        @ArgumentValue("value1","value-1","value.1")
+        value1,
+        value2,
+    }
+    @NamedArgument
+    Enum choice;
+
     // Custom types can also be used with custon parsing function
     struct CustomType {
         double d;
