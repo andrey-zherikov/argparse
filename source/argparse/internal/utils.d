@@ -40,26 +40,3 @@ unittest
 {
     assert(formatAllowedValues!(["abc", "def", "ghi"]) == "{abc,def,ghi}");
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package template EnumMembersAsStrings(E)
-{
-    enum EnumMembersAsStrings = {
-        import std.traits: EnumMembers;
-        alias members = EnumMembers!E;
-
-        typeof(__traits(identifier, members[0]))[] res;
-        static foreach (i, _; members)
-            res ~= __traits(identifier, members[i]);
-
-        return res;
-    }();
-}
-
-unittest
-{
-    enum E { abc, def, ghi }
-    assert(EnumMembersAsStrings!E == ["abc", "def", "ghi"]);
-}
-

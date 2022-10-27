@@ -1192,6 +1192,26 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.apple)); })(["-a","apple"]
 assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.pear)); })(["-a=pear"]) == 0);
 ```
 
+In some cases the value for command line argument might have characters that are not allowed in enum identifiers.
+There is `ArgumentValue` UDA that can be used to adjust allowed values:
+
+```d
+struct T
+{
+    enum Fruit {
+        apple,
+        @ArgumentValue("no-apple","noapple")
+        noapple
+    };
+
+    Fruit a;
+}
+
+assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.apple)); })(["-a","apple"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.noapple)); })(["-a=no-apple"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.noapple)); })(["-a","noapple"]) == 0);
+```
+
 ### Counter
 
 Counter argument is the parameter that tracks the number of times the argument occurred on the command line:

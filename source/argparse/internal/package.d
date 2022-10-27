@@ -9,7 +9,8 @@ import argparse.internal.arguments;
 import argparse.internal.subcommands;
 import argparse.internal.argumentuda;
 import argparse.internal.hooks: Hook;
-import argparse.internal.utils: formatAllowedValues, EnumMembersAsStrings;
+import argparse.internal.utils: formatAllowedValues;
+import argparse.internal.enumhelpers: getEnumValues, getEnumValue;
 
 import std.traits;
 import std.sumtype: SumType, match;
@@ -329,8 +330,8 @@ if(!is(T == void))
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
             void,   // pre process
-            Validators.ValueInList!(EnumMembersAsStrings!T, typeof(RawParam.value)),   // pre validate
-            void,   // parse
+            Validators.ValueInList!(getEnumValues!T, typeof(RawParam.value)),   // pre validate
+            getEnumValue!T,   // parse
             void,   // validate
             void,   // action
             void    // no-value action
