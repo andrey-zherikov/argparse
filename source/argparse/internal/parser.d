@@ -6,6 +6,39 @@ import argparse.internal.subcommands;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private string[] consumeValuesFromCLI(ref string[] args, ulong minValuesCount, ulong maxValuesCount, char namedArgChar)
+{
+    import std.range: empty, front, popFront;
+
+    string[] values;
+
+    if(minValuesCount > 0)
+    {
+        if(minValuesCount < args.length)
+        {
+            values = args[0..minValuesCount];
+            args = args[minValuesCount..$];
+        }
+        else
+        {
+            values = args;
+            args = [];
+        }
+    }
+
+    while(!args.empty &&
+        values.length < maxValuesCount &&
+        (args.front.length == 0 || args.front[0] != namedArgChar))
+    {
+        values ~= args.front;
+        args.popFront();
+    }
+
+    return values;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 package struct Parser
 {
     import std.sumtype: SumType;
@@ -68,15 +101,13 @@ package struct Parser
         : Argument(NamedShort(config.convertCase(nameWithDash[1..$]), nameWithDash, value));
     }
 
-    auto parseArgument(T, PARSE)(const ref CommandArguments!T cmd, PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
+    auto parseArgument(bool completionMode, T, FOUNDARG)(const ref CommandArguments!T cmd, ref T receiver, FOUNDARG foundArg, string value, string nameWithDash)
     {
-        auto res = parse(config, cmd, nameWithDash, receiver, value, args);
-        if(!res)
-            return res;
+        scope(exit) idxParsedArgs[foundArg.index] = true;
 
-        idxParsedArgs[argIndex] = true;
+        auto rawValues = value !is null ? [value] : consumeValuesFromCLI(args, foundArg.arg.minValuesCount.get, foundArg.arg.maxValuesCount.get, config.namedArgChar);
 
-        return Result.Success;
+        return cmd.getParseFunction!completionMode(foundArg.index)(config, cmd, receiver, nameWithDash, rawValues);
     }
 
     auto parseSubCommand(T)(const ref CommandArguments!T cmd, ref T receiver)
@@ -143,7 +174,7 @@ package struct Parser
         if(foundArg.arg is null)
             return parseSubCommand(cmd, receiver);
 
-        auto res = parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, null, foundArg.arg.names[0], foundArg.index);
+        auto res = parseArgument!completionMode(cmd, receiver, foundArg, null, foundArg.arg.names[0]);
         if(!res)
             return res;
 
@@ -175,7 +206,7 @@ package struct Parser
             return Result.UnknownArgument;
 
         args.popFront();
-        return parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
+        return parseArgument!completionMode(cmd, receiver, foundArg, arg.value, arg.nameWithDash);
     }
 
     auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, bool isDefaultCmd, ref T receiver, NamedShort arg)
@@ -189,7 +220,7 @@ package struct Parser
                 return Result.UnknownArgument;
 
             args.popFront();
-            return parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
+            return parseArgument!completionMode(cmd, receiver, foundArg, arg.value, arg.nameWithDash);
         }
 
         // Try to parse "-ABC..." where "A","B","C" are different single-letter arguments
@@ -219,7 +250,7 @@ package struct Parser
                 arg.name = "";
             }
 
-            auto res = parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, value, "-"~name, foundArg.index);
+            auto res = parseArgument!completionMode(cmd, receiver, foundArg, value, "-"~name);
             if(!res)
                 return res;
         }

@@ -361,24 +361,19 @@ package struct Arguments
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package alias ParseFunction(RECEIVER) = Result delegate(Config* config, const ref CommandArguments!RECEIVER cmd, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
+package alias ParseFunction(RECEIVER) = Result delegate(Config* config, const ref CommandArguments!RECEIVER cmd, ref RECEIVER receiver, string argName, string[] rawValues);
 
 package alias ParsingArgument(alias symbol, alias uda, RECEIVER, bool completionMode) =
-    delegate(Config* config, const ref CommandArguments!RECEIVER cmd, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
+    delegate(Config* config, const ref CommandArguments!RECEIVER cmd, ref RECEIVER receiver, string argName, string[] rawValues)
     {
         static if(completionMode)
         {
-            if(rawValue is null)
-                consumeValuesFromCLI(rawArgs, uda.info.minValuesCount.get, uda.info.maxValuesCount.get, config.namedArgChar);
-
             return Result.Success;
         }
         else
         {
             try
             {
-                auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, uda.info.minValuesCount.get, uda.info.maxValuesCount.get, config.namedArgChar);
-
                 auto res = uda.info.checkValuesCount(argName, rawValues.length);
                 if(!res)
                     return res;
@@ -398,38 +393,5 @@ package alias ParsingArgument(alias symbol, alias uda, RECEIVER, bool completion
             }
         }
     };
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private auto consumeValuesFromCLI(ref string[] args, ulong minValuesCount, ulong maxValuesCount, char namedArgChar)
-{
-    import std.range: empty, front, popFront;
-
-    string[] values;
-
-    if(minValuesCount > 0)
-    {
-        if(minValuesCount < args.length)
-        {
-            values = args[0..minValuesCount];
-            args = args[minValuesCount..$];
-        }
-        else
-        {
-            values = args;
-            args = [];
-        }
-    }
-
-    while(!args.empty &&
-        values.length < maxValuesCount &&
-        (args.front.length == 0 || args.front[0] != namedArgChar))
-    {
-        values ~= args.front;
-        args.popFront();
-    }
-
-    return values;
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

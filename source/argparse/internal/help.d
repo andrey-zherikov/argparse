@@ -154,7 +154,7 @@ package auto HelpArgumentUDA()
     {
         static auto getParseFunc(T)()
         {
-            return delegate(Config* config, const ref CommandArguments!T cmd, string argName, ref T receiver, string rawValue, ref string[] rawArgs)
+            return delegate(Config* config, const ref CommandArguments!T cmd, ref T receiver, string argName, string[] rawValues)
             {
                 import std.stdio: stdout;
 
