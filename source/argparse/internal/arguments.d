@@ -337,15 +337,15 @@ package struct Arguments
     }
 
 
-    auto findArgumentImpl(const size_t* pIndex) const
+    struct FindResult
     {
-        struct Result
-        {
-            size_t index = size_t.max;
-            const(ArgumentInfo)* arg;
-        }
+        size_t index = size_t.max;
+        const(ArgumentInfo)* arg;
+    }
 
-        return pIndex ? Result(*pIndex, &arguments[*pIndex]) : Result.init;
+    FindResult findArgumentImpl(const size_t* pIndex) const
+    {
+        return pIndex ? FindResult(*pIndex, &arguments[*pIndex]) : FindResult.init;
     }
 
     auto findPositionalArgument(size_t position) const
