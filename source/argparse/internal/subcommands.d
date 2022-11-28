@@ -59,7 +59,7 @@ package template getCommandInfo(Config config, COMMAND, string name = "")
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private alias InitSubCommandFunction (RECEIVER) = Result delegate(ref RECEIVER receiver);
-private alias ParseSubCommandFunction(RECEIVER) = Result delegate(ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver);
+private alias ParseSubCommandFunction(RECEIVER) = Result delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -138,21 +138,29 @@ package struct SubCommands(RECEIVER)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+package auto ParsingSubCommandParse(Config config, COMMAND_TYPE, CommandInfo info, bool completionMode, PARENT)(scope const CommandArguments!PARENT* parentArguments)
+{
+    return delegate(ref Parser parser, const ref Parser.Argument arg, ref COMMAND_TYPE cmdTarget)
+    {
+        static if(!is(COMMAND_TYPE == Default!TYPE, TYPE))
+            alias TYPE = COMMAND_TYPE;
+
+        auto commandArgs = commandArguments!(config, TYPE, info)(parentArguments);
+
+        auto command = Parser.Command.create(commandArgs, cmdTarget);
+
+        return parser.parse!completionMode(command, arg);
+    };
+}
+
 private auto ParsingSubCommandArgument(Config config, COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(scope const CommandArguments!RECEIVER* parentArguments)
 {
-    return delegate(ref Parser parser, const ref Parser.Argument arg, bool isDefaultCmd, ref RECEIVER receiver)
+    return delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver)
     {
         auto target = &__traits(getMember, receiver, symbol);
 
-        alias parse = (ref COMMAND_TYPE cmdTarget)
-        {
-            static if(!is(COMMAND_TYPE == Default!TYPE, TYPE))
-                alias TYPE = COMMAND_TYPE;
-
-            auto command = commandArguments!(config, TYPE, info)(parentArguments);
-
-            return parser.parse!completionMode(command, isDefaultCmd, cmdTarget, arg);
-        };
+        alias parse = (ref COMMAND_TYPE cmdTarget) =>
+            ParsingSubCommandParse!(config, COMMAND_TYPE, info, completionMode)(parentArguments)(parser, arg, cmdTarget);
 
 
         static if(typeof(*target).Types.length == 1)
