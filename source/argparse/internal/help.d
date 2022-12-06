@@ -7,6 +7,7 @@ import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
 import argparse.internal.subcommands: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
+import argparse.internal.parser: Parser;
 import argparse.internal.style;
 
 import argparse.ansi;
@@ -158,8 +159,17 @@ package auto HelpArgumentUDA()
             {
                 import std.stdio: stdout;
 
+                import std.algorithm: map;
+                import std.array: join;
+
+                string progName = (cmd.parentNames ~ (cmd.info.displayNames.length > 0 ? cmd.info.displayNames[0] : "")).map!(_ => _.length > 0 ? _ : getProgramName()).join(" ");
+
+                const(Arguments)*[] args;
+                for(auto arguments = &cmd.arguments; arguments; arguments = arguments.parentArguments)
+                    args ~= arguments;
+
                 auto output = stdout.lockingTextWriter();
-                printHelp(_ => output.put(_), cmd, config);
+                printHelp(_ => output.put(_), cmd, args, config, progName);
 
                 return Result(0);
             };
@@ -471,47 +481,51 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(T)(void delegate(string) sink, const ref Style style, in CommandArguments!T cmd)
+private void createUsage(void delegate(string) sink, const ref Style style, string progName, const(Arguments)* arguments, bool hasSubCommands)
 {
-    import std.algorithm: map;
-    import std.array: join;
+    import std.algorithm: filter, each, map;
 
-    string progName = style.programName((cmd.parentNames ~ (cmd.info.displayNames.length > 0 ? cmd.info.displayNames[0] : "")).map!(_ => _.length > 0 ? _ : getProgramName()).join(" "));
-
-    sink("Usage: ");
-
-    auto usage = cmd.info.usage.get;
-    if(usage.length > 0)
-        substituteProg(sink, usage, progName);
-    else
+    alias print = (r) => r
+    .filter!((ref _) => !_.hideFromHelp)
+    .each!((ref _)
     {
-        import std.algorithm: filter, each, map;
+        sink(" ");
+        printUsage(sink, style, _);
+    });
 
-        alias print = (r) => r
-            .filter!((ref _) => !_.hideFromHelp)
-            .each!((ref _)
-            {
-                sink(" ");
-                printUsage(sink, style, _);
-            });
+    sink(progName);
 
-        sink(progName);
+    // named args
+    print(arguments.arguments.filter!((ref _) => !_.positional));
+    // positional args
+    print(arguments.positionalArguments.map!(ref (_) => arguments.arguments[_]));
+    // sub commands
+    if(hasSubCommands)
+        sink(style.subcommandName(" <command> [<args>]"));
+}
 
-        // named args
-        print(cmd.arguments.arguments.filter!((ref _) => !_.positional));
-        // positional args
-        print(cmd.arguments.positionalArguments.map!(ref (_) => cmd.arguments.arguments[_]));
-        // sub commands
-        if(cmd.subCommands.length > 0)
-            sink(style.subcommandName(" <command> [<args>]"));
-    }
+private string getUsage(T)(const ref Style style, in CommandArguments!T cmd, string progName)
+{
+    import std.array: appender;
 
-    sink("\n");
+    auto usage = appender!string;
+
+    usage.put("Usage: ");
+
+    auto usageText = cmd.info.usage.get;
+    if(usageText.length > 0)
+        substituteProg(_ => usage.put(_), usageText, progName);
+    else
+        createUsage(_ => usage.put(_), style, progName, &cmd.arguments, cmd.subCommands.length > 0);
+
+    usage.put("\n");
+
+    return usage[];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto getSections(const ref Style style, const(Arguments)* arguments)
+private auto getSections(const ref Style style, const(Arguments)*[] arguments)
 {
     import std.algorithm: filter, map;
     import std.array: appender, array;
@@ -546,10 +560,10 @@ private auto getSections(const ref Style style, const(Arguments)* arguments)
     Section[] sections;
     size_t[string] sectionMap;
 
-    for(; arguments; arguments = arguments.parentArguments)
+    foreach(ref args; arguments)
     {
         //user-defined groups first, then required args and then optional args
-        foreach(ref group; chain(arguments.userGroups, [arguments.requiredGroup, arguments.optionalGroup]))
+        foreach(ref group; chain(args.userGroups, [args.requiredGroup, args.optionalGroup]))
         {
             auto p = (group.name in sectionMap);
             ulong index;
@@ -564,7 +578,7 @@ private auto getSections(const ref Style style, const(Arguments)* arguments)
             sections[index].entries.match!(
                 (ref Item[] items) {
                     items ~= group.arguments
-                        .map!(_ => &arguments.arguments[_])
+                        .map!(_ => &args.arguments[_])
                         .filter!((const _) => showArg(*_))
                         .map!((const _) => getItem(*_))
                         .array;
@@ -608,29 +622,23 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
     return section;
 }
 
-private auto getSection(T)(const ref Style style, in CommandArguments!T cmd)
+private auto getSection(T)(const ref Style style, in CommandArguments!T cmd, const(Arguments)*[] arguments, string progName)
 {
-    import std.array: appender;
-
-    auto usage = appender!string;
-
-    printUsage(_ => usage.put(_), style, cmd);
-
     Section[] sections;
 
     // sub commands
     if(cmd.subCommands.length > 0)
         sections ~= getSection(style, cmd.subCommands.info);
 
-    sections ~= getSections(style, &cmd.arguments);
+    sections ~= getSections(style, arguments);
 
-    auto section = Section(usage[], cmd.info.description, cmd.info.epilog);
+    auto section = Section(getUsage(style, cmd, progName), cmd.info.description, cmd.info.epilog);
     section.entries = sections;
 
     return section;
 }
 
-package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, Config* config)
+private void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, const(Arguments)*[] arguments, Config* config, string progName)
 {
     import std.algorithm: each;
 
@@ -639,7 +647,7 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 
     auto helpStyle = enableStyling ? config.helpStyle : Style.None;
 
-    auto section = getSection(helpStyle, cmd);
+    auto section = getSection(helpStyle, cmd, arguments, helpStyle.programName(progName));
 
     immutable helpPosition = section.maxItemNameLength(20) + 4;
     immutable indent = spaces(helpPosition + 2);
@@ -679,7 +687,8 @@ unittest
         auto a = appender!string;
         Config config;
         config.stylingMode = Config.StylingMode.off;
-        printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
+        auto cmd = commandArguments!(Config.init, T);
+        printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
         return a[];
     }
 
@@ -737,7 +746,8 @@ unittest
     auto a = appender!string;
     Config config;
     config.stylingMode = Config.StylingMode.off;
-    printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
+    auto cmd = commandArguments!(Config.init, T);
+    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
         "group1:\n"~
@@ -787,7 +797,8 @@ unittest
     auto a = appender!string;
     Config config;
     config.stylingMode = Config.StylingMode.off;
-    printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
+    auto cmd = commandArguments!(Config.init, T);
+    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~
