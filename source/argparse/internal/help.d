@@ -155,18 +155,16 @@ package auto HelpArgumentUDA()
     {
         static auto getParseFunc(T)()
         {
-            return delegate(Config* config, const ref CommandArguments!T cmd, ref T receiver, string argName, string[] rawValues)
+            return delegate(const Parser.Command[] cmdStack, Config* config, const ref CommandArguments!T cmd, ref T receiver, string argName, string[] rawValues)
             {
                 import std.stdio: stdout;
 
                 import std.algorithm: map;
-                import std.array: join;
+                import std.array: join, array;
 
-                string progName = (cmd.parentNames ~ (cmd.info.displayNames.length > 0 ? cmd.info.displayNames[0] : "")).map!(_ => _.length > 0 ? _ : getProgramName()).join(" ");
+                string progName = cmdStack.map!((ref _) => _.displayName.length > 0 ? _.displayName : getProgramName()).join(" ");
 
-                const(Arguments)*[] args;
-                for(auto arguments = &cmd.arguments; arguments; arguments = arguments.parentArguments)
-                    args ~= arguments;
+                auto args = cmdStack.map!((ref _) => &_.arguments).array;
 
                 auto output = stdout.lockingTextWriter();
                 printHelp(_ => output.put(_), cmd, args, config, progName);
@@ -525,7 +523,7 @@ private string getUsage(T)(const ref Style style, in CommandArguments!T cmd, str
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto getSections(const ref Style style, const(Arguments)*[] arguments)
+private auto getSections(const ref Style style, const(Arguments*)[] arguments)
 {
     import std.algorithm: filter, map;
     import std.array: appender, array;
@@ -560,7 +558,7 @@ private auto getSections(const ref Style style, const(Arguments)*[] arguments)
     Section[] sections;
     size_t[string] sectionMap;
 
-    foreach(ref args; arguments)
+    foreach_reverse(ref args; arguments)
     {
         //user-defined groups first, then required args and then optional args
         foreach(ref group; chain(args.userGroups, [args.requiredGroup, args.optionalGroup]))
@@ -622,7 +620,7 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
     return section;
 }
 
-private auto getSection(T)(const ref Style style, in CommandArguments!T cmd, const(Arguments)*[] arguments, string progName)
+private auto getSection(T)(const ref Style style, in CommandArguments!T cmd, const(Arguments*)[] arguments, string progName)
 {
     Section[] sections;
 
@@ -638,7 +636,7 @@ private auto getSection(T)(const ref Style style, in CommandArguments!T cmd, con
     return section;
 }
 
-private void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, const(Arguments)*[] arguments, Config* config, string progName)
+private void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, const(Arguments*)[] arguments, Config* config, string progName)
 {
     import std.algorithm: each;
 

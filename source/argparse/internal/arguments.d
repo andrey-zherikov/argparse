@@ -3,6 +3,7 @@ module argparse.internal.arguments;
 import argparse.internal: CommandArguments;
 import argparse.internal.utils: partiallyApply;
 import argparse.internal.lazystring;
+import argparse.internal.parser: Parser;
 
 import argparse.api: Config, Result, RawParam;
 
@@ -214,8 +215,6 @@ package struct Arguments
     // positional arguments
     size_t[] argsPositional;
 
-    const Arguments* parentArguments;
-
     Group[] userGroups;
     size_t[string] groupsByName;
 
@@ -230,11 +229,6 @@ package struct Arguments
 
     @property auto positionalArguments() const { return argsPositional; }
 
-
-    this(const Arguments* parentArguments)
-    {
-        this.parentArguments = parentArguments;
-    }
 
     void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions, Group group)()
     {
@@ -360,11 +354,11 @@ package struct Arguments
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package alias ParseFunction(RECEIVER) = Result delegate(Config* config, const ref CommandArguments!RECEIVER cmd, ref RECEIVER receiver, string argName, string[] rawValues);
+// TODO: move these to CommandArguments
+package alias ParseFunction(RECEIVER) = Result delegate(const Parser.Command[] cmdStack, Config* config, const ref CommandArguments!RECEIVER cmd, ref RECEIVER receiver, string argName, string[] rawValues);
 
 package alias ParsingArgument(alias symbol, alias uda, RECEIVER, bool completionMode) =
-    delegate(Config* config, const ref CommandArguments!RECEIVER cmd, ref RECEIVER receiver, string argName, string[] rawValues)
+    delegate(const Parser.Command[] cmdStack, Config* config, const ref CommandArguments!RECEIVER cmd, ref RECEIVER receiver, string argName, string[] rawValues)
     {
         static if(completionMode)
         {

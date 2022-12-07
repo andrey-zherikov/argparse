@@ -122,8 +122,7 @@ package struct CommandArguments(RECEIVER)
 
     private enum _validate = checkArgumentNames!RECEIVER && checkPositionalIndexes!RECEIVER;
 
-    const CommandInfo info;
-    const(string)[] parentNames;
+    CommandInfo info;
 
     Arguments arguments;
 
@@ -147,16 +146,6 @@ package struct CommandArguments(RECEIVER)
     private this(CommandInfo info)
     {
         this.info = info;
-
-        subCommands.level = 0;
-    }
-    private this(PARENT)(CommandInfo info, const PARENT* parentArguments)
-    {
-        this.info = info;
-
-        parentNames = parentArguments.parentNames ~ parentArguments.info.displayNames[0];
-        subCommands.level = parentArguments.subCommands.level + 1;
-        arguments = Arguments(&parentArguments.arguments);
     }
 
     private void addArgument(alias symbol, alias uda)()
@@ -282,7 +271,7 @@ private void addSubCommands(Config config, COMMAND)(ref CommandArguments!COMMAND
             static assert(getUDAs!(mem, argparse.SubCommands).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
 
             static foreach(TYPE; typeof(mem).Types)
-                cmd.subCommands.add!(config, sym, TYPE, COMMAND)(&cmd);
+                cmd.subCommands.add!(config, sym, TYPE, COMMAND);
         }
     }}
 }
@@ -299,21 +288,11 @@ private void initCommandArguments(Config config, COMMAND)(ref CommandArguments!C
         cmd.addArgumentImpl!(null, getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA()));
 }
 
-package(argparse) auto commandArguments(Config config, COMMAND)()
+package(argparse) auto commandArguments(Config config, COMMAND, CommandInfo info = getCommandInfo!(config, COMMAND))()
 {
     checkArgumentName!COMMAND(config.namedArgChar);
 
-    auto cmd = CommandArguments!COMMAND(getCommandInfo!(config, COMMAND));
-    initCommandArguments!config(cmd);
-
-    return cmd;
-}
-
-package auto commandArguments(Config config, COMMAND, CommandInfo info, PARENT)(const PARENT* parentArguments)
-{
-    checkArgumentName!COMMAND(config.namedArgChar);
-
-    auto cmd = CommandArguments!COMMAND(info, parentArguments);
+    auto cmd = CommandArguments!COMMAND(info);
     initCommandArguments!config(cmd);
 
     return cmd;

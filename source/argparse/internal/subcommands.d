@@ -2,9 +2,10 @@ module argparse.internal.subcommands;
 
 import argparse: Default;
 import argparse.api: Config, Result;
-import argparse.internal: CommandArguments, commandArguments;
+import argparse.internal: commandArguments;
 import argparse.internal.parser: Parser;
 import argparse.internal.lazystring;
+import argparse.internal.arguments;
 
 import std.sumtype: match;
 
@@ -59,7 +60,8 @@ package template getCommandInfo(Config config, COMMAND, string name = "")
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private alias InitSubCommandFunction (RECEIVER) = Result delegate(ref RECEIVER receiver);
-private alias ParseSubCommandFunction(RECEIVER) = Result delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver);
+private alias ParseSubCommandFunction(RECEIVER) = Result delegate(ref Parser parser, const Parser.Command[] cmdStack, const ref Parser.Argument arg, ref RECEIVER receiver);
+private alias CreateSubCommandFunction(RECEIVER) = Parser.Command delegate(ref RECEIVER receiver);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -71,9 +73,8 @@ package struct SubCommands(RECEIVER)
         InitSubCommandFunction !RECEIVER initialize;
         ParseSubCommandFunction!RECEIVER parse;
         ParseSubCommandFunction!RECEIVER complete;
+        CreateSubCommandFunction!RECEIVER createCommand;
     }
-
-    uint level; // (sub-)command level, 0 = top level
 
     size_t[string] byName;
 
@@ -83,7 +84,7 @@ package struct SubCommands(RECEIVER)
 
     auto length() const { return info.length; }
 
-    void add(Config config, alias symbol, SUBCOMMAND, COMMAND)(scope const CommandArguments!COMMAND* parentArguments)
+    void add(Config config, alias symbol, SUBCOMMAND, COMMAND)()
     {
         enum defaultCommand = is(SUBCOMMAND == Default!COMMAND_TYPE, COMMAND_TYPE);
         static if(!defaultCommand)
@@ -116,8 +117,9 @@ package struct SubCommands(RECEIVER)
         info ~= cmdInfo;
         handlers ~= Handlers(
                 ParsingSubCommandInit!(SUBCOMMAND, COMMAND, symbol),
-                ParsingSubCommandArgument!(config, SUBCOMMAND, cmdInfo, COMMAND, symbol, false)(parentArguments),
-                ParsingSubCommandArgument!(config, SUBCOMMAND, cmdInfo, COMMAND, symbol, true)(parentArguments)
+                ParsingSubCommandArgument!(config, SUBCOMMAND, cmdInfo, COMMAND, symbol, false),
+                ParsingSubCommandArgument!(config, SUBCOMMAND, cmdInfo, COMMAND, symbol, true),
+                ParsingSubCommandCreate!(config, SUBCOMMAND, cmdInfo, COMMAND, symbol),
             );
     }
 
@@ -125,56 +127,90 @@ package struct SubCommands(RECEIVER)
     {
         struct Result
         {
-            uint level = uint.max;
             InitSubCommandFunction !RECEIVER initialize;
             ParseSubCommandFunction!RECEIVER parse;
             ParseSubCommandFunction!RECEIVER complete;
+            CreateSubCommandFunction!RECEIVER createCommand;
         }
 
         auto p = name in byName;
-        return !p ? Result.init : Result(level+1, handlers[*p].initialize, handlers[*p].parse, handlers[*p].complete);
+        return !p ? Result.init : Result(handlers[*p].initialize, handlers[*p].parse, handlers[*p].complete, handlers[*p].createCommand);
     }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package auto ParsingSubCommandParse(Config config, COMMAND_TYPE, CommandInfo info, bool completionMode, PARENT)(scope const CommandArguments!PARENT* parentArguments)
+package auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol)()
 {
-    return delegate(ref Parser parser, const ref Parser.Argument arg, ref COMMAND_TYPE cmdTarget)
-    {
-        static if(!is(COMMAND_TYPE == Default!TYPE, TYPE))
-            alias TYPE = COMMAND_TYPE;
-
-        auto commandArgs = commandArguments!(config, TYPE, info)(parentArguments);
-
-        auto command = Parser.Command.create(commandArgs, cmdTarget);
-
-        return parser.parse!completionMode(command, arg);
-    };
-}
-
-private auto ParsingSubCommandArgument(Config config, COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)(scope const CommandArguments!RECEIVER* parentArguments)
-{
-    return delegate(ref Parser parser, const ref Parser.Argument arg, ref RECEIVER receiver)
+    return delegate(ref RECEIVER receiver)
     {
         auto target = &__traits(getMember, receiver, symbol);
 
-        alias parse = (ref COMMAND_TYPE cmdTarget) =>
-            ParsingSubCommandParse!(config, COMMAND_TYPE, info, completionMode)(parentArguments)(parser, arg, cmdTarget);
+        static if(!is(COMMAND_TYPE == Default!TYPE, TYPE))
+            alias TYPE = COMMAND_TYPE;
+
+        auto commandArgs = commandArguments!(config, TYPE, info);
+
+        alias parse = (ref COMMAND_TYPE cmdTarget)
+        {
+            auto command = Parser.Command.create!config(commandArgs, cmdTarget);
+            return command;
+        };
 
 
         static if(typeof(*target).Types.length == 1)
-            return (*target).match!parse;
+            auto command = (*target).match!parse;
         else
         {
-            return (*target).match!(parse,
+            auto command = (*target).match!(parse,
+                (_)
+            {
+                assert(false, "This should never happen");
+                //return Result.Failure;
+                return Parser.Command.init;
+            }
+            );
+        }
+        return command;
+    };
+}
+
+private auto ParsingSubCommandArgument(Config config, COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol, bool completionMode)()
+{
+    return delegate(ref Parser parser, const Parser.Command[] cmdStack, const ref Parser.Argument arg, ref RECEIVER receiver)
+    {
+        auto target = &__traits(getMember, receiver, symbol);
+
+        static if(!is(COMMAND_TYPE == Default!TYPE, TYPE))
+            alias TYPE = COMMAND_TYPE;
+
+        auto commandArgs = commandArguments!(config, TYPE, info);
+
+        alias parse = (ref COMMAND_TYPE cmdTarget)
+        {
+            auto command = Parser.Command.create!config(commandArgs, cmdTarget);
+            return command;
+            //return parser.parse!completionMode(command, arg);
+        };
+
+
+        static if(typeof(*target).Types.length == 1)
+            auto command = (*target).match!parse;
+        else
+        {
+            auto command = (*target).match!(parse,
                 (_)
                 {
                     assert(false, "This should never happen");
-                    return Result.Failure;
+                    //return Result.Failure;
+                    return Parser.Command.init;
                 }
             );
         }
+
+        return parser.parse!completionMode(cmdStack, command, arg);
+        //return parser.parse!completionMode(command, arg);
+        //return command;
     };
 }
 
