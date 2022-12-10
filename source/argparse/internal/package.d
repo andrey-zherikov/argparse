@@ -154,11 +154,7 @@ package struct CommandArguments(RECEIVER)
 
     private void addArgumentImpl(alias symbol, alias uda, groups...)()
     {
-        static if(symbol is null)
-            enum restrictions = [];
-        else
-            enum restrictions = getRestrictions!(RECEIVER, symbol);
-
+        enum restrictions = getRestrictions!(RECEIVER, symbol);
 
         static assert(groups.length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
         static if(groups.length > 0)
@@ -247,7 +243,13 @@ package auto commandArguments(Config config, COMMAND, CommandInfo info = getComm
     addArguments!config(cmd);
 
     if(config.addHelp)
-        cmd.addArgumentImpl!(null, getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA()));
+    {
+        enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
+
+        cmd.arguments.addArgument!(uda.info);
+        cmd.parseArguments ~= uda.parsingFunc.getParseFunc!COMMAND;
+        cmd.completeArguments ~= ParsingArgument!(null, uda, COMMAND, true);
+    }
 
     return cmd;
 }
