@@ -1,5 +1,7 @@
 module argparse.internal.parser;
 
+import std.typecons: Nullable, nullable;
+
 import argparse.api: Config, Result;
 import argparse.internal: commandArguments, setTrailingArgs;
 import argparse.internal.arguments: Arguments;
@@ -71,8 +73,6 @@ package struct Parser
 
     struct Command
     {
-        Result delegate(ref Parser parser, const Command[] cmdStack, const ref Command command, const ref Argument) parse;
-        Result delegate(ref Parser parser, const Command[] cmdStack, const ref Command command, const ref Argument) complete;
         bool isDefault;
 
         Arguments.FindResult findNamedArgument(string name) const
@@ -125,16 +125,16 @@ package struct Parser
         CommandInfo[] subCommandInfos;
         Command delegate()[] subCommandCreate;
 
-        Command getSubCommand(const Command[] cmdStack, string name) const
+        auto getSubCommand(const Command[] cmdStack, string name) const
         {
             auto pIndex = name in subCommandByName;
             if(pIndex is null)
-                return Command.init;
+                return Nullable!Command.init;
 
             auto subCmd = subCommandCreate[*pIndex]();
             subCmd.isDefault = name == DEFAULT_COMMAND;
 
-            return subCmd;
+            return nullable(subCmd);
         }
 
 
@@ -145,14 +145,6 @@ package struct Parser
             import std.array: array;
 
             Command res;
-            res.parse = (ref Parser parser, const Command[] cmdStack, const ref Command command, const ref arg)
-                {
-                    return parser.parse!false(cmdStack, command, arg);
-                };
-            res.complete = (ref Parser parser, const Command[] cmdStack, const ref Command command, const ref arg)
-                {
-                    return parser.parse!true(cmdStack, command, arg);
-                };
 
             res.parseFunctions = cmd.parseArguments.map!(_ =>
                 (const Command[] cmdStack, Config* config, string argName, string[] argValue)
@@ -225,13 +217,13 @@ package struct Parser
         import std.range: front, popFront;
 
         auto subcmd = cmd.getSubCommand(cmdStack, config.convertCase(args.front));
-        if(subcmd.parse is null)
+        if(subcmd.isNull)
             return Result.UnknownArgument;
 
         if(cmdStack1.length < cmdStack.length)
             cmdStack.length = cmdStack1.length;
 
-        addCommand(subcmd, false);
+        addCommand(subcmd.get, false);
 
         args.popFront();
 
@@ -377,13 +369,14 @@ package struct Parser
         {
             static if(completionMode)
             {
-                auto res = cmdParser.complete(this, cmdStack1, cmdParser, arg);
+                auto res = parse!true(cmdStack1, cmdParser, arg);
+
                 if(res)
                     result.suggestions ~= res.suggestions;
             }
             else
             {
-                auto res = cmdParser.parse(this, cmdStack1, cmdParser, arg);
+                auto res = parse!false(cmdStack1, cmdParser, arg);
 
                 if(res.status != Result.Status.unknownArgument)
                     return res;
@@ -427,10 +420,10 @@ package struct Parser
 
         if(addDefaultCommand)
         {
-            cmd = cmd.getSubCommand(cmdStack, DEFAULT_COMMAND);
-            if (cmd.parse !is null)
+            auto subcmd = cmd.getSubCommand(cmdStack, DEFAULT_COMMAND);
+            if(!subcmd.isNull)
             {
-                cmdStack ~= cmd;
+                cmdStack ~= subcmd.get;
 
                 //import std.stdio : writeln, stderr;stderr.writeln("-- addCommand 1 ", cmd.getSubCommand);
                 //
