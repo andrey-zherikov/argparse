@@ -251,13 +251,6 @@ unittest
 
 struct SubCommands {}
 
-// Default subcommand
-struct Default(COMMAND)
-{
-    COMMAND command;
-    alias command this;
-}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 public auto ref Usage(T : CommandInfo)(auto ref T cmd, string text)
