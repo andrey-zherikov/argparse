@@ -6,7 +6,7 @@ import argparse.api: Config, Result;
 import argparse.internal: commandArguments;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.subcommands;
-import argparse.internal.command: Command;
+import argparse.internal.command: Command, createCommand;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -373,7 +373,7 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
 
     auto command = commandArguments!(origConfig, COMMAND);
 
-    auto cmd = Parser.Command.create!(origConfig, COMMAND)(receiver);
+    auto cmd = createCommand!(origConfig, COMMAND)(receiver);
     parser.addCommand(cmd, true);
 
     auto res = parser.parseAll!completionMode(command);

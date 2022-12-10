@@ -1,10 +1,11 @@
 module argparse;
 
 
-import argparse.internal: ValueParseFunctions, Validators, commandArguments, Parsers, NoValueActionFunc;
+import argparse.internal: ValueParseFunctions, Validators, Parsers, NoValueActionFunc;
 import argparse.internal.parser: callParser;
 import argparse.internal.style: Style;
 import argparse.internal.arguments: ArgumentInfo, Group, RestrictionGroup;
+import argparse.internal.command: createCommand;
 import argparse.internal.subcommands: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.hooks: Hooks;
@@ -348,7 +349,8 @@ unittest
         return config;
     }();
 
-    auto a = commandArguments!(config, T);
+    T receiver;
+    auto a = createCommand!config(receiver);
     assert(a.arguments.requiredGroup.arguments == [2,4]);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -367,7 +369,8 @@ unittest
         return config;
     }();
 
-    auto a = commandArguments!(config, T);
+    T receiver;
+    auto a = createCommand!config(receiver);
     assert(a.arguments.requiredGroup.arguments == []);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -381,7 +384,7 @@ unittest
         @(NamedArgument("2"))
         int a;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T1); }));
+    static assert(!__traits(compiles, { T1 t; enum c = createCommand!(Config.init)(t); }));
 
     struct T2
     {
@@ -390,21 +393,21 @@ unittest
         @(NamedArgument("1"))
         int b;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T2); }));
+    static assert(!__traits(compiles, { T2 t; enum c = createCommand!(Config.init)(t); }));
 
     struct T3
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(0)) int b;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T3); }));
+    static assert(!__traits(compiles, { T3 t; enum c = createCommand!(Config.init)(t); }));
 
     struct T4
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(2)) int b;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T4); }));
+    static assert(!__traits(compiles, { T4 t; enum c = createCommand!(Config.init)(t); }));
 }
 
 unittest
@@ -448,7 +451,8 @@ unittest
         int no_c;
     }
 
-    auto p = commandArguments!(Config.init, params);
+    params receiver;
+    auto a = createCommand!(Config.init)(receiver);
 }
 
 unittest

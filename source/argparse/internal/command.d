@@ -88,44 +88,49 @@ package struct Command
     {
         return arguments.checkRestrictions(cliArgs, config);
     }
+}
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    static Command create(Config config, COMMAND_TYPE, CommandInfo info = getCommandInfo!(config, COMMAND_TYPE))(ref COMMAND_TYPE receiver)
+package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo info = getCommandInfo!(config, COMMAND_TYPE))(ref COMMAND_TYPE receiver)
+{
+    import std.algorithm: map;
+    import std.array: array;
+
+    auto cmd = commandArguments!(config, COMMAND_TYPE, CommandInfo.init);
+
+    Command res;
+
+    res.parseFunctions = cmd.parseArguments.map!(_ =>
+        (const Command[] cmdStack, Config* config, string argName, string[] argValue)
+        => _(cmdStack, config, receiver, argName, argValue)
+        ).array;
+    res.completeFunctions = cmd.completeArguments.map!(_ =>
+        (const Command[] cmdStack, Config* config, string argName, string[] argValue)
+            => _(cmdStack, config, receiver, argName, argValue)
+        ).array;
+
+    res.parseFinalizers = cmd.parseFinalizers.map!(_ =>
+        (const Config* config) => _(receiver, config),
+        ).array;
+
+    res.setTrailingArgs = (ref string[] args)
     {
-        auto cmd = commandArguments!(config, COMMAND_TYPE, info);
+        .setTrailingArgs(receiver, args);
+    };
 
-        import std.algorithm: map;
-        import std.array: array;
+    res.info = info;
+    res.arguments = cmd.arguments;
 
-        Command res;
+    enum subCommands = createSubCommands!(config, COMMAND_TYPE);
+    enum subCommands1 = createSubCommands1!(config, COMMAND_TYPE);
 
-        res.parseFunctions = cmd.parseArguments.map!(_ =>
-            (const Command[] cmdStack, Config* config, string argName, string[] argValue)
-        => _(cmdStack, config, receiver, argName, argValue)
-        ).array;
-        res.completeFunctions = cmd.completeArguments.map!(_ =>
-            (const Command[] cmdStack, Config* config, string argName, string[] argValue)
-        => _(cmdStack, config, receiver, argName, argValue)
-        ).array;
-        res.subCommandCreate = cmd.subCommands.createFunc.map!(_ =>
-            () => _(receiver),
-        ).array;
-        res.parseFinalizers = cmd.parseFinalizers.map!(_ =>
-            (const Config* config) => _(receiver, config),
-        ).array;
+    res.subCommandInfos = subCommands.info;
+    res.subCommandByName = subCommands.byName;
+    res.subCommandCreate = subCommands.createFunc.map!(_ => () => _(receiver)).array;
 
-        res.setTrailingArgs = (ref string[] args)
-        {
-            .setTrailingArgs(receiver, args);
-        };
 
-        res.info = cmd.info;
-        res.arguments = cmd.arguments;
-        res.subCommandInfos = cmd.subCommands.info;
-        res.subCommandByName = cmd.subCommands.byName;
-
-        return res;
-    }
+    return res;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

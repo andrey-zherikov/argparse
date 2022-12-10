@@ -4,7 +4,7 @@ import argparse: Description, Optional;
 import argparse.api: Config, Result;
 import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
-import argparse.internal.command: Command;
+import argparse.internal.command: Command, createCommand;
 import argparse.internal.subcommands: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.style;
@@ -690,7 +690,7 @@ unittest
         };
         auto config = cfg();
         T receiver;
-        auto cmd = Command.create!(cfg())(receiver);
+        auto cmd = createCommand!(cfg())(receiver);
         printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
         return a[];
     }
@@ -754,7 +754,7 @@ unittest
     };
     auto config = cfg();
     T receiver;
-    auto cmd = Command.create!(cfg())(receiver);
+    auto cmd = createCommand!(cfg())(receiver);
     printHelp(_ => a.put(_), cmd,  [&cmd.arguments], &config, "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
@@ -810,7 +810,7 @@ unittest
     };
     auto config = cfg();
     T receiver;
-    auto cmd = Command.create!(cfg())(receiver);
+    auto cmd = createCommand!(cfg())(receiver);
     printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
