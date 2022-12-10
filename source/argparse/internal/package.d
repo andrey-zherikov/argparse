@@ -8,7 +8,7 @@ import argparse.internal.lazystring;
 import argparse.internal.arguments;
 import argparse.internal.subcommands;
 import argparse.internal.argumentuda;
-import argparse.internal.hooks: Hook;
+import argparse.internal.hooks: parsingDoneHandlers;
 import argparse.internal.utils: formatAllowedValues;
 import argparse.internal.enumhelpers: getEnumValues, getEnumValue;
 
@@ -137,17 +137,9 @@ package struct CommandArguments(RECEIVER)
 
     private void addArgument(alias symbol, alias uda)()
     {
-        alias member = __traits(getMember, RECEIVER, symbol);
+        parseFinalizers ~= parsingDoneHandlers!(RECEIVER, symbol);
 
-        static if(__traits(compiles, getUDAs!(typeof(member), Hook.ParsingDone)) && getUDAs!(typeof(member), Hook.ParsingDone).length > 0)
-        {
-            static foreach(hook; getUDAs!(typeof(member), Hook.ParsingDone))
-                parseFinalizers ~= (ref RECEIVER receiver, const Config* config)
-                    {
-                        auto target = &__traits(getMember, receiver, symbol);
-                        hook(*target, config);
-                    };
-        }
+        alias member = __traits(getMember, RECEIVER, symbol);
 
         addArgumentImpl!(symbol, uda, getUDAs!(member, Group));
     }
