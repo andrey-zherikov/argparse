@@ -135,8 +135,6 @@ package struct CommandArguments(RECEIVER)
     SubCommands!RECEIVER subCommands;
 
 
-    mixin ForwardMemberFunction!"arguments.findPositionalArgument";
-    mixin ForwardMemberFunction!"arguments.findNamedArgument";
     mixin ForwardMemberFunction!"arguments.checkRestrictions";
 
 
@@ -184,20 +182,6 @@ package struct CommandArguments(RECEIVER)
             parseArguments ~= ParsingArgument!(symbol, uda, RECEIVER, false);
 
         completeArguments ~= ParsingArgument!(symbol, uda, RECEIVER, true);
-    }
-
-    auto getParseFunction(bool completionMode)(size_t index) const
-    {
-        static if(completionMode)
-            return completeArguments[index];
-        else
-            return parseArguments[index];
-    }
-
-    package void onParsingDone(ref RECEIVER receiver, const Config* config) const
-    {
-        foreach(dg; parseFinalizers)
-            dg(receiver, config);
     }
 }
 

@@ -451,13 +451,6 @@ unittest
     }
 
     auto p = commandArguments!(Config.init, params);
-    assert(p.findNamedArgument("a").arg is null);
-    assert(p.findNamedArgument("b").arg !is null);
-    assert(p.findNamedArgument("boo").arg !is null);
-    assert(p.findPositionalArgument(0).arg !is null);
-    assert(p.findPositionalArgument(1).arg is null);
-    assert(p.getParseFunction!false(p.findNamedArgument("b").index) !is null);
-    assert(p.getParseFunction!true(p.findNamedArgument("b").index) !is null);
 }
 
 unittest
