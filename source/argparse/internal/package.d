@@ -201,6 +201,8 @@ package struct CommandArguments(RECEIVER)
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 package void setTrailingArgs(RECEIVER)(ref RECEIVER receiver, ref string[] rawArgs)
 {
     static if(!is(RECEIVER == Default!TYPE, TYPE))
@@ -220,6 +222,41 @@ package void setTrailingArgs(RECEIVER)(ref RECEIVER receiver, ref string[] rawAr
         rawArgs = [];
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package alias ParseFunction(RECEIVER) = Result delegate(const Parser.Command[] cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues);
+
+package alias ParsingArgument(alias symbol, alias uda, RECEIVER, bool completionMode) =
+    delegate(const Parser.Command[] cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues)
+    {
+        static if(completionMode)
+        {
+            return Result.Success;
+        }
+        else
+        {
+            try
+            {
+                auto res = uda.info.checkValuesCount(argName, rawValues.length);
+                if(!res)
+                    return res;
+
+                auto param = RawParam(config, argName, rawValues);
+
+                auto target = &__traits(getMember, receiver, symbol);
+
+                static if(is(typeof(target) == function) || is(typeof(target) == delegate))
+                    return uda.parsingFunc.parse(target, param);
+                else
+                    return uda.parsingFunc.parse(*target, param);
+            }
+            catch(Exception e)
+            {
+                return Result.Error(argName, ": ", e.msg);
+            }
+        }
+    };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
