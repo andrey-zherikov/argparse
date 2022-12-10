@@ -118,8 +118,6 @@ package bool checkPositionalIndexes(T)()
 
 package struct CommandArguments(RECEIVER)
 {
-    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1, "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
-
     private enum _validate = checkArgumentNames!RECEIVER && checkPositionalIndexes!RECEIVER;
 
     CommandInfo info;
@@ -196,32 +194,30 @@ package struct CommandArguments(RECEIVER)
             return parseArguments[index];
     }
 
-    auto findSubCommand(string name) const
-    {
-        return subCommands.find(name);
-    }
-
-    package void setTrailingArgs(ref RECEIVER receiver, ref string[] rawArgs) const
-    {
-        static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
-        {
-            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArguments)[0]);
-            auto target = &__traits(getMember, receiver, symbol);
-
-            static if(__traits(compiles, { *target = rawArgs; }))
-                *target = rawArgs;
-            else
-                static assert(false, "Type '"~typeof(*target).stringof~"' of `"~
-                                     RECEIVER.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
-
-            rawArgs = [];
-        }
-    }
-
     package void onParsingDone(ref RECEIVER receiver, const Config* config) const
     {
         foreach(dg; parseFinalizers)
             dg(receiver, config);
+    }
+}
+
+package void setTrailingArgs(RECEIVER)(ref RECEIVER receiver, ref string[] rawArgs)
+{
+    static if(!is(RECEIVER == Default!TYPE, TYPE))
+        alias TYPE = RECEIVER;
+
+    static assert(getSymbolsByUDA!(TYPE, TrailingArguments).length <= 1, "Type "~TYPE.stringof~" must have at most one 'TrailingArguments' UDA");
+    static if(getSymbolsByUDA!(TYPE, TrailingArguments).length == 1)
+    {
+        enum symbol = __traits(identifier, getSymbolsByUDA!(TYPE, TrailingArguments)[0]);
+        auto target = &__traits(getMember, receiver, symbol);
+
+        static if(__traits(compiles, { *target = rawArgs; }))
+            *target = rawArgs;
+        else
+            static assert(false, "Type '"~typeof(*target).stringof~"' of `"~TYPE.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
+
+        rawArgs = [];
     }
 }
 
@@ -276,7 +272,7 @@ private void addSubCommands(Config config, COMMAND)(ref CommandArguments!COMMAND
     }}
 }
 
-private void initCommandArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
+package void initCommandArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
 {
     import std.algorithm: sort, map, joiner;
     import std.array: array;

@@ -2,7 +2,7 @@ module argparse.internal.help;
 
 import argparse: Description, Optional;
 import argparse.api: Config, Result;
-import argparse.internal: CommandArguments, commandArguments;
+import argparse.internal: commandArguments;
 import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
 import argparse.internal.subcommands: CommandInfo;
@@ -155,7 +155,7 @@ package auto HelpArgumentUDA()
     {
         static auto getParseFunc(T)()
         {
-            return delegate(const Parser.Command[] cmdStack, Config* config, const ref CommandArguments!T cmd, ref T receiver, string argName, string[] rawValues)
+            return delegate(const Parser.Command[] cmdStack, Config* config, ref T receiver, string argName, string[] rawValues)
             {
                 import std.stdio: stdout;
 
@@ -167,7 +167,7 @@ package auto HelpArgumentUDA()
                 auto args = cmdStack.map!((ref _) => &_.arguments).array;
 
                 auto output = stdout.lockingTextWriter();
-                printHelp(_ => output.put(_), cmd, args, config, progName);
+                printHelp(_ => output.put(_), cmdStack[$-1], args, config, progName);
 
                 return Result(0);
             };
@@ -502,7 +502,7 @@ private void createUsage(void delegate(string) sink, const ref Style style, stri
         sink(style.subcommandName(" <command> [<args>]"));
 }
 
-private string getUsage(T)(const ref Style style, in CommandArguments!T cmd, string progName)
+private string getUsage(const ref Style style, const ref Parser.Command cmd, string progName)
 {
     import std.array: appender;
 
@@ -514,7 +514,7 @@ private string getUsage(T)(const ref Style style, in CommandArguments!T cmd, str
     if(usageText.length > 0)
         substituteProg(_ => usage.put(_), usageText, progName);
     else
-        createUsage(_ => usage.put(_), style, progName, &cmd.arguments, cmd.subCommands.length > 0);
+        createUsage(_ => usage.put(_), style, progName, &cmd.arguments, cmd.subCommandInfos.length > 0);
 
     usage.put("\n");
 
@@ -523,7 +523,7 @@ private string getUsage(T)(const ref Style style, in CommandArguments!T cmd, str
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto getSections(const ref Style style, const(Arguments*)[] arguments)
+private auto getSections(ARGUMENTS)(const ref Style style, ARGUMENTS arguments)
 {
     import std.algorithm: filter, map;
     import std.array: appender, array;
@@ -620,15 +620,15 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
     return section;
 }
 
-private auto getSection(T)(const ref Style style, in CommandArguments!T cmd, const(Arguments*)[] arguments, string progName)
+private auto getSection(const ref Style style, const ref Parser.Command cmd, Section[] argSections, string progName)
 {
     Section[] sections;
 
     // sub commands
-    if(cmd.subCommands.length > 0)
-        sections ~= getSection(style, cmd.subCommands.info);
+    if(cmd.subCommandInfos.length > 0)
+        sections ~= getSection(style, cmd.subCommandInfos);
 
-    sections ~= getSections(style, arguments);
+    sections ~= argSections;
 
     auto section = Section(getUsage(style, cmd, progName), cmd.info.description, cmd.info.epilog);
     section.entries = sections;
@@ -636,7 +636,7 @@ private auto getSection(T)(const ref Style style, in CommandArguments!T cmd, con
     return section;
 }
 
-private void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, const(Arguments*)[] arguments, Config* config, string progName)
+private void printHelp(ARGUMENTS)(void delegate(string) sink, const ref Parser.Command cmd, ARGUMENTS arguments, Config* config, string progName)
 {
     import std.algorithm: each;
 
@@ -645,7 +645,8 @@ private void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 
     auto helpStyle = enableStyling ? config.helpStyle : Style.None;
 
-    auto section = getSection(helpStyle, cmd, arguments, helpStyle.programName(progName));
+    auto argSections = getSections(helpStyle, arguments);
+    auto section = getSection(helpStyle, cmd, argSections, helpStyle.programName(progName));
 
     immutable helpPosition = section.maxItemNameLength(20) + 4;
     immutable indent = spaces(helpPosition + 2);
@@ -683,10 +684,16 @@ unittest
         import std.array: appender;
 
         auto a = appender!string;
-        Config config;
-        config.stylingMode = Config.StylingMode.off;
+        alias cfg = {
+            Config config;
+            config.stylingMode = Config.StylingMode.off;
+            return config;
+        };
+        auto config = cfg();
+        T receiver;
         auto cmd = commandArguments!(Config.init, T);
-        printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+        auto cmd1 = Parser.Command.create!(cfg())(cmd, receiver);
+        printHelp(_ => a.put(_), cmd1, [&cmd.arguments], &config, "MYPROG");
         return a[];
     }
 
@@ -742,10 +749,16 @@ unittest
     scope(exit) restoreStyleEnv(env);
 
     auto a = appender!string;
-    Config config;
-    config.stylingMode = Config.StylingMode.off;
+    alias cfg = {
+        Config config;
+        config.stylingMode = Config.StylingMode.off;
+        return config;
+    };
+    auto config = cfg();
+    T receiver;
     auto cmd = commandArguments!(Config.init, T);
-    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+    auto cmd1 = Parser.Command.create!(cfg())(cmd, receiver);
+    printHelp(_ => a.put(_), cmd1,  [&cmd.arguments], &config, "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
         "group1:\n"~
@@ -793,10 +806,16 @@ unittest
     scope(exit) restoreStyleEnv(env);
 
     auto a = appender!string;
-    Config config;
-    config.stylingMode = Config.StylingMode.off;
+    alias cfg = {
+        Config config;
+        config.stylingMode = Config.StylingMode.off;
+        return config;
+    };
+    auto config = cfg();
+    T receiver;
     auto cmd = commandArguments!(Config.init, T);
-    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+    auto cmd1 = Parser.Command.create!(cfg())(cmd, receiver);
+    printHelp(_ => a.put(_), cmd1, [&cmd.arguments], &config, "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~

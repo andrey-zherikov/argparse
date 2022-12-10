@@ -1,6 +1,5 @@
 module argparse.internal.arguments;
 
-import argparse.internal: CommandArguments;
 import argparse.internal.utils: partiallyApply;
 import argparse.internal.lazystring;
 import argparse.internal.parser: Parser;
@@ -355,10 +354,10 @@ package struct Arguments
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // TODO: move these to CommandArguments
-package alias ParseFunction(RECEIVER) = Result delegate(const Parser.Command[] cmdStack, Config* config, const ref CommandArguments!RECEIVER cmd, ref RECEIVER receiver, string argName, string[] rawValues);
+package alias ParseFunction(RECEIVER) = Result delegate(const Parser.Command[] cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues);
 
 package alias ParsingArgument(alias symbol, alias uda, RECEIVER, bool completionMode) =
-    delegate(const Parser.Command[] cmdStack, Config* config, const ref CommandArguments!RECEIVER cmd, ref RECEIVER receiver, string argName, string[] rawValues)
+    delegate(const Parser.Command[] cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues)
     {
         static if(completionMode)
         {

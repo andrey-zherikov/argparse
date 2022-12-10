@@ -1,7 +1,7 @@
 module argparse.internal.parser;
 
 import argparse.api: Config, Result;
-import argparse.internal: commandArguments;
+import argparse.internal: commandArguments, setTrailingArgs;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.subcommands;
 
@@ -75,24 +75,75 @@ package struct Parser
         Result delegate(ref Parser parser, const Command[] cmdStack, const ref Command command, const ref Argument) complete;
         bool isDefault;
 
-        Arguments.FindResult delegate(string name) findNamedArgument;
-        Arguments.FindResult delegate(size_t position) findPositionalArgument;
+        Arguments.FindResult findNamedArgument(string name) const
+        {
+            return arguments.findNamedArgument(name);
+        }
+        Arguments.FindResult findPositionalArgument(size_t position) const
+        {
+            return arguments.findPositionalArgument(position);
+        }
 
-        Result delegate(const Command[] cmdStack, Config* config, size_t argIndex, string argName, string[] argValue) parseArgument;
-        Result delegate(const Command[] cmdStack, Config* config, size_t argIndex, string argName, string[] argValue) completeArgument;
+        alias ParseFunction = Result delegate(const Command[] cmdStack, Config* config, string argName, string[] argValue);
+        ParseFunction[] parseFunctions;
+        ParseFunction[] completeFunctions;
+
+        Result parseArgument(const Command[] cmdStack, Config* config, size_t argIndex, string argName, string[] argValue) const
+        {
+            return parseFunctions[argIndex](cmdStack, config, argName, argValue);
+        }
+        Result completeArgument(const Command[] cmdStack, Config* config, size_t argIndex, string argName, string[] argValue) const
+        {
+            return completeFunctions[argIndex](cmdStack, config, argName, argValue);
+        }
 
         void delegate(ref string[] args) setTrailingArgs;
 
-        Command delegate(const Command[] cmdStack, const ref Command command, string name) getSubCommand;
-
-        string[] delegate(string prefix) suggestions;
 
 
-        string displayName;
+        const(string)[] suggestions(string prefix) const
+        {
+            import std.range: chain;
+            import std.algorithm: filter, map;
+            import std.string: startsWith;
+            import std.array: array, join;
+
+            // suggestions are names of all arguments and subcommands
+            auto suggestions_ = chain(arguments.arguments.map!(_ => _.displayNames).join, subCommandByName.keys);
+
+            // empty prefix means that we need to provide all suggestions, otherwise they are filtered
+            return prefix == "" ? suggestions_.array : suggestions_.filter!(_ => _.startsWith(prefix)).array;
+        }
+
+
+        string displayName() const { return info.displayNames[0]; }
         Arguments arguments;
 
-        static Command create(Config config, COMMAND, RECEIVER)(ref COMMAND cmd, ref RECEIVER receiver)
+        CommandInfo info;
+
+        size_t[string] subCommandByName;
+        CommandInfo[] subCommandInfos;
+        Command delegate()[] subCommandCreate;
+
+        Command getSubCommand(const Command[] cmdStack, string name) const
         {
+            auto pIndex = name in subCommandByName;
+            if(pIndex is null)
+                return Command.init;
+
+            auto subCmd = subCommandCreate[*pIndex]();
+            subCmd.isDefault = name == DEFAULT_COMMAND;
+
+            return subCmd;
+        }
+
+
+
+        static Command create(Config config, COMMAND, RECEIVER)(COMMAND cmd, ref RECEIVER receiver)
+        {
+            import std.algorithm: map;
+            import std.array: array;
+
             Command res;
             res.parse = (ref Parser parser, const Command[] cmdStack, const ref Command command, const ref arg)
                 {
@@ -102,70 +153,28 @@ package struct Parser
                 {
                     return parser.parse!true(cmdStack, command, arg);
                 };
-            res.findNamedArgument = (string name)
-                {
-                    return cmd.arguments.findNamedArgument(name);
-                };
-            res.findPositionalArgument = (size_t position)
-                {
-                    return cmd.arguments.findPositionalArgument(position);
-                };
-            res.parseArgument = (const Command[] cmdStack, Config* config, size_t argIndex, string argName, string[] argValue)
-                {
-                    return cmd.getParseFunction!false(argIndex)(cmdStack, config, cmd, receiver, argName, argValue);
-                };
-            res.completeArgument = (const Command[] cmdStack, Config* config, size_t argIndex, string argName, string[] argValue)
-                {
-                    return cmd.getParseFunction!true(argIndex)(cmdStack, config, cmd, receiver, argName, argValue);
-                };
+
+            res.parseFunctions = cmd.parseArguments.map!(_ =>
+                (const Command[] cmdStack, Config* config, string argName, string[] argValue)
+                    => _(cmdStack, config, receiver, argName, argValue)
+                ).array;
+            res.completeFunctions = cmd.completeArguments.map!(_ =>
+                (const Command[] cmdStack, Config* config, string argName, string[] argValue)
+                    => _(cmdStack, config, receiver, argName, argValue)
+                ).array;
+            res.subCommandCreate = cmd.subCommands.createFunc.map!(_ =>
+                    () => _(receiver),
+                ).array;
+
             res.setTrailingArgs = (ref string[] args)
                 {
-                    cmd.setTrailingArgs(receiver, args);
+                    .setTrailingArgs(receiver, args);
                 };
-            res.getSubCommand = (const Command[] cmdStack, const ref Command parentCommand, string name)
-                {
-                    auto found = cmd.findSubCommand(name);
-                    if(found.parse is null)
-                        return Command.init;
 
-                    found.initialize(receiver);
-
-                    auto ccc = found.createCommand(receiver);
-
-                    Command res = ccc;
-                    res.parse = (ref Parser parser, const Command[] cmdStack, const ref Command command, const ref arg)
-                        {
-                            //return ccc.parse(parser, ccc, arg);
-                            //return parser.parse!false(ccc, arg);
-                            //return parser.parse!false(command, arg);
-                            auto c = found.parse(parser, cmdStack, arg, receiver);
-                            return c;//parser.parse!false(c, arg);
-                        };
-                    res.complete = (ref Parser parser, const Command[] cmdStack, const ref Command command, const ref arg)
-                        {
-                            auto c = found.complete(parser, cmdStack, arg, receiver);
-                            return c;//parser.parse!true(c, arg);
-                        };
-                    res.isDefault = name == DEFAULT_COMMAND;
-
-                    return res;
-                };
+            res.info = cmd.info;
             res.arguments = cmd.arguments;
-            res.displayName = cmd.info.displayNames[0];
-
-            res.suggestions = (string prefix)
-                {
-                    import std.range: chain;
-                    import std.algorithm: filter, map;
-                    import std.string: startsWith;
-                    import std.array: array, join;
-
-                    // suggestions are names of all arguments and subcommands
-                    auto suggestions = chain(cmd.arguments.arguments.map!(_ => _.displayNames).join, cmd.subCommands.byName.keys);
-
-                    // empty prefix means that we need to provide all suggestions, otherwise they are filtered
-                    return prefix == "" ? suggestions.array : suggestions.filter!(_ => _.startsWith(prefix)).array;
-                };
+            res.subCommandInfos = cmd.subCommands.info;
+            res.subCommandByName = cmd.subCommands.byName;
 
             return res;
         }
@@ -215,7 +224,7 @@ package struct Parser
     {
         import std.range: front, popFront;
 
-        auto subcmd = cmd.getSubCommand(cmdStack, cmd, config.convertCase(args.front));
+        auto subcmd = cmd.getSubCommand(cmdStack, config.convertCase(args.front));
         if(subcmd.parse is null)
             return Result.UnknownArgument;
 
@@ -418,7 +427,7 @@ package struct Parser
 
         if(addDefaultCommand)
         {
-            cmd = cmd.getSubCommand(cmdStack, cmd, DEFAULT_COMMAND);
+            cmd = cmd.getSubCommand(cmdStack, DEFAULT_COMMAND);
             if (cmd.parse !is null)
             {
                 cmdStack ~= cmd;
