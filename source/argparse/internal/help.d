@@ -2,7 +2,6 @@ module argparse.internal.help;
 
 import argparse: Description, Optional;
 import argparse.api: Config, Result;
-import argparse.internal: commandArguments;
 import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
 import argparse.internal.subcommands: CommandInfo;
@@ -691,9 +690,8 @@ unittest
         };
         auto config = cfg();
         T receiver;
-        auto cmd = commandArguments!(Config.init, T);
-        auto cmd1 = Parser.Command.create!(cfg())(cmd, receiver);
-        printHelp(_ => a.put(_), cmd1, [&cmd.arguments], &config, "MYPROG");
+        auto cmd = Parser.Command.create!(cfg())(receiver);
+        printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
         return a[];
     }
 
@@ -756,9 +754,8 @@ unittest
     };
     auto config = cfg();
     T receiver;
-    auto cmd = commandArguments!(Config.init, T);
-    auto cmd1 = Parser.Command.create!(cfg())(cmd, receiver);
-    printHelp(_ => a.put(_), cmd1,  [&cmd.arguments], &config, "MYPROG");
+    auto cmd = Parser.Command.create!(cfg())(receiver);
+    printHelp(_ => a.put(_), cmd,  [&cmd.arguments], &config, "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
         "group1:\n"~
@@ -813,9 +810,8 @@ unittest
     };
     auto config = cfg();
     T receiver;
-    auto cmd = commandArguments!(Config.init, T);
-    auto cmd1 = Parser.Command.create!(cfg())(cmd, receiver);
-    printHelp(_ => a.put(_), cmd1, [&cmd.arguments], &config, "MYPROG");
+    auto cmd = Parser.Command.create!(cfg())(receiver);
+    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~

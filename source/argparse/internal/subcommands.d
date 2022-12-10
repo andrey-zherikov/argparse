@@ -1,7 +1,6 @@
 module argparse.internal.subcommands;
 
 import argparse.api: Config, Result, RemoveDefault, isDefault;
-import argparse.internal: commandArguments;
 import argparse.internal.parser: Parser;
 import argparse.internal.lazystring;
 import argparse.internal.arguments;
@@ -110,24 +109,18 @@ package auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo in
     {
         auto target = &__traits(getMember, receiver, symbol);
 
-        auto commandArgs = commandArguments!(config, RemoveDefault!COMMAND_TYPE, info);
-
-        alias parse = (ref COMMAND_TYPE cmdTarget)
-        {
-            auto command = Parser.Command.create!config(commandArgs, cmdTarget);
-            return command;
-        };
-
+        alias create = (ref COMMAND_TYPE actualTarget)
+            => Parser.Command.create!(config, RemoveDefault!COMMAND_TYPE, info)(actualTarget);
 
         static if(typeof(*target).Types.length == 1)
-            return (*target).match!parse;
+            return (*target).match!create;
         else
         {
             // Initialize if needed
             if((*target).match!((ref COMMAND_TYPE t) => false, _ => true))
                 *target = COMMAND_TYPE.init;
 
-            return (*target).match!(parse,
+            return (*target).match!(create,
                 (_)
                 {
                     assert(false, "This should never happen");

@@ -139,8 +139,10 @@ package struct Parser
 
 
 
-        static Command create(Config config, COMMAND, RECEIVER)(COMMAND cmd, ref RECEIVER receiver)
+        static Command create(Config config, COMMAND_TYPE, CommandInfo info = getCommandInfo!(config, COMMAND_TYPE))(ref COMMAND_TYPE receiver)
         {
+            auto cmd = commandArguments!(config, COMMAND_TYPE, info);
+
             import std.algorithm: map;
             import std.array: array;
 
@@ -471,7 +473,7 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
 
     auto command = commandArguments!(origConfig, COMMAND);
 
-    parser.addCommand(Parser.Command.create!origConfig(command, receiver), true);
+    parser.addCommand(Parser.Command.create!(origConfig, COMMAND)(receiver), true);
 
     auto res = parser.parseAll!completionMode(command);
 
