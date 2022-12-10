@@ -223,11 +223,11 @@ package alias ParsingArgument(alias symbol, alias uda, RECEIVER, bool completion
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA  ).length == 0 &&
+package enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA  ).length == 0 &&
                                             getSymbolsByUDA!(COMMAND, NamedArgument).length == 0 &&
                                             getSymbolsByUDA!(COMMAND, argparse.SubCommands  ).length == 0;
 
-private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
+package enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
 
 
 private void addArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)

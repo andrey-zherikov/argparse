@@ -6,7 +6,7 @@ import std.traits: getSymbolsByUDA;
 import argparse.api: Config, Result, RemoveDefault, TrailingArguments;
 import argparse.internal: commandArguments;
 import argparse.internal.arguments: Arguments;
-import argparse.internal.subcommands: DEFAULT_COMMAND, CommandInfo, getCommandInfo;
+import argparse.internal.subcommands: DEFAULT_COMMAND, CommandInfo, getCommandInfo, createSubCommands;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -62,7 +62,7 @@ package struct Command
 
     size_t[string] subCommandByName;
     CommandInfo[] subCommandInfos;
-    Command delegate()[] subCommandCreate;
+    Command delegate() pure nothrow [] subCommandCreate;
 
     auto getSubCommand(const Command[] cmdStack, string name) const
     {
@@ -123,7 +123,6 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
     res.arguments = cmd.arguments;
 
     enum subCommands = createSubCommands!(config, COMMAND_TYPE);
-    enum subCommands1 = createSubCommands1!(config, COMMAND_TYPE);
 
     res.subCommandInfos = subCommands.info;
     res.subCommandByName = subCommands.byName;

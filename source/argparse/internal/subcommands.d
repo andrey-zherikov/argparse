@@ -3,9 +3,10 @@ module argparse.internal.subcommands;
 import argparse.api: Config, Result, RemoveDefault, isDefault;
 import argparse.internal.command: Command, createCommand;
 import argparse.internal.lazystring;
-import argparse.internal.arguments;
+import argparse.internal: hasNoMembersWithUDA, isOpFunction;
 
-import std.sumtype: match;
+import std.sumtype: match, isSumType;
+import std.traits;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -57,7 +58,7 @@ package template getCommandInfo(Config config, COMMAND, string name = "")
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private alias CreateSubCommandFunction(RECEIVER) = Command delegate(ref RECEIVER receiver);
+private alias CreateSubCommandFunction(RECEIVER) = Command function(ref RECEIVER receiver) pure nothrow;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -105,7 +106,7 @@ package struct SubCommands(RECEIVER)
 
 package auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol)()
 {
-    return delegate(ref RECEIVER receiver)
+    return function (ref RECEIVER receiver)
     {
         auto target = &__traits(getMember, receiver, symbol);
 
@@ -129,4 +130,32 @@ package auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo in
             );
         }
     };
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package auto createSubCommands(Config config, COMMAND)()
+{
+    enum isSubCommand(alias mem) = hasUDA!(mem, argparse.SubCommands) ||
+                                   hasNoMembersWithUDA!COMMAND && !isOpFunction!mem && isSumType!(typeof(mem));
+
+    SubCommands!COMMAND subCommands;
+
+    static foreach(sym; __traits(allMembers, COMMAND))
+    {{
+        alias mem = __traits(getMember, COMMAND, sym);
+
+        // skip types
+        static if(!is(mem) && isSubCommand!mem)
+        {
+            static assert(isSumType!(typeof(mem)), COMMAND.stringof~"."~sym~" must have 'SumType' type");
+
+            static assert(getUDAs!(mem, argparse.SubCommands).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
+
+            static foreach(TYPE; typeof(mem).Types)
+                subCommands.add!(config, sym, TYPE, COMMAND);
+        }
+    }}
+
+    return subCommands;
 }
