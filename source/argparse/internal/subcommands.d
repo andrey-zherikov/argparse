@@ -1,7 +1,7 @@
 module argparse.internal.subcommands;
 
 import argparse.api: Config, Result, RemoveDefault, isDefault;
-import argparse.internal.parser: Parser;
+import argparse.internal.command: Command;
 import argparse.internal.lazystring;
 import argparse.internal.arguments;
 
@@ -57,7 +57,7 @@ package template getCommandInfo(Config config, COMMAND, string name = "")
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private alias CreateSubCommandFunction(RECEIVER) = Parser.Command delegate(ref RECEIVER receiver);
+private alias CreateSubCommandFunction(RECEIVER) = Command delegate(ref RECEIVER receiver);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -110,7 +110,7 @@ package auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo in
         auto target = &__traits(getMember, receiver, symbol);
 
         alias create = (ref COMMAND_TYPE actualTarget)
-            => Parser.Command.create!(config, RemoveDefault!COMMAND_TYPE, info)(actualTarget);
+            => Command.create!(config, RemoveDefault!COMMAND_TYPE, info)(actualTarget);
 
         static if(typeof(*target).Types.length == 1)
             return (*target).match!create;
@@ -124,7 +124,7 @@ package auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo in
                 (_)
                 {
                     assert(false, "This should never happen");
-                    return Parser.Command.init;
+                    return Command.init;
                 }
             );
         }

@@ -3,7 +3,7 @@ module argparse.internal;
 import argparse : NamedArgument, TrailingArguments;
 import argparse.api: Config, Result, Param, RawParam, RemoveDefault;
 import argparse.internal.help;
-import argparse.internal.parser;
+import argparse.internal.command: Command;
 import argparse.internal.lazystring;
 import argparse.internal.arguments;
 import argparse.internal.subcommands;
@@ -185,35 +185,13 @@ package struct CommandArguments(RECEIVER)
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package void setTrailingArgs(RECEIVER)(ref RECEIVER receiver, ref string[] rawArgs)
-{
-    alias ORIG_TYPE = RemoveDefault!RECEIVER;
-
-    alias symbols = getSymbolsByUDA!(ORIG_TYPE, TrailingArguments);
-
-    static assert(symbols.length <= 1, "Type "~ORIG_TYPE.stringof~" must have at most one 'TrailingArguments' UDA");
-    static if(symbols.length == 1)
-    {
-        enum symbol = __traits(identifier, symbols[0]);
-        auto target = &__traits(getMember, receiver, symbol);
-
-        static if(__traits(compiles, { *target = rawArgs; }))
-            *target = rawArgs;
-        else
-            static assert(false, "Type '"~typeof(*target).stringof~"' of `"~ORIG_TYPE.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
-
-        rawArgs = [];
-    }
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package alias ParseFunction(RECEIVER) = Result delegate(const Parser.Command[] cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues);
+package alias ParseFunction(RECEIVER) = Result delegate(const Command[] cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues);
 
 package alias ParsingArgument(alias symbol, alias uda, RECEIVER, bool completionMode) =
-    delegate(const Parser.Command[] cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues)
+    delegate(const Command[] cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues)
     {
         static if(completionMode)
         {

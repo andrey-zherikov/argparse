@@ -4,9 +4,9 @@ import argparse: Description, Optional;
 import argparse.api: Config, Result;
 import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
+import argparse.internal.command: Command;
 import argparse.internal.subcommands: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
-import argparse.internal.parser: Parser;
 import argparse.internal.style;
 
 import argparse.ansi;
@@ -154,7 +154,7 @@ package auto HelpArgumentUDA()
     {
         static auto getParseFunc(T)()
         {
-            return delegate(const Parser.Command[] cmdStack, Config* config, ref T receiver, string argName, string[] rawValues)
+            return delegate(const Command[] cmdStack, Config* config, ref T receiver, string argName, string[] rawValues)
             {
                 import std.stdio: stdout;
 
@@ -501,7 +501,7 @@ private void createUsage(void delegate(string) sink, const ref Style style, stri
         sink(style.subcommandName(" <command> [<args>]"));
 }
 
-private string getUsage(const ref Style style, const ref Parser.Command cmd, string progName)
+private string getUsage(const ref Style style, const ref Command cmd, string progName)
 {
     import std.array: appender;
 
@@ -619,7 +619,7 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
     return section;
 }
 
-private auto getSection(const ref Style style, const ref Parser.Command cmd, Section[] argSections, string progName)
+private auto getSection(const ref Style style, const ref Command cmd, Section[] argSections, string progName)
 {
     Section[] sections;
 
@@ -635,7 +635,7 @@ private auto getSection(const ref Style style, const ref Parser.Command cmd, Sec
     return section;
 }
 
-private void printHelp(ARGUMENTS)(void delegate(string) sink, const ref Parser.Command cmd, ARGUMENTS arguments, Config* config, string progName)
+private void printHelp(ARGUMENTS)(void delegate(string) sink, const ref Command cmd, ARGUMENTS arguments, Config* config, string progName)
 {
     import std.algorithm: each;
 
@@ -656,7 +656,7 @@ private void printHelp(ARGUMENTS)(void delegate(string) sink, const ref Parser.C
 unittest
 {
     static auto epilog() { return "custom epilog"; }
-    @(Command("MYPROG")
+    @(argparse.Command("MYPROG")
      .Description("custom description")
      .Epilog(epilog)
     )
@@ -690,7 +690,7 @@ unittest
         };
         auto config = cfg();
         T receiver;
-        auto cmd = Parser.Command.create!(cfg())(receiver);
+        auto cmd = Command.create!(cfg())(receiver);
         printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
         return a[];
     }
@@ -719,7 +719,7 @@ unittest
 
 unittest
 {
-    @Command("MYPROG")
+    @(argparse.Command("MYPROG"))
     struct T
     {
         @(ArgumentGroup("group1").Description("group1 description"))
@@ -754,7 +754,7 @@ unittest
     };
     auto config = cfg();
     T receiver;
-    auto cmd = Parser.Command.create!(cfg())(receiver);
+    auto cmd = Command.create!(cfg())(receiver);
     printHelp(_ => a.put(_), cmd,  [&cmd.arguments], &config, "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
@@ -777,15 +777,15 @@ unittest
 {
     import std.sumtype: SumType;
 
-    @Command("MYPROG")
+    @(argparse.Command("MYPROG"))
     struct T
     {
-        @(Command("cmd1").ShortDescription("Perform cmd 1"))
+        @(argparse.Command("cmd1").ShortDescription("Perform cmd 1"))
         struct CMD1
         {
             string a;
         }
-        @(Command("very-long-command-name-2").ShortDescription("Perform cmd 2"))
+        @(argparse.Command("very-long-command-name-2").ShortDescription("Perform cmd 2"))
         struct CMD2
         {
             string b;
@@ -810,7 +810,7 @@ unittest
     };
     auto config = cfg();
     T receiver;
-    auto cmd = Parser.Command.create!(cfg())(receiver);
+    auto cmd = Command.create!(cfg())(receiver);
     printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
