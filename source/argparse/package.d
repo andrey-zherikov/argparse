@@ -148,8 +148,6 @@ auto NamedArgument(string name)
     return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo([name])).Optional();
 }
 
-struct TrailingArguments {}
-
 
 unittest
 {
