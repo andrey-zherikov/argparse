@@ -1,7 +1,7 @@
 module argparse.internal;
 
-import argparse : NamedArgument, TrailingArguments, Default;
-import argparse.api: Config, Result, Param, RawParam;
+import argparse : NamedArgument, TrailingArguments;
+import argparse.api: Config, Result, Param, RawParam, RemoveDefault;
 import argparse.internal.help;
 import argparse.internal.parser;
 import argparse.internal.lazystring;
@@ -205,19 +205,20 @@ package struct CommandArguments(RECEIVER)
 
 package void setTrailingArgs(RECEIVER)(ref RECEIVER receiver, ref string[] rawArgs)
 {
-    static if(!is(RECEIVER == Default!TYPE, TYPE))
-        alias TYPE = RECEIVER;
+    alias ORIG_TYPE = RemoveDefault!RECEIVER;
 
-    static assert(getSymbolsByUDA!(TYPE, TrailingArguments).length <= 1, "Type "~TYPE.stringof~" must have at most one 'TrailingArguments' UDA");
-    static if(getSymbolsByUDA!(TYPE, TrailingArguments).length == 1)
+    alias symbols = getSymbolsByUDA!(ORIG_TYPE, TrailingArguments);
+
+    static assert(symbols.length <= 1, "Type "~ORIG_TYPE.stringof~" must have at most one 'TrailingArguments' UDA");
+    static if(symbols.length == 1)
     {
-        enum symbol = __traits(identifier, getSymbolsByUDA!(TYPE, TrailingArguments)[0]);
+        enum symbol = __traits(identifier, symbols[0]);
         auto target = &__traits(getMember, receiver, symbol);
 
         static if(__traits(compiles, { *target = rawArgs; }))
             *target = rawArgs;
         else
-            static assert(false, "Type '"~typeof(*target).stringof~"' of `"~TYPE.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
+            static assert(false, "Type '"~typeof(*target).stringof~"' of `"~ORIG_TYPE.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
 
         rawArgs = [];
     }

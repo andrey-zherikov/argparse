@@ -1,7 +1,6 @@
 module argparse.internal.subcommands;
 
-import argparse: Default;
-import argparse.api: Config, Result;
+import argparse.api: Config, Result, RemoveDefault, isDefault;
 import argparse.internal: commandArguments;
 import argparse.internal.parser: Parser;
 import argparse.internal.lazystring;
@@ -74,10 +73,6 @@ package struct SubCommands(RECEIVER)
 
     void add(Config config, alias symbol, SUBCOMMAND, COMMAND)()
     {
-        enum defaultCommand = is(SUBCOMMAND == Default!COMMAND_TYPE, COMMAND_TYPE);
-        static if(!defaultCommand)
-            alias COMMAND_TYPE = SUBCOMMAND;
-
         //static assert(getUDAs!(member, Group).length <= 1,
         //    "Member "~COMMAND.stringof~"."~symbol~" has multiple 'Group' UDAs");
 
@@ -88,7 +83,7 @@ package struct SubCommands(RECEIVER)
 
         immutable index = info.length;
 
-        enum cmdInfo = getCommandInfo!(config, COMMAND_TYPE, COMMAND_TYPE.stringof);
+        enum cmdInfo = getCommandInfo!(config, RemoveDefault!SUBCOMMAND, RemoveDefault!SUBCOMMAND.stringof);
 
         static foreach(name; cmdInfo.names)
         {{
@@ -96,7 +91,7 @@ package struct SubCommands(RECEIVER)
             byName[name] = index;
         }}
 
-        static if(defaultCommand)
+        static if(isDefault!SUBCOMMAND)
         {
             assert(!(DEFAULT_COMMAND in byName), "Multiple default subcommands: "~COMMAND.stringof~"."~symbol);
             byName[DEFAULT_COMMAND] = index;
@@ -115,10 +110,7 @@ package auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo in
     {
         auto target = &__traits(getMember, receiver, symbol);
 
-        static if(!is(COMMAND_TYPE == Default!TYPE, TYPE))
-            alias TYPE = COMMAND_TYPE;
-
-        auto commandArgs = commandArguments!(config, TYPE, info);
+        auto commandArgs = commandArguments!(config, RemoveDefault!COMMAND_TYPE, info);
 
         alias parse = (ref COMMAND_TYPE cmdTarget)
         {
