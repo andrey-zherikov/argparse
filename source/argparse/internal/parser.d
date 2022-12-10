@@ -137,6 +137,13 @@ package struct Parser
             return nullable(subCmd);
         }
 
+        void delegate(const Config* config)[] parseFinalizers;
+
+        void onParsingDone(const Config* config) const
+        {
+            foreach(dg; parseFinalizers)
+                dg(config);
+        }
 
 
         static Command create(Config config, COMMAND_TYPE, CommandInfo info = getCommandInfo!(config, COMMAND_TYPE))(ref COMMAND_TYPE receiver)
@@ -158,6 +165,9 @@ package struct Parser
                 ).array;
             res.subCommandCreate = cmd.subCommands.createFunc.map!(_ =>
                     () => _(receiver),
+                ).array;
+            res.parseFinalizers = cmd.parseFinalizers.map!(_ =>
+                    (const Config* config) => _(receiver, config),
                 ).array;
 
             res.setTrailingArgs = (ref string[] args)
@@ -473,7 +483,8 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
 
     auto command = commandArguments!(origConfig, COMMAND);
 
-    parser.addCommand(Parser.Command.create!(origConfig, COMMAND)(receiver), true);
+    auto cmd = Parser.Command.create!(origConfig, COMMAND)(receiver);
+    parser.addCommand(cmd, true);
 
     auto res = parser.parseAll!completionMode(command);
 
@@ -486,7 +497,7 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
             if(config.stylingMode == Config.StylingMode.autodetect)
                 config.setStylingMode(detectSupport() ? Config.StylingMode.on : Config.StylingMode.off);
 
-            command.onParsingDone(receiver, &config);
+            cmd.onParsingDone(&config);
         }
         else if(res.errorMsg.length > 0)
             config.onError(res.errorMsg);
