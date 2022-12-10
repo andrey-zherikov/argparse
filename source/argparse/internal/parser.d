@@ -72,7 +72,6 @@ package struct Parser
     size_t idxNextPositional = 0;
 
 
-    alias Command = .Command;
     Command[] cmdStack;
 
 
