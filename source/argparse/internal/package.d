@@ -131,18 +131,9 @@ package struct CommandArguments(RECEIVER)
     ParseFinalizer[] parseFinalizers;
 
 
-    // sub commands
-    SubCommands!RECEIVER subCommands;
-
-
     mixin ForwardMemberFunction!"arguments.checkRestrictions";
 
 
-
-    private this(CommandInfo info)
-    {
-        this.info = info;
-    }
 
     private void addArgument(alias symbol, alias uda)()
     {
@@ -248,48 +239,16 @@ private void addArguments(Config config, COMMAND)(ref CommandArguments!COMMAND c
     }}
 }
 
-private void addSubCommands(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
-{
-    import std.sumtype: isSumType;
-
-    enum isSubCommand(alias mem) = hasUDA!(mem, argparse.SubCommands) ||
-                                   hasNoMembersWithUDA!COMMAND && !isOpFunction!mem && isSumType!(typeof(mem));
-
-    static foreach(sym; __traits(allMembers, COMMAND))
-    {{
-        alias mem = __traits(getMember, COMMAND, sym);
-
-        // skip types
-        static if(!is(mem) && isSubCommand!mem)
-        {
-            static assert(isSumType!(typeof(mem)), COMMAND.stringof~"."~sym~" must have 'SumType' type");
-
-            static assert(getUDAs!(mem, argparse.SubCommands).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
-
-            static foreach(TYPE; typeof(mem).Types)
-                cmd.subCommands.add!(config, sym, TYPE, COMMAND);
-        }
-    }}
-}
-
-package void initCommandArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
-{
-    import std.algorithm: sort, map, joiner;
-    import std.array: array;
-
-    addArguments!config(cmd);
-    addSubCommands!config(cmd);
-
-    if(config.addHelp)
-        cmd.addArgumentImpl!(null, getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA()));
-}
-
-package(argparse) auto commandArguments(Config config, COMMAND, CommandInfo info = getCommandInfo!(config, COMMAND))()
+package auto commandArguments(Config config, COMMAND, CommandInfo info = getCommandInfo!(config, COMMAND))()
 {
     checkArgumentName!COMMAND(config.namedArgChar);
 
     auto cmd = CommandArguments!COMMAND(info);
-    initCommandArguments!config(cmd);
+
+    addArguments!config(cmd);
+
+    if(config.addHelp)
+        cmd.addArgumentImpl!(null, getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA()));
 
     return cmd;
 }
