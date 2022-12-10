@@ -149,18 +149,17 @@ package struct CommandArguments(RECEIVER)
                     };
         }
 
-        enum restrictions = {
-            RestrictionGroup[] restrictions;
-            static foreach(gr; getUDAs!(member, RestrictionGroup))
-                restrictions ~= gr;
-            return restrictions;
-        }();
-
-        addArgumentImpl!(symbol, uda, restrictions, getUDAs!(member, Group));
+        addArgumentImpl!(symbol, uda, getUDAs!(member, Group));
     }
 
-    private void addArgumentImpl(alias symbol, alias uda, RestrictionGroup[] restrictions = [], groups...)()
+    private void addArgumentImpl(alias symbol, alias uda, groups...)()
     {
+        static if(symbol is null)
+            enum restrictions = [];
+        else
+            enum restrictions = getRestrictions!(RECEIVER, symbol);
+
+
         static assert(groups.length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
         static if(groups.length > 0)
             arguments.addArgument!(uda.info, restrictions, groups[0]);

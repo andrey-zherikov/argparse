@@ -201,6 +201,21 @@ unittest
     assert(!RestrictionGroup.init.required);
 }
 
+package auto getRestrictions(TYPE, alias symbol)()
+{
+    import std.traits: getUDAs;
+
+    alias member = __traits(getMember, TYPE, symbol);
+
+    RestrictionGroup[] restrictions;
+
+    static foreach(gr; getUDAs!(member, RestrictionGroup))
+        restrictions ~= gr;
+
+    return restrictions;
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package struct Arguments
