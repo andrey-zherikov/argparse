@@ -18,13 +18,6 @@ private struct Hook
     }
 }
 
-package(argparse) struct Hooks
-{
-    alias onParsingDone(alias func) = Hook.ParsingDone!func;
-
-    alias ParsingDoneHandler(TYPE) = void delegate(ref TYPE receiver, const Config* config);
-}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private enum hookCall(TYPE, alias symbol, hook) = (ref TYPE receiver, const Config* config)
@@ -33,16 +26,50 @@ private enum hookCall(TYPE, alias symbol, hook) = (ref TYPE receiver, const Conf
     hook(*target, config);
 };
 
-package enum parsingDoneHandlers(TYPE, alias symbol) = {
-    alias member = __traits(getMember, TYPE, symbol);
+private auto parsingDoneHandlers(TYPE, symbols...)()
+{
+    void delegate(ref TYPE, const Config*)[] handlers;
 
-    Hooks.ParsingDoneHandler!TYPE[] handlers;
+    static foreach(symbol; symbols)
+    {{
+        alias member = __traits(getMember, TYPE, symbol);
 
-    static if(__traits(compiles, getUDAs!(typeof(member), Hook.ParsingDone)) && getUDAs!(typeof(member), Hook.ParsingDone).length > 0)
-    {
-        static foreach(hook; getUDAs!(typeof(member), Hook.ParsingDone))
-            handlers ~= hookCall!(TYPE, symbol, hook);
-    }
+        static if(__traits(compiles, getUDAs!(typeof(member), Hook.ParsingDone)) && getUDAs!(typeof(member), Hook.ParsingDone).length > 0)
+        {
+            static foreach(hook; getUDAs!(typeof(member), Hook.ParsingDone))
+                handlers ~= hookCall!(TYPE, symbol, hook);
+        }
+    }}
 
     return handlers;
-}();
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package(argparse) struct Hooks
+{
+    alias onParsingDone(alias func) = Hook.ParsingDone!func;
+
+    package template Handlers(TYPE, symbols...)
+    {
+        enum parsingDone = parsingDoneHandlers!(TYPE, symbols);
+    }
+}
+
+package struct HookHandlers
+{
+    private void delegate(const Config* config)[] parsingDone;
+
+
+    void bind(TYPE, symbols...)(ref TYPE receiver)
+    {
+        static foreach(handler; parsingDoneHandlers!(TYPE, symbols))
+            parsingDone ~= (const Config* config) => handler(receiver, config);
+    }
+
+    void onParsingDone(const Config* config) const
+    {
+        foreach(dg; parsingDone)
+            dg(config);
+    }
+}

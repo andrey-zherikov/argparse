@@ -8,7 +8,6 @@ import argparse.internal.lazystring;
 import argparse.internal.arguments;
 import argparse.internal.subcommands;
 import argparse.internal.argumentuda;
-import argparse.internal.hooks: parsingDoneHandlers;
 import argparse.internal.utils: formatAllowedValues;
 import argparse.internal.enumhelpers: getEnumValues, getEnumValue;
 
@@ -127,9 +126,6 @@ package struct CommandArguments(RECEIVER)
     ParseFunction!RECEIVER[] parseArguments;
     ParseFunction!RECEIVER[] completeArguments;
 
-    alias void delegate(ref RECEIVER receiver, const Config* config) ParseFinalizer;
-    ParseFinalizer[] parseFinalizers;
-
 
     mixin ForwardMemberFunction!"arguments.checkRestrictions";
 
@@ -224,11 +220,7 @@ package auto commandArguments(Config config, COMMAND, CommandInfo info = getComm
     cmd.info = info;
 
     static foreach(symbol; iterateArguments!COMMAND)
-    {{
-        cmd.parseFinalizers ~= parsingDoneHandlers!(COMMAND, symbol);
-
         cmd.addArgumentImpl!(symbol, getMemberArgumentUDA!(config, COMMAND, symbol, NamedArgument), getMemberGroupUDAs!(COMMAND, symbol));
-    }}
 
     if(config.addHelp)
     {

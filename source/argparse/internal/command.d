@@ -4,9 +4,10 @@ import std.typecons: Nullable, nullable;
 import std.traits: getSymbolsByUDA;
 
 import argparse.api: Config, Result, RemoveDefault, TrailingArguments;
-import argparse.internal: commandArguments;
+import argparse.internal: commandArguments, iterateArguments;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.subcommands: DEFAULT_COMMAND, CommandInfo, getCommandInfo, createSubCommands;
+import argparse.internal.hooks: HookHandlers;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,12 +77,11 @@ package struct Command
         return nullable(subCmd);
     }
 
-    void delegate(const Config* config)[] parseFinalizers;
+    HookHandlers hooks;
 
     void onParsingDone(const Config* config) const
     {
-        foreach(dg; parseFinalizers)
-            dg(config);
+        hooks.onParsingDone(config);
     }
 
     Result checkRestrictions(in bool[size_t] cliArgs, Config* config) const
@@ -110,9 +110,7 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
             => _(cmdStack, config, receiver, argName, argValue)
         ).array;
 
-    res.parseFinalizers = cmd.parseFinalizers.map!(_ =>
-        (const Config* config) => _(receiver, config),
-        ).array;
+    res.hooks.bind!(COMMAND_TYPE, iterateArguments!COMMAND_TYPE)(receiver);
 
     res.setTrailingArgs = (ref string[] args)
     {
@@ -154,3 +152,5 @@ private void setTrailingArgs(RECEIVER)(ref RECEIVER receiver, ref string[] rawAr
         rawArgs = [];
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
