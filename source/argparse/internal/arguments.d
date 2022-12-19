@@ -6,6 +6,7 @@ import argparse.internal.lazystring;
 import argparse.api: Config, Result;
 
 import std.typecons: Nullable;
+import std.traits: getUDAs;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -182,6 +183,8 @@ package(argparse) struct Group
     size_t[] arguments;
 }
 
+package enum getMemberGroupUDAs(TYPE, alias symbol) = getUDAs!(__traits(getMember, TYPE, symbol), Group);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package(argparse) struct RestrictionGroup
@@ -203,8 +206,6 @@ unittest
 
 package auto getRestrictions(TYPE, alias symbol)()
 {
-    import std.traits: getUDAs;
-
     alias member = __traits(getMember, TYPE, symbol);
 
     RestrictionGroup[] restrictions;
