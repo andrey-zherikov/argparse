@@ -134,16 +134,6 @@ package struct CommandArguments(RECEIVER)
     mixin ForwardMemberFunction!"arguments.checkRestrictions";
 
 
-
-    private void addArgument(alias symbol, alias uda)()
-    {
-        parseFinalizers ~= parsingDoneHandlers!(RECEIVER, symbol);
-
-        alias member = __traits(getMember, RECEIVER, symbol);
-
-        addArgumentImpl!(symbol, uda, getUDAs!(member, Group));
-    }
-
     private void addArgumentImpl(alias symbol, alias uda, groups...)()
     {
         enum restrictions = getRestrictions!(RECEIVER, symbol);
@@ -208,31 +198,37 @@ package enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUD
 package enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
 
 
-private void addArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
+package template iterateArguments(TYPE)
 {
+    import std.meta: Filter;
     import std.sumtype: isSumType;
 
-    enum isArgument(alias mem) = hasUDA!(mem, ArgumentUDA) ||
-                                 hasUDA!(mem, NamedArgument) ||
-                                 hasNoMembersWithUDA!COMMAND && !isOpFunction!mem && !isSumType!(typeof(mem));
+    template filter(alias sym)
+    {
+        alias mem = __traits(getMember, TYPE, sym);
 
-    static foreach(sym; __traits(allMembers, COMMAND))
-    {{
-        alias mem = __traits(getMember, COMMAND, sym);
+        enum filter = !is(mem) && (
+            hasUDA!(mem, ArgumentUDA) ||
+            hasUDA!(mem, NamedArgument) ||
+            hasNoMembersWithUDA!TYPE && !isOpFunction!mem && !isSumType!(typeof(mem)));
+    }
 
-        // skip types
-        static if(!is(mem) && isArgument!mem)
-            cmd.addArgument!(sym, getMemberArgumentUDA!(config, COMMAND, sym, NamedArgument));
-    }}
+    alias iterateArguments = Filter!(filter, __traits(allMembers, TYPE));
 }
 
 package auto commandArguments(Config config, COMMAND, CommandInfo info = getCommandInfo!(config, COMMAND))()
 {
     checkArgumentName!COMMAND(config.namedArgChar);
 
-    auto cmd = CommandArguments!COMMAND(info);
+    CommandArguments!COMMAND cmd;
+    cmd.info = info;
 
-    addArguments!config(cmd);
+    static foreach(symbol; iterateArguments!COMMAND)
+    {{
+        cmd.parseFinalizers ~= parsingDoneHandlers!(COMMAND, symbol);
+
+        cmd.addArgumentImpl!(symbol, getMemberArgumentUDA!(config, COMMAND, symbol, NamedArgument), getMemberGroupUDAs!(COMMAND, symbol));
+    }}
 
     if(config.addHelp)
     {
