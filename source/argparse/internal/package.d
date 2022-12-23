@@ -126,25 +126,6 @@ package struct CommandArguments(RECEIVER)
 
 
     mixin ForwardMemberFunction!"arguments.checkRestrictions";
-
-
-    private void addArgumentImpl(alias symbol, alias uda, groups...)()
-    {
-        enum restrictions = getRestrictions!(RECEIVER, symbol);
-
-        static assert(groups.length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
-        static if(groups.length > 0)
-            arguments.addArgument!(uda.info, restrictions, groups[0]);
-        else
-            arguments.addArgument!(uda.info, restrictions);
-
-        static if(__traits(compiles, { parseArguments ~= uda.parsingFunc.getParseFunc!RECEIVER; }))
-            parseArguments ~= uda.parsingFunc.getParseFunc!RECEIVER;
-        else
-            parseArguments ~= ParsingArgument!(symbol, uda, RECEIVER, false);
-
-        completeArguments ~= ParsingArgument!(symbol, uda, RECEIVER, true);
-    }
 }
 
 
@@ -217,13 +198,20 @@ package auto commandArguments(Config config, COMMAND, CommandInfo info = getComm
     CommandArguments!COMMAND cmd;
 
     static foreach(symbol; iterateArguments!COMMAND)
-        cmd.addArgumentImpl!(symbol, getMemberArgumentUDA!(config, COMMAND, symbol, NamedArgument), getMemberGroupUDAs!(COMMAND, symbol));
+    {{
+        enum uda = getMemberArgumentUDA!(config, COMMAND, symbol, NamedArgument);
+
+        cmd.arguments.addArgument!(COMMAND, symbol, uda.info);
+
+        cmd.parseArguments ~= ParsingArgument!(symbol, uda, COMMAND, false);
+        cmd.completeArguments ~= ParsingArgument!(symbol, uda, COMMAND, true);
+    }}
 
     if(config.addHelp)
     {
         enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
 
-        cmd.arguments.addArgument!(uda.info);
+        cmd.arguments.addArgument!(COMMAND, null, uda.info);
         cmd.parseArguments ~= uda.parsingFunc.getParseFunc!COMMAND;
         cmd.completeArguments ~= ParsingArgument!(null, uda, COMMAND, true);
     }

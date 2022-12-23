@@ -183,7 +183,17 @@ package(argparse) struct Group
     size_t[] arguments;
 }
 
-package enum getMemberGroupUDAs(TYPE, alias symbol) = getUDAs!(__traits(getMember, TYPE, symbol), Group);
+private template getMemberGroupUDA(TYPE, alias symbol)
+{
+    private enum udas = getUDAs!(__traits(getMember, TYPE, symbol), Group);
+
+    static assert(udas.length <= 1, "Member "~TYPE.stringof~"."~symbol~" has multiple 'Group' UDAs");
+    static if(udas.length > 0)
+        enum getMemberGroupUDA = udas[0];
+}
+
+private enum hasMemberGroupUDA(TYPE, alias symbol) = __traits(compiles, { enum group = getMemberGroupUDA!(TYPE, symbol); });
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -204,17 +214,17 @@ unittest
     assert(!RestrictionGroup.init.required);
 }
 
-package auto getRestrictions(TYPE, alias symbol)()
+private auto getRestrictionGroups(TYPE, alias symbol)()
 {
-    alias member = __traits(getMember, TYPE, symbol);
-
     RestrictionGroup[] restrictions;
 
-    static foreach(gr; getUDAs!(member, RestrictionGroup))
+    static foreach(gr; getUDAs!(__traits(getMember, TYPE, symbol), RestrictionGroup))
         restrictions ~= gr;
 
     return restrictions;
 }
+
+private enum getRestrictionGroups(TYPE, typeof(null) symbol) = RestrictionGroup[].init;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -244,35 +254,29 @@ package struct Arguments
     @property auto positionalArguments() const { return argsPositional; }
 
 
-    void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions, Group group)()
+    void addArgument(TYPE, alias symbol, ArgumentInfo info)()
     {
-        static if(group.name == requiredGroupName)
-            addArgument!(info, restrictions)(requiredGroup);
-        else static if(group.name == optionalGroupName)
-            addArgument!(info, restrictions)(optionalGroup);
-        else
+        static if(hasMemberGroupUDA!(TYPE, symbol))
         {
+            enum group = getMemberGroupUDA!(TYPE, symbol);
+
             auto index = (group.name in groupsByName);
             if(index !is null)
-                addArgument!(info, restrictions)(userGroups[*index]);
+                addArgumentImpl!(TYPE, symbol, info)(userGroups[*index]);
             else
             {
                 groupsByName[group.name] = userGroups.length;
                 userGroups ~= group;
-                addArgument!(info, restrictions)(userGroups[$-1]);
+                addArgumentImpl!(TYPE, symbol, info)(userGroups[$-1]);
             }
         }
-    }
-
-    void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions = [])()
-    {
-        static if(info.required)
-            addArgument!(info, restrictions)(requiredGroup);
+        else static if(info.required)
+            addArgumentImpl!(TYPE, symbol, info)(requiredGroup);
         else
-            addArgument!(info, restrictions)(optionalGroup);
+            addArgumentImpl!(TYPE, symbol, info)(optionalGroup);
     }
 
-    private void addArgument(ArgumentInfo info, RestrictionGroup[] argRestrictions = [])( ref Group group)
+    private void addArgumentImpl(TYPE, alias symbol, ArgumentInfo info)(ref Group group)
     {
         static assert(info.names.length > 0);
 
@@ -298,7 +302,7 @@ package struct Arguments
         static if(info.required)
             restrictions ~= Restrictions.RequiredArg!info(index);
 
-        static foreach(restriction; argRestrictions)
+        static foreach(restriction; getRestrictionGroups!(TYPE, symbol))
             addRestriction!(info, restriction)(index);
     }
 
