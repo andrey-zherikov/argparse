@@ -119,8 +119,6 @@ package struct CommandArguments(RECEIVER)
 {
     private enum _validate = checkArgumentNames!RECEIVER && checkPositionalIndexes!RECEIVER;
 
-    CommandInfo info;
-
     Arguments arguments;
 
     ParseFunction!RECEIVER[] parseArguments;
@@ -217,7 +215,6 @@ package auto commandArguments(Config config, COMMAND, CommandInfo info = getComm
     checkArgumentName!COMMAND(config.namedArgChar);
 
     CommandArguments!COMMAND cmd;
-    cmd.info = info;
 
     static foreach(symbol; iterateArguments!COMMAND)
         cmd.addArgumentImpl!(symbol, getMemberArgumentUDA!(config, COMMAND, symbol, NamedArgument), getMemberGroupUDAs!(COMMAND, symbol));
