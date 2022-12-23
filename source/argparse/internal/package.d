@@ -207,7 +207,7 @@ package auto commandArguments(Config config, COMMAND, CommandInfo info = getComm
         cmd.completeArguments ~= ParsingArgument!(symbol, uda, COMMAND, true);
     }}
 
-    if(config.addHelp)
+    static if(config.addHelp)
     {
         enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
 
