@@ -21,14 +21,6 @@ import std.sumtype: SumType, match;
 /// Internal API
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package mixin template ForwardMemberFunction(string dest)
-{
-    import std.array: split;
-    mixin("auto "~dest.split('.')[$-1]~"(Args...)(auto ref Args args) inout { import core.lifetime: forward; return "~dest~"(forward!args); }");
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 private auto checkDuplicates(alias sortedRange, string errorMsg)() {
     static if(sortedRange.length >= 2)
     {
@@ -123,9 +115,6 @@ package struct CommandArguments(RECEIVER)
 
     ParseFunction!RECEIVER[] parseArguments;
     ParseFunction!RECEIVER[] completeArguments;
-
-
-    mixin ForwardMemberFunction!"arguments.checkRestrictions";
 }
 
 

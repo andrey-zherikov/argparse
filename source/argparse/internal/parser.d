@@ -311,7 +311,7 @@ package struct Parser
                     return res;
         }
 
-        return cmd.checkRestrictions(idxParsedArgs, config);
+        return cmd.arguments.checkRestrictions(idxParsedArgs, config);
     }
 
     void addCommand(Command cmd, bool addDefaultCommand)
