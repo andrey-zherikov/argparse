@@ -304,7 +304,12 @@ package struct Arguments
                 restrictionGroups ~= restriction;
 
                 static if(restriction.required)
-                    restrictions ~= (a,b,c) => Restrictions.RequiredAnyOf(a, b, c, restrictionGroups[index].arguments);
+                {{
+                    // with -preview=in the lambda does not infer correctly
+                    // if appended directly
+                    Restriction restriction = (a, in b, in c) => Restrictions.RequiredAnyOf(a, b, c, restrictionGroups[index].arguments);
+                    restrictions ~= restriction;
+                }}
 
                 enum checkFunc =
                     {
@@ -315,7 +320,10 @@ package struct Arguments
                         }
                     }();
 
-                restrictions ~= (a,b,c) => checkFunc(a, b, c, restrictionGroups[index].arguments);
+                // with -preview=in the lambda does not infer correctly
+                // if appended directly
+                Restriction restriction = (a, in b, in c) => checkFunc(a, b, c, restrictionGroups[index].arguments);
+                restrictions ~= restriction;
 
                 return index;
             }();
