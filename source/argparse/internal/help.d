@@ -471,7 +471,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(T)(void delegate(string) sink, const ref Style style, in CommandArguments!T cmd)
+private void printUsage(T)(void delegate(string) sink, const ref Style style, in return CommandArguments!T cmd)
 {
     import std.algorithm: map;
     import std.array: join;
