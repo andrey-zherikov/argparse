@@ -112,8 +112,6 @@ package struct CommandArguments(RECEIVER)
     private enum _validate = checkArgumentNames!RECEIVER && checkPositionalIndexes!RECEIVER;
 
     Arguments arguments;
-
-    ParseFunction!RECEIVER[] completeArguments;
 }
 
 
@@ -190,8 +188,6 @@ package auto commandArguments(Config config, COMMAND, CommandInfo info = getComm
         enum uda = getMemberArgumentUDA!(config, COMMAND, symbol, NamedArgument);
 
         cmd.arguments.addArgument!(COMMAND, symbol, uda.info);
-
-        cmd.completeArguments ~= ParsingArgument!(symbol, uda, COMMAND, true);
     }}
 
     static if(config.addHelp)
@@ -199,7 +195,6 @@ package auto commandArguments(Config config, COMMAND, CommandInfo info = getComm
         enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
 
         cmd.arguments.addArgument!(COMMAND, null, uda.info);
-        cmd.completeArguments ~= ParsingArgument!(null, uda, COMMAND, true);
     }
 
     return cmd;

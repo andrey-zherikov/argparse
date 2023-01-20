@@ -49,3 +49,13 @@ package auto getArgumentParsingFunctions(Config config, COMMAND_STACK, TYPE, sym
 
     return res;
 }
+
+package auto getArgumentCompletionFunctions(Config config, COMMAND_STACK, TYPE, symbols...)()
+{
+    ParseFunction!(COMMAND_STACK, TYPE)[] res;
+
+    static foreach(symbol; symbols)
+        res ~= ParsingArgument!(COMMAND_STACK, TYPE, symbol, getMemberArgumentUDA!(config, TYPE, symbol, NamedArgument), true);
+
+    return res;
+}

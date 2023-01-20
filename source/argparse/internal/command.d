@@ -8,7 +8,7 @@ import argparse.internal: commandArguments, iterateArguments;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.subcommands: DEFAULT_COMMAND, CommandInfo, getCommandInfo, createSubCommands;
 import argparse.internal.hooks: HookHandlers;
-import argparse.internal.argumentparser: getArgumentParsingFunctions;
+import argparse.internal.argumentparser;
 import argparse.internal.argumentuda: getArgumentUDA;
 import argparse.internal.help: HelpArgumentUDA;
 
@@ -109,6 +109,11 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
             => _(cmdStack, config, receiver, argName, argValue)
         ).array;
 
+    res.completeFunctions = getArgumentCompletionFunctions!(config, Command[], COMMAND_TYPE, iterateArguments!COMMAND_TYPE).map!(_ =>
+        (const Command[] cmdStack, Config* config, string argName, string[] argValue)
+            => _(cmdStack, config, receiver, argName, argValue)
+        ).array;
+
     static if(config.addHelp)
     {
         enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
@@ -116,12 +121,11 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
         res.parseFunctions ~=
             (const Command[] cmdStack, Config* config, string argName, string[] argValue)
                 => uda.parsingFunc.parse!COMMAND_TYPE(cmdStack, config, receiver, argName, argValue);
-    }
 
-    res.completeFunctions = cmd.completeArguments.map!(_ =>
-        (const Command[] cmdStack, Config* config, string argName, string[] argValue)
-            => _(cmdStack, config, receiver, argName, argValue)
-        ).array;
+        res.completeFunctions ~=
+            (const Command[] cmdStack, Config* config, string argName, string[] argValue)
+                => Result.Success;
+    }
 
     res.hooks.bind!(COMMAND_TYPE, iterateArguments!COMMAND_TYPE)(receiver);
 
