@@ -37,6 +37,11 @@ jobs:
           DFLAGS: -preview=in
         run: dub test --build=unittest-cov
 
+      - name: Run tests (dip1000 & in)
+        env:
+          DFLAGS: -dip1000, -preview=in
+        run: dub test --build=unittest-cov
+
       - name: Build examples
         run: dub --root examples build --parallel
 
