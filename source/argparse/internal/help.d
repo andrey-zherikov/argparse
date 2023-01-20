@@ -152,24 +152,21 @@ package auto HelpArgumentUDA()
 {
     struct HelpArgumentParsingFunction
     {
-        static auto getParseFunc(T)()
+        static auto parse(T)(const Command[] cmdStack, Config* config, ref T receiver, string argName, string[] rawValues)
         {
-            return delegate(const Command[] cmdStack, Config* config, ref T receiver, string argName, string[] rawValues)
-            {
-                import std.stdio: stdout;
+            import std.stdio: stdout;
 
-                import std.algorithm: map;
-                import std.array: join, array;
+            import std.algorithm: map;
+            import std.array: join, array;
 
-                string progName = cmdStack.map!((ref _) => _.displayName.length > 0 ? _.displayName : getProgramName()).join(" ");
+            string progName = cmdStack.map!((ref _) => _.displayName.length > 0 ? _.displayName : getProgramName()).join(" ");
 
-                auto args = cmdStack.map!((ref _) => &_.arguments).array;
+            auto args = cmdStack.map!((ref _) => &_.arguments).array;
 
-                auto output = stdout.lockingTextWriter();
-                printHelp(_ => output.put(_), cmdStack[$-1], args, config, progName);
+            auto output = stdout.lockingTextWriter();
+            printHelp(_ => output.put(_), cmdStack[$-1], args, config, progName);
 
-                return Result(0);
-            };
+            return Result(0);
         }
     }
 

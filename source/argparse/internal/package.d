@@ -113,7 +113,6 @@ package struct CommandArguments(RECEIVER)
 
     Arguments arguments;
 
-    ParseFunction!RECEIVER[] parseArguments;
     ParseFunction!RECEIVER[] completeArguments;
 }
 
@@ -192,7 +191,6 @@ package auto commandArguments(Config config, COMMAND, CommandInfo info = getComm
 
         cmd.arguments.addArgument!(COMMAND, symbol, uda.info);
 
-        cmd.parseArguments ~= ParsingArgument!(symbol, uda, COMMAND, false);
         cmd.completeArguments ~= ParsingArgument!(symbol, uda, COMMAND, true);
     }}
 
@@ -201,7 +199,6 @@ package auto commandArguments(Config config, COMMAND, CommandInfo info = getComm
         enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
 
         cmd.arguments.addArgument!(COMMAND, null, uda.info);
-        cmd.parseArguments ~= uda.parsingFunc.getParseFunc!COMMAND;
         cmd.completeArguments ~= ParsingArgument!(null, uda, COMMAND, true);
     }
 
