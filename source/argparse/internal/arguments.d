@@ -4,7 +4,7 @@ import argparse.internal.utils: partiallyApply;
 import argparse.internal.lazystring;
 
 import argparse.config;
-import argparse.api: Result;
+import argparse.result;
 
 import std.typecons: Nullable;
 import std.traits: getUDAs;

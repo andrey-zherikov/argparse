@@ -2,7 +2,8 @@ module argparse.internal;
 
 import argparse : NamedArgument, TrailingArguments;
 import argparse.config;
-import argparse.api: Result, Param, RawParam, RemoveDefault;
+import argparse.result;
+import argparse.api: Param, RawParam, RemoveDefault;
 import argparse.internal.help;
 import argparse.internal.command: Command;
 import argparse.internal.lazystring;

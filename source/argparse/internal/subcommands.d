@@ -1,7 +1,8 @@
 module argparse.internal.subcommands;
 
 import argparse.config;
-import argparse.api: Result, RemoveDefault, isDefault;
+import argparse.result;
+import argparse.api: RemoveDefault, isDefault;
 import argparse.internal.command: Command, createCommand;
 import argparse.internal.lazystring;
 import argparse.internal: hasNoMembersWithUDA, isOpFunction;

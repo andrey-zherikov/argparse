@@ -4,7 +4,8 @@ import std.typecons: Nullable, nullable;
 import std.traits: getSymbolsByUDA;
 
 import argparse.config;
-import argparse.api: Result, RemoveDefault, TrailingArguments;
+import argparse.result;
+import argparse.api: RemoveDefault, TrailingArguments;
 import argparse.internal: commandArguments, iterateArguments;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.subcommands: DEFAULT_COMMAND, CommandInfo, getCommandInfo, createSubCommands;

@@ -3,7 +3,7 @@ module argparse.internal.parser;
 import std.typecons: Nullable, nullable;
 
 import argparse.config;
-import argparse.api: Result;
+import argparse.result;
 import argparse.internal: commandArguments;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.subcommands;
