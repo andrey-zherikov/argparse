@@ -15,6 +15,7 @@ import argparse.internal.enumhelpers: EnumValue;
 public import argparse.api;
 public import argparse.config;
 public import argparse.result;
+public import argparse.param;
 
 
 

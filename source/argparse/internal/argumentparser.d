@@ -3,7 +3,7 @@ module argparse.internal.argumentparser;
 import argparse : NamedArgument;
 import argparse.config;
 import argparse.result;
-import argparse.api: RawParam;
+import argparse.param;
 import argparse.internal.argumentuda: getMemberArgumentUDA;
 
 
