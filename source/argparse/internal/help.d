@@ -1,7 +1,8 @@
 module argparse.internal.help;
 
 import argparse: Description, Optional;
-import argparse.api: Config, Result;
+import argparse.config;
+import argparse.api: Result;
 import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
 import argparse.internal.command: Command, createCommand;

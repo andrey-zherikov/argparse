@@ -3,7 +3,8 @@ module argparse.internal.arguments;
 import argparse.internal.utils: partiallyApply;
 import argparse.internal.lazystring;
 
-import argparse.api: Config, Result;
+import argparse.config;
+import argparse.api: Result;
 
 import std.typecons: Nullable;
 import std.traits: getUDAs;

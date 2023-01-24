@@ -1,7 +1,7 @@
 module argparse.internal.completer;
 
 import argparse : CLI, Command, SubCommands, Default, Description, ShortDescription, MutuallyExclusive, NamedArgument, TrailingArguments;
-import argparse.api: Config;
+import argparse.config;
 
 import argparse.internal.subcommands: CommandInfo;
 

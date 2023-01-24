@@ -1,6 +1,6 @@
 module argparse.internal.argumentuda;
 
-import argparse.api: Config;
+import argparse.config;
 import argparse.internal.arguments: ArgumentInfo;
 import argparse.internal.utils: formatAllowedValues;
 import argparse.internal.enumhelpers: getEnumValues;
