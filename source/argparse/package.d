@@ -1,7 +1,7 @@
 module argparse;
 
 
-import argparse.internal: ValueParseFunctions, Validators, Parsers, NoValueActionFunc;
+import argparse.internal: ValueParseFunctions;
 import argparse.internal.parser: callParser;
 import argparse.internal.style: Style;
 import argparse.internal.arguments: ArgumentInfo, Group, RestrictionGroup;
@@ -11,6 +11,7 @@ import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.hooks: Hooks;
 import argparse.internal.utils: formatAllowedValues;
 import argparse.internal.enumhelpers: EnumValue;
+import argparse.internal.parsehelpers: PassThrough, ValueInList;
 
 public import argparse.api;
 public import argparse.config;
@@ -1094,7 +1095,7 @@ auto AllowedValues(alias values, ARG)(ARG arg)
 
     enum valuesAA = assocArray(values, false.repeat);
 
-    auto desc = arg.Validation!(Validators.ValueInList!(values, KeyType!(typeof(valuesAA))));
+    auto desc = arg.Validation!(ValueInList!(values, KeyType!(typeof(valuesAA))));
     if(desc.info.placeholder.length == 0)
         desc.info.placeholder = formatAllowedValues!values;
 
@@ -1456,7 +1457,7 @@ unittest
 .Description("Colorize the output. If value is omitted then 'always' is used.")
 .AllowedValues!(["always","auto","never"])
 .NumberOfValues(0, 1)
-.Parse!(Parsers.PassThrough)
+.Parse!(PassThrough)
 .Action!(AnsiStylingArgument.action)
 .ActionNoValue!(AnsiStylingArgument.action)
 )

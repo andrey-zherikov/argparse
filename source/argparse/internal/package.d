@@ -5,6 +5,7 @@ import argparse.config;
 import argparse.result;
 import argparse.param;
 import argparse.api: RemoveDefault;
+import argparse.internal.parsehelpers;
 import argparse.internal.help;
 import argparse.internal.command: Command;
 import argparse.internal.lazystring;
@@ -214,7 +215,7 @@ if(!is(T == void))
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
             void,   // pre process
-            Validators.ValueInList!(getEnumValues!T, typeof(RawParam.value)),   // pre validate
+            ValueInList!(getEnumValues!T, typeof(RawParam.value)),   // pre validate
             getEnumValue!T,   // parse
             void,   // validate
             void,   // action
@@ -275,9 +276,9 @@ if(!is(T == void))
         static if(!isArray!TElement || isSomeString!TElement)  // 1D array
         {
             static if(!isStaticArray!T)
-                alias action = Actions.Append!T;
+                alias action = Append!T;
             else
-                alias action = Actions.Assign!T;
+                alias action = Assign!T;
 
             alias DefaultValueParseFunctions = DefaultValueParseFunctions!TElement
                 .changePreProcess!splitValues
@@ -304,7 +305,7 @@ if(!is(T == void))
         else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
         {
             alias DefaultValueParseFunctions = DefaultValueParseFunctions!TElement
-                .changeAction!(Actions.Extend!TElement)
+                .changeAction!(Extend!TElement)
                 .changeNoValueAction!((ref T param) { param ~= TElement.init; });
         }
         else
@@ -316,11 +317,11 @@ if(!is(T == void))
     {
         import std.string : indexOf;
         alias DefaultValueParseFunctions = ValueParseFunctions!(
-            splitValues,                                                // pre process
-            void,                                                       // pre validate
-            Parsers.PassThrough,                                        // parse
-            void,                                                       // validate
-            (ref T recepient, Param!(string[]) param)                   // action
+            splitValues,                               // pre process
+            void,                                      // pre validate
+            PassThrough,                               // parse
+            void,                                      // validate
+            (ref T recepient, Param!(string[]) param)  // action
             {
                 alias K = KeyType!T;
                 alias V = ValueType!T;
@@ -349,12 +350,12 @@ if(!is(T == void))
     else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
         alias DefaultValueParseFunctions = ValueParseFunctions!(
-            void,                           // pre process
-            void,                           // pre validate
-            Parsers.PassThrough,            // parse
-            void,                           // validate
-            Actions.CallFunction!T,         // action
-            Actions.CallFunctionNoParam!T   // no-value action
+            void,                   // pre process
+            void,                   // pre validate
+            PassThrough,            // parse
+            void,                   // validate
+            CallFunction!T,         // action
+            CallFunctionNoParam!T   // no-value action
         );
     }
     else
@@ -657,7 +658,7 @@ unittest
 // void action(ref DEST receiver)
 // bool action(ref DEST receiver, Param!void param)
 // void action(ref DEST receiver, Param!void param)
-package(argparse) struct NoValueActionFunc(alias F, T)
+package struct NoValueActionFunc(alias F, T)
 {
     static bool opCall(ref T receiver, Param!void param)
     {
@@ -811,7 +812,7 @@ private struct ParseFunc(alias F, T)
         static if(is(F == void))
         {
             foreach(value; param.value)
-                receiver = Parsers.Convert!T(value);
+                receiver = Convert!T(value);
             return true;
         }
         // T parse(string[] values)
@@ -902,7 +903,7 @@ private struct ActionFunc(alias F, T, ParseType)
     {
         static if(is(F == void))
         {
-            Actions.Assign!(T, ParseType)(receiver, param.value);
+            Assign!(T, ParseType)(receiver, param.value);
             return true;
         }
         // bool action(ref T receiver, ParseType value)
@@ -975,129 +976,14 @@ unittest
     assert(test!((ref string[] p, Param!(string[]) a) { p=a.value; }, string[])(["1","2","3"]) == ["1","2","3"]);
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package(argparse) struct Parsers
-{
-    static auto Convert(T)(string value)
-    {
-        import std.conv: to;
-        return value.length > 0 ? value.to!T : T.init;
-    }
-
-    static auto PassThrough(string[] values)
-    {
-        return values;
-    }
-}
-
 unittest
 {
-    assert(Parsers.Convert!int("7") == 7);
-    assert(Parsers.Convert!string("7") == "7");
-    assert(Parsers.Convert!char("7") == '7');
-
-    assert(Parsers.PassThrough(["7","8"]) == ["7","8"]);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private struct Actions
-{
-    static auto Assign(DEST, SRC=DEST)(ref DEST param, SRC value)
-    {
-        param  = value;
-    }
-
-    static auto Append(T)(ref T param, T value)
-    {
-        param ~= value;
-    }
-
-    static auto Extend(T)(ref T[] param, T value)
-    {
-        param ~= value;
-    }
-
-    static auto CallFunction(F)(ref F func, RawParam param)
-    {
-        // ... func()
-        static if(__traits(compiles, { func(); }))
-        {
-            func();
-        }
-        // ... func(string value)
-        else static if(__traits(compiles, { func(param.value[0]); }))
-        {
-            foreach(value; param.value)
-                func(value);
-        }
-        // ... func(string[] value)
-        else static if(__traits(compiles, { func(param.value); }))
-        {
-            func(param.value);
-        }
-        // ... func(RawParam param)
-        else static if(__traits(compiles, { func(param); }))
-        {
-            func(param);
-        }
-        else
-            static assert(false, "Unsupported callback: " ~ F.stringof);
-    }
-
-    static auto CallFunctionNoParam(F)(ref F func, Param!void param)
-    {
-        // ... func()
-        static if(__traits(compiles, { func(); }))
-        {
-            func();
-        }
-        // ... func(string value)
-        else static if(__traits(compiles, { func(string.init); }))
-        {
-            func(string.init);
-        }
-        // ... func(string[] value)
-        else static if(__traits(compiles, { func([]); }))
-        {
-            func([]);
-        }
-        // ... func(Param!void param)
-        else static if(__traits(compiles, { func(param); }))
-        {
-            func(param);
-        }
-        // ... func(RawParam param)
-        else static if(__traits(compiles, { func(RawParam.init); }))
-        {
-            func(RawParam(param.config, param.name));
-        }
-        else
-            static assert(false, "Unsupported callback: " ~ F.stringof);
-    }
-}
-
-unittest
-{
-    int i;
-    Actions.Assign!(int)(i,7);
-    assert(i == 7);
-}
-
-unittest
-{
-    int[] i;
-    Actions.Append!(int[])(i,[1,2,3]);
-    Actions.Append!(int[])(i,[7,8,9]);
-    assert(i == [1,2,3,7,8,9]);
-
     alias test = (int[] v1, int[] v2) {
         int[] res;
 
         Param!(int[]) param;
 
-        alias F = Actions.Append!(int[]);
+        alias F = Append!(int[]);
         param.value = v1;   ActionFunc!(F, int[], int[])(res, param);
 
         param.value = v2;   ActionFunc!(F, int[], int[])(res, param);
@@ -1105,67 +991,6 @@ unittest
         return res;
     };
     assert(test([1,2,3],[7,8,9]) == [1,2,3,7,8,9]);
-}
-
-unittest
-{
-    int[][] i;
-    Actions.Extend!(int[])(i,[1,2,3]);
-    Actions.Extend!(int[])(i,[7,8,9]);
-    assert(i == [[1,2,3],[7,8,9]]);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package(argparse) struct Validators
-{
-    template ValueInList(alias values, TYPE)
-    {
-        static auto ValueInList(Param!TYPE param)
-        {
-            import std.array : assocArray, join;
-            import std.range : repeat, front;
-            import std.conv: to;
-
-            enum valuesAA = assocArray(values, false.repeat);
-            enum allowedValues = values.to!(string[]).join(',');
-
-            static if(is(typeof(values.front) == TYPE))
-                auto paramValues = [param.value];
-            else
-                auto paramValues = param.value;
-
-            foreach(value; paramValues)
-                if(!(value in valuesAA))
-                    return Result.Error("Invalid value '", value, "' for argument '", param.name, "'.\nValid argument values are: ", allowedValues);
-
-            return Result.Success;
-        }
-        static auto ValueInList(Param!(TYPE[]) param)
-        {
-            foreach(ref value; param.value)
-            {
-                auto res = ValueInList!(values, TYPE)(Param!TYPE(param.config, param.name, value));
-                if(!res)
-                    return res;
-            }
-            return Result.Success;
-        }
-    }
-}
-
-unittest
-{
-    enum values = ["a","b","c"];
-    Config config;
-
-    assert(Validators.ValueInList!(values, string)(Param!string(&config, "", "b")));
-    assert(!Validators.ValueInList!(values, string)(Param!string(&config, "", "d")));
-
-    assert(Validators.ValueInList!(values, string)(RawParam(&config, "", ["b"])));
-    assert(Validators.ValueInList!(values, string)(RawParam(&config, "", ["b","a"])));
-    assert(!Validators.ValueInList!(values, string)(RawParam(&config, "", ["d"])));
-    assert(!Validators.ValueInList!(values, string)(RawParam(&config, "", ["b","d"])));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
