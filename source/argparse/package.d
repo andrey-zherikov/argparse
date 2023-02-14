@@ -1,7 +1,7 @@
 module argparse;
 
 
-import argparse.internal: ValueParseFunctions;
+import argparse.internal.valueparser: ValueParser;
 import argparse.internal.parser: callParser;
 import argparse.internal.style: Style;
 import argparse.internal.arguments: ArgumentInfo, Group, RestrictionGroup;
@@ -91,7 +91,7 @@ public auto ref MaxNumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong max)
 
 unittest
 {
-    ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void)) arg;
+    ArgumentUDA!void arg;
     assert(!arg.info.hideFromHelp);
     assert(!arg.info.required);
     assert(arg.info.minValuesCount.isNull);
@@ -120,7 +120,7 @@ unittest
     assert(arg.info.maxValuesCount.get == 3);
 
     // values shouldn't be changed
-    arg.addDefaults(ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void)).init);
+    arg.addDefaults(ArgumentUDA!void.init);
     assert(arg.info.placeholder == "text");
     assert(arg.info.description.get == "qwer");
     assert(arg.info.hideFromHelp);
@@ -133,7 +133,7 @@ unittest
 
 auto PositionalArgument(uint pos)
 {
-    auto arg = ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo()).Required();
+    auto arg = ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo()).Required();
     arg.info.position = pos;
     return arg;
 }
@@ -145,12 +145,12 @@ auto PositionalArgument(uint pos, string name)
 
 auto NamedArgument(string[] name...)
 {
-    return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo(name.dup)).Optional();
+    return ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo(name.dup)).Optional();
 }
 
 auto NamedArgument(string name)
 {
-    return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo([name])).Optional();
+    return ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo([name])).Optional();
 }
 
 
@@ -669,7 +669,9 @@ unittest
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T("C",null,typeof(T.cmd)(Default!(T.cmd2)(T.cmd2("B"))))); return 12345; })(["-c","C","-b","B"]) == 12345);
+    import std.stdio : writeln, stderr;stderr.writeln(__FILE__," ",__LINE__);
     assert(CLI!T.parseArgs!((_) {assert(false);})(["-h"]) == 0);
+    import std.stdio : writeln, stderr;stderr.writeln(__FILE__," ",__LINE__);
     assert(CLI!T.parseArgs!((_) {assert(false);})(["--help"]) == 0);
 }
 
@@ -977,21 +979,21 @@ public auto AllowNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
 unittest
 {
     auto uda = NamedArgument().PreValidation!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, FUNC, void, void, void, void)), alias FUNC));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, FUNC, void, void, void, void)), alias FUNC));
     assert(!is(FUNC == void));
 }
 
 unittest
 {
     auto uda = NamedArgument().Parse!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, FUNC, void, void, void)), alias FUNC));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, FUNC, void, void, void)), alias FUNC));
     assert(!is(FUNC == void));
 }
 
 unittest
 {
     auto uda = NamedArgument().Parse!((string _) => _);
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, FUNC, void, void, void)), alias FUNC));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, FUNC, void, void, void)), alias FUNC));
     assert(!is(FUNC == void));
     assert(uda.info.minValuesCount == 1);
     assert(uda.info.maxValuesCount == 1);
@@ -1000,7 +1002,7 @@ unittest
 unittest
 {
     auto uda = NamedArgument().Parse!((string[] _) => _);
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, FUNC, void, void, void)), alias FUNC));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, FUNC, void, void, void)), alias FUNC));
     assert(!is(FUNC == void));
     assert(uda.info.minValuesCount == 0);
     assert(uda.info.maxValuesCount == ulong.max);
@@ -1009,21 +1011,21 @@ unittest
 unittest
 {
     auto uda = NamedArgument().Validation!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, FUNC, void, void)), alias FUNC));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, FUNC, void, void)), alias FUNC));
     assert(!is(FUNC == void));
 }
 
 unittest
 {
     auto uda = NamedArgument().Action!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, void, FUNC, void)), alias FUNC));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, void, FUNC, void)), alias FUNC));
     assert(!is(FUNC == void));
 }
 
 unittest
 {
     auto uda = NamedArgument().AllowNoValue!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, FUNC)), alias FUNC));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, void, void, FUNC)), alias FUNC));
     assert(!is(FUNC == void));
     assert(uda.info.minValuesCount == 0);
 }
@@ -1041,7 +1043,7 @@ public auto RequireNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
 unittest
 {
     auto uda = NamedArgument().RequireNoValue!"value";
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, FUNC)), alias FUNC));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, void, void, FUNC)), alias FUNC));
     assert(!is(FUNC == void));
     assert(uda.info.minValuesCount == 0);
     assert(uda.info.maxValuesCount == 0);

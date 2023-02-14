@@ -9,11 +9,11 @@ import std.traits;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) struct ArgumentUDA(ValueParseFunctions)
+package(argparse) struct ArgumentUDA(ValueParser)
 {
     ArgumentInfo info;
 
-    alias parsingFunc = ValueParseFunctions;
+    alias parsingFunc = ValueParser;
 
     auto addDefaults(T)(ArgumentUDA!T uda)
     {
@@ -26,7 +26,10 @@ package(argparse) struct ArgumentUDA(ValueParseFunctions)
         if(newInfo.minValuesCount.isNull()) newInfo.minValuesCount = uda.info.minValuesCount;
         if(newInfo.maxValuesCount.isNull()) newInfo.maxValuesCount = uda.info.maxValuesCount;
 
-        return ArgumentUDA!(parsingFunc.addDefaults!(uda.parsingFunc))(newInfo);
+        static if(is(ValueParser == void))
+            return ArgumentUDA!ValueParser(newInfo);
+        else
+            return ArgumentUDA!(ValueParser.addDefaults!T)(newInfo);
     }
 }
 
