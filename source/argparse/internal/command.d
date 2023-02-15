@@ -5,13 +5,14 @@ import std.traits: getSymbolsByUDA;
 
 import argparse.config;
 import argparse.result;
+import argparse: NamedArgument;
 import argparse.api: RemoveDefault, TrailingArguments;
-import argparse.internal: commandArguments, iterateArguments;
+import argparse.internal: iterateArguments;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.subcommands: DEFAULT_COMMAND, CommandInfo, getCommandInfo, createSubCommands;
 import argparse.internal.hooks: HookHandlers;
 import argparse.internal.argumentparser;
-import argparse.internal.argumentuda: getArgumentUDA;
+import argparse.internal.argumentuda: getArgumentUDA, getMemberArgumentUDA;
 import argparse.internal.help: HelpArgumentUDA;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,9 +103,14 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
     import std.algorithm: map;
     import std.array: array;
 
-    auto cmd = commandArguments!(config, COMMAND_TYPE, CommandInfo.init);
-
     Command res;
+
+    static foreach(symbol; iterateArguments!COMMAND_TYPE)
+    {{
+        enum uda = getMemberArgumentUDA!(config, COMMAND_TYPE, symbol, NamedArgument);
+
+        res.arguments.addArgument!(COMMAND_TYPE, symbol, uda.info);
+    }}
 
     res.parseFunctions = getArgumentParsingFunctions!(config, Command[], COMMAND_TYPE, iterateArguments!COMMAND_TYPE).map!(_ =>
         (const Command[] cmdStack, Config* config, string argName, string[] argValue)
@@ -117,8 +123,10 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
         ).array;
 
     static if(config.addHelp)
-    {
+    {{
         enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
+
+        res.arguments.addArgument!(COMMAND_TYPE, null, uda.info);
 
         res.parseFunctions ~=
             (const Command[] cmdStack, Config* config, string argName, string[] argValue)
@@ -127,7 +135,7 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
         res.completeFunctions ~=
             (const Command[] cmdStack, Config* config, string argName, string[] argValue)
                 => Result.Success;
-    }
+    }}
 
     res.hooks.bind!(COMMAND_TYPE, iterateArguments!COMMAND_TYPE)(receiver);
 
@@ -137,7 +145,6 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
     };
 
     res.info = info;
-    res.arguments = cmd.arguments;
 
     enum subCommands = createSubCommands!(config, COMMAND_TYPE);
 
