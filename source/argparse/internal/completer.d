@@ -3,7 +3,7 @@ module argparse.internal.completer;
 import argparse : CLI, Command, SubCommands, Default, Description, ShortDescription, MutuallyExclusive, NamedArgument, TrailingArguments;
 import argparse.config;
 
-import argparse.internal.subcommands: CommandInfo;
+import argparse.internal.commandinfo: CommandInfo;
 
 import std.traits: getUDAs;
 import std.sumtype: SumType;

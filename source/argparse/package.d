@@ -6,7 +6,7 @@ import argparse.internal.parser: callParser;
 import argparse.internal.style: Style;
 import argparse.internal.arguments: ArgumentInfo, Group, RestrictionGroup;
 import argparse.internal.command: createCommand;
-import argparse.internal.subcommands: CommandInfo;
+import argparse.internal.commandinfo: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.hooks: Hooks;
 import argparse.internal.utils: formatAllowedValues;

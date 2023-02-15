@@ -4,7 +4,7 @@ import argparse : NamedArgument;
 import argparse.config;
 import argparse.internal.help: HelpArgumentUDA;
 import argparse.internal.arguments: Arguments;
-import argparse.internal.subcommands: CommandInfo, getCommandInfo;
+import argparse.internal.commandinfo;
 import argparse.internal.argumentuda: ArgumentUDA, getMemberArgumentUDA, getArgumentUDA;
 
 import std.traits;

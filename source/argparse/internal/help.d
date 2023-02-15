@@ -6,7 +6,7 @@ import argparse.result;
 import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
 import argparse.internal.command: Command, createCommand;
-import argparse.internal.subcommands: CommandInfo;
+import argparse.internal.commandinfo: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.style;
 
