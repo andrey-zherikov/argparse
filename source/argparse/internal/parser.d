@@ -4,7 +4,6 @@ import std.typecons: Nullable, nullable;
 
 import argparse.config;
 import argparse.result;
-import argparse.internal: commandArguments;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.subcommands;
 import argparse.internal.command: Command, createCommand;
@@ -294,7 +293,7 @@ package struct Parser
         return result;
     }
 
-    auto parseAll(bool completionMode, ARGUMENTS)(const ref ARGUMENTS arguments)
+    auto parseAll(bool completionMode)()
     {
         import std.range: empty, front, back;
 
@@ -312,7 +311,7 @@ package struct Parser
                     return res;
         }
 
-        return arguments.checkRestrictions(idxParsedArgs, config);
+        return cmdStack[0].arguments.checkRestrictions(idxParsedArgs, config);
     }
 
     void addCommand(Command cmd, bool addDefaultCommand)
@@ -371,12 +370,10 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
 
     auto parser = Parser(&config, args);
 
-    auto arguments = commandArguments!(origConfig, COMMAND);
-
     auto cmd = createCommand!(origConfig, COMMAND)(receiver);
     parser.addCommand(cmd, true);
 
-    auto res = parser.parseAll!completionMode(arguments);
+    auto res = parser.parseAll!completionMode;
 
     static if(!completionMode)
     {

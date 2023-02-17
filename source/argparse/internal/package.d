@@ -2,7 +2,6 @@ module argparse.internal;
 
 import argparse : NamedArgument;
 import argparse.config;
-import argparse.internal.help: HelpArgumentUDA;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.commandinfo;
 import argparse.internal.argumentuda: ArgumentUDA, getMemberArgumentUDA, getArgumentUDA;
@@ -117,28 +116,3 @@ package template iterateArguments(TYPE)
 
     alias iterateArguments = Filter!(filter, __traits(allMembers, TYPE));
 }
-
-package auto commandArguments(Config config, COMMAND, CommandInfo info = getCommandInfo!(config, COMMAND))()
-{
-    enum _validate = checkArgumentNames!(config, COMMAND) && checkPositionalIndexes!COMMAND;
-
-    Arguments arguments;
-
-    static foreach(symbol; iterateArguments!COMMAND)
-    {{
-        enum uda = getMemberArgumentUDA!(config, COMMAND, symbol, NamedArgument);
-
-        arguments.addArgument!(COMMAND, symbol, uda.info);
-    }}
-
-    static if(config.addHelp)
-    {
-        enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
-
-        arguments.addArgument!(COMMAND, null, uda.info);
-    }
-
-    return arguments;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
