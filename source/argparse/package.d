@@ -416,15 +416,12 @@ unittest
 
 unittest
 {
-    import std.exception;
-
     struct T
     {
         @(NamedArgument("--"))
         int a;
     }
     static assert(!__traits(compiles, { enum p = CLI!T.parseArgs!((T t){})([]); }));
-    assertThrown(CLI!T.parseArgs!((T t){})([]));
 }
 
 unittest

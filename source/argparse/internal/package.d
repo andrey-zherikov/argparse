@@ -32,22 +32,21 @@ private auto checkDuplicates(alias sortedRange, string errorMsg)() {
     return true;
 }
 
-package bool checkArgumentNames(T)()
+private bool checkArgumentNames(Config config, TYPE)()
 {
     enum names = {
         import std.algorithm : sort;
 
         string[] names;
-        static foreach (sym; getSymbolsByUDA!(T, ArgumentUDA))
+        static foreach(symbol; iterateArguments!TYPE)
         {{
-            enum argUDA = getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA)[0];
+            enum argUDA = getMemberArgumentUDA!(config, TYPE, symbol, NamedArgument);
 
-            static assert(!argUDA.info.positional || argUDA.info.names.length <= 1,
-            "Positional argument should have exactly one name: "~T.stringof~"."~sym.stringof);
+            static assert(!argUDA.info.positional || argUDA.info.names.length == 1, "Positional argument '"~TYPE.stringof~"."~sym.stringof~"' should have exactly one name: "~argUDA.info.names);
 
             static foreach (name; argUDA.info.names)
             {
-                static assert(name.length > 0, "Argument name can't be empty: "~T.stringof~"."~sym.stringof);
+                static assert(name.length > 0, "Argument name can't be empty: "~TYPE.stringof~"."~sym.stringof);
 
                 names ~= name;
             }
@@ -56,16 +55,10 @@ package bool checkArgumentNames(T)()
         return names.sort;
     }();
 
+    static foreach(name; names)
+        assert(name[0] != config.namedArgChar, "Argument name should not begin with '"~config.namedArgChar~"': "~name);
+
     return checkDuplicates!(names, "Argument name appears more than once: ");
-}
-
-private void checkArgumentName(T)(char namedArgChar)
-{
-    import std.exception: enforce;
-
-    static foreach(sym; getSymbolsByUDA!(T, ArgumentUDA))
-        static foreach(name; getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA)[0].info.names)
-            enforce(name[0] != namedArgChar, "Name of argument should not begin with '"~namedArgChar~"': "~name);
 }
 
 package bool checkPositionalIndexes(T)()
@@ -100,16 +93,6 @@ package bool checkPositionalIndexes(T)()
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct CommandArguments(RECEIVER)
-{
-    private enum _validate = checkArgumentNames!RECEIVER && checkPositionalIndexes!RECEIVER;
-
-    Arguments arguments;
-}
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 package enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA  ).length == 0 &&
                                             getSymbolsByUDA!(COMMAND, NamedArgument).length == 0 &&
                                             getSymbolsByUDA!(COMMAND, argparse.SubCommands  ).length == 0;
@@ -137,25 +120,25 @@ package template iterateArguments(TYPE)
 
 package auto commandArguments(Config config, COMMAND, CommandInfo info = getCommandInfo!(config, COMMAND))()
 {
-    checkArgumentName!COMMAND(config.namedArgChar);
+    enum _validate = checkArgumentNames!(config, COMMAND) && checkPositionalIndexes!COMMAND;
 
-    CommandArguments!COMMAND cmd;
+    Arguments arguments;
 
     static foreach(symbol; iterateArguments!COMMAND)
     {{
         enum uda = getMemberArgumentUDA!(config, COMMAND, symbol, NamedArgument);
 
-        cmd.arguments.addArgument!(COMMAND, symbol, uda.info);
+        arguments.addArgument!(COMMAND, symbol, uda.info);
     }}
 
     static if(config.addHelp)
     {
         enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
 
-        cmd.arguments.addArgument!(COMMAND, null, uda.info);
+        arguments.addArgument!(COMMAND, null, uda.info);
     }
 
-    return cmd;
+    return arguments;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

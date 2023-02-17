@@ -294,7 +294,7 @@ package struct Parser
         return result;
     }
 
-    auto parseAll(bool completionMode, COMMAND)(const ref COMMAND cmd)
+    auto parseAll(bool completionMode, ARGUMENTS)(const ref ARGUMENTS arguments)
     {
         import std.range: empty, front, back;
 
@@ -312,7 +312,7 @@ package struct Parser
                     return res;
         }
 
-        return cmd.arguments.checkRestrictions(idxParsedArgs, config);
+        return arguments.checkRestrictions(idxParsedArgs, config);
     }
 
     void addCommand(Command cmd, bool addDefaultCommand)
@@ -371,12 +371,12 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
 
     auto parser = Parser(&config, args);
 
-    auto command = commandArguments!(origConfig, COMMAND);
+    auto arguments = commandArguments!(origConfig, COMMAND);
 
     auto cmd = createCommand!(origConfig, COMMAND)(receiver);
     parser.addCommand(cmd, true);
 
-    auto res = parser.parseAll!completionMode(command);
+    auto res = parser.parseAll!completionMode(arguments);
 
     static if(!completionMode)
     {
