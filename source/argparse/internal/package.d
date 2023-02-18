@@ -1,7 +1,8 @@
 module argparse.internal;
 
-import argparse : NamedArgument;
 import argparse.config;
+import argparse.api.argument: NamedArgument;
+import argparse.api.command: SubCommands;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.commandinfo;
 import argparse.internal.argumentuda: ArgumentUDA, getMemberArgumentUDA, getArgumentUDA;
@@ -94,7 +95,7 @@ package bool checkPositionalIndexes(T)()
 
 package enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA  ).length == 0 &&
                                             getSymbolsByUDA!(COMMAND, NamedArgument).length == 0 &&
-                                            getSymbolsByUDA!(COMMAND, argparse.SubCommands  ).length == 0;
+                                            getSymbolsByUDA!(COMMAND, SubCommands  ).length == 0;
 
 package enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
 

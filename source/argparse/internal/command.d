@@ -5,8 +5,8 @@ import std.traits: getSymbolsByUDA;
 
 import argparse.config;
 import argparse.result;
-import argparse: NamedArgument;
-import argparse.api: RemoveDefault, TrailingArguments;
+import argparse.api.argument: TrailingArguments, NamedArgument;
+import argparse.api.command: RemoveDefaultAttribute;
 import argparse.internal: iterateArguments;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.commandinfo;
@@ -161,7 +161,7 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
 
 private void setTrailingArgs(RECEIVER)(ref RECEIVER receiver, ref string[] rawArgs)
 {
-    alias ORIG_TYPE = RemoveDefault!RECEIVER;
+    alias ORIG_TYPE = RemoveDefaultAttribute!RECEIVER;
 
     alias symbols = getSymbolsByUDA!(ORIG_TYPE, TrailingArguments);
 

@@ -2,7 +2,7 @@ module argparse.internal.subcommands;
 
 import argparse.config;
 import argparse.result;
-import argparse.api: RemoveDefault, isDefault;
+import argparse.api.command: SubCommandsUDA = SubCommands, isDefaultCommand, RemoveDefaultAttribute;
 import argparse.internal.commandinfo;
 import argparse.internal.command: Command, createCommand;
 import argparse.internal.lazystring;
@@ -42,7 +42,7 @@ package struct SubCommands(RECEIVER)
 
         immutable index = info.length;
 
-        enum cmdInfo = getCommandInfo!(config, RemoveDefault!SUBCOMMAND, RemoveDefault!SUBCOMMAND.stringof);
+        enum cmdInfo = getCommandInfo!(config, RemoveDefaultAttribute!SUBCOMMAND, RemoveDefaultAttribute!SUBCOMMAND.stringof);
 
         static foreach(name; cmdInfo.names)
         {{
@@ -50,7 +50,7 @@ package struct SubCommands(RECEIVER)
             byName[name] = index;
         }}
 
-        static if(isDefault!SUBCOMMAND)
+        static if(isDefaultCommand!SUBCOMMAND)
         {
             assert(!(DEFAULT_COMMAND in byName), "Multiple default subcommands: "~COMMAND.stringof~"."~symbol);
             byName[DEFAULT_COMMAND] = index;
@@ -70,7 +70,7 @@ package auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo in
         auto target = &__traits(getMember, receiver, symbol);
 
         alias create = (ref COMMAND_TYPE actualTarget)
-            => createCommand!(config, RemoveDefault!COMMAND_TYPE, info)(actualTarget);
+            => createCommand!(config, RemoveDefaultAttribute!COMMAND_TYPE, info)(actualTarget);
 
         static if(typeof(*target).Types.length == 1)
             return (*target).match!create;
@@ -95,7 +95,7 @@ package auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo in
 
 package auto createSubCommands(Config config, COMMAND)()
 {
-    enum isSubCommand(alias mem) = hasUDA!(mem, argparse.SubCommands) ||
+    enum isSubCommand(alias mem) = hasUDA!(mem, SubCommandsUDA) ||
                                    hasNoMembersWithUDA!COMMAND && !isOpFunction!mem && isSumType!(typeof(mem));
 
     SubCommands!COMMAND subCommands;
@@ -109,7 +109,7 @@ package auto createSubCommands(Config config, COMMAND)()
         {
             static assert(isSumType!(typeof(mem)), COMMAND.stringof~"."~sym~" must have 'SumType' type");
 
-            static assert(getUDAs!(mem, argparse.SubCommands).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
+            static assert(getUDAs!(mem, SubCommandsUDA).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
 
             static foreach(TYPE; typeof(mem).Types)
                 subCommands.add!(config, sym, TYPE, COMMAND);

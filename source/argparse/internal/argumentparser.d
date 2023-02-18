@@ -1,6 +1,6 @@
 module argparse.internal.argumentparser;
 
-import argparse : NamedArgument;
+import argparse.api.argument: NamedArgument;
 import argparse.config;
 import argparse.result;
 import argparse.param;

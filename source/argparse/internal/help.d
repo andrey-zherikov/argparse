@@ -1,21 +1,17 @@
 module argparse.internal.help;
 
-import argparse: Description, Optional;
+import argparse.ansi;
 import argparse.config;
 import argparse.result;
+import argparse.api.argument: NamedArgument, PositionalArgument, TrailingArguments, Description, Optional, Required, Placeholder, HideFromHelp, AllowedValues;
+import argparse.api.argumentgroup: ArgumentGroup, Description;
+import argparse.api.command: CommandUDA = Command, SubCommands, Description, ShortDescription, Epilog;
 import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
 import argparse.internal.command: Command, createCommand;
 import argparse.internal.commandinfo: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.style;
-
-import argparse.ansi;
-
-version(unittest)
-{
-    import argparse;
-}
 
 import std.sumtype: SumType, match;
 
@@ -654,7 +650,7 @@ private void printHelp(ARGUMENTS)(void delegate(string) sink, const ref Command 
 unittest
 {
     static auto epilog() { return "custom epilog"; }
-    @(argparse.Command("MYPROG")
+    @(CommandUDA("MYPROG")
      .Description("custom description")
      .Epilog(epilog)
     )
@@ -717,7 +713,7 @@ unittest
 
 unittest
 {
-    @(argparse.Command("MYPROG"))
+    @(CommandUDA("MYPROG"))
     struct T
     {
         @(ArgumentGroup("group1").Description("group1 description"))
@@ -775,15 +771,15 @@ unittest
 {
     import std.sumtype: SumType;
 
-    @(argparse.Command("MYPROG"))
+    @(CommandUDA("MYPROG"))
     struct T
     {
-        @(argparse.Command("cmd1").ShortDescription("Perform cmd 1"))
+        @(CommandUDA("cmd1").ShortDescription("Perform cmd 1"))
         struct CMD1
         {
             string a;
         }
-        @(argparse.Command("very-long-command-name-2").ShortDescription("Perform cmd 2"))
+        @(CommandUDA("very-long-command-name-2").ShortDescription("Perform cmd 2"))
         struct CMD2
         {
             string b;
