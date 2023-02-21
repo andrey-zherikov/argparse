@@ -507,7 +507,7 @@ private string getUsage(const ref Style style, const ref Command cmd, string pro
     if(usageText.length > 0)
         substituteProg(_ => usage.put(_), usageText, progName);
     else
-        createUsage(_ => usage.put(_), style, progName, &cmd.arguments, cmd.subCommandInfos.length > 0);
+        createUsage(_ => usage.put(_), style, progName, &cmd.arguments, cmd.subCommands.info.length > 0);
 
     usage.put("\n");
 
@@ -618,8 +618,8 @@ private auto getSection(const ref Style style, const ref Command cmd, Section[] 
     Section[] sections;
 
     // sub commands
-    if(cmd.subCommandInfos.length > 0)
-        sections ~= getSection(style, cmd.subCommandInfos);
+    if(cmd.subCommands.info.length > 0)
+        sections ~= getSection(style, cmd.subCommands.info);
 
     sections ~= argSections;
 

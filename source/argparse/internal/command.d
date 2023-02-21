@@ -58,7 +58,7 @@ package struct Command
         import std.array: array, join;
 
         // suggestions are names of all arguments and subcommands
-        auto suggestions_ = chain(arguments.arguments.map!(_ => _.displayNames).join, subCommandByName.keys);
+        auto suggestions_ = chain(arguments.arguments.map!(_ => _.displayNames).join, subCommands.byName.keys);
 
         // empty prefix means that we need to provide all suggestions, otherwise they are filtered
         return prefix == "" ? suggestions_.array : suggestions_.filter!(_ => _.startsWith(prefix)).array;
@@ -70,13 +70,12 @@ package struct Command
 
     CommandInfo info;
 
-    size_t[string] subCommandByName;
-    CommandInfo[] subCommandInfos;
+    SubCommands subCommands;
     Command delegate() pure nothrow [] subCommandCreate;
 
     auto getSubCommand(const Command[] cmdStack, string name) const
     {
-        auto pIndex = name in subCommandByName;
+        auto pIndex = name in subCommands.byName;
         if(pIndex is null)
             return Nullable!Command.init;
 
@@ -153,19 +152,14 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
 
     static if(symbol.length > 0)
     {
-        SubCommands subCommands;
-
         static foreach(TYPE; typeof(__traits(getMember, COMMAND_TYPE, symbol)).Types)
         {{
             enum cmdInfo = getCommandInfo!(config, RemoveDefaultAttribute!TYPE, RemoveDefaultAttribute!TYPE.stringof);
 
-            subCommands.add!(config, COMMAND_TYPE.stringof~"."~symbol, isDefaultCommand!TYPE, cmdInfo);
+            res.subCommands.add!(config, COMMAND_TYPE.stringof~"."~symbol, isDefaultCommand!TYPE, cmdInfo);
 
             res.subCommandCreate ~= () => ParsingSubCommandCreate!(config, TYPE, cmdInfo, COMMAND_TYPE, symbol)()(receiver);
         }}
-
-        res.subCommandInfos = subCommands.info;
-        res.subCommandByName = subCommands.byName;
     }
 
     return res;
