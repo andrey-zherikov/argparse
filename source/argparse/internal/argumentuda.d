@@ -98,7 +98,7 @@ if(!is(TYPE == void))
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package template getArgumentUDA(Config config, MEMBERTYPE, string defaultName)
+private template getArgumentUDAImpl(Config config, MEMBERTYPE, string defaultName)
 {
     auto finalize(alias initUDA)()
     {
@@ -144,14 +144,17 @@ package template getArgumentUDA(Config config, MEMBERTYPE, string defaultName)
 
         return uda;
     }
-
-    static if(__traits(compiles, getUDAs!(MEMBERTYPE, ArgumentUDA)) && getUDAs!(MEMBERTYPE, ArgumentUDA).length == 1)
-        alias fromUDA(alias initUDA) = finalize!(initUDA.addDefaults(getUDAs!(MEMBERTYPE, ArgumentUDA)[0]));
-    else
-        alias fromUDA(alias initUDA) = finalize!initUDA;
 }
 
-package alias getArgumentUDA(Config config, MEMBERTYPE, string defaultName, alias initUDA) = getArgumentUDA!(config, MEMBERTYPE, defaultName).fromUDA!initUDA;
+package template getArgumentUDA(Config config, MEMBERTYPE, string defaultName, alias initUDA)
+{
+    static if(__traits(compiles, getUDAs!(MEMBERTYPE, ArgumentUDA)) && getUDAs!(MEMBERTYPE, ArgumentUDA).length == 1)
+        enum uda = initUDA.addDefaults(getUDAs!(MEMBERTYPE, ArgumentUDA)[0]);
+    else
+        alias uda = initUDA;
+
+    enum getArgumentUDA = getArgumentUDAImpl!(config, MEMBERTYPE, defaultName).finalize!uda;
+}
 
 
 unittest
@@ -223,15 +226,19 @@ unittest
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-package enum getMemberArgumentUDA(alias config, TYPE, alias symbol, alias defaultUDA) = {
-    alias member = __traits(getMember, TYPE, symbol);
 
-    enum udas = getUDAs!(member, ArgumentUDA);
+package template getMemberArgumentUDA(Config config, TYPE, alias symbol, alias defaultUDA)
+{
+    private alias member = __traits(getMember, TYPE, symbol);
+
+    private enum udas = getUDAs!(member, ArgumentUDA);
     static assert(udas.length <= 1, "Member "~TYPE.stringof~"."~symbol~" has multiple '*Argument' UDAs");
 
     static if(udas.length > 0)
-        return getArgumentUDA!(config, typeof(member), symbol, udas[0]);
+        private enum uda = udas[0];
     else
-        return getArgumentUDA!(config, typeof(member), symbol, defaultUDA);
-}();
+        private alias uda = defaultUDA;
+
+    enum getMemberArgumentUDA = getArgumentUDA!(config, typeof(member), symbol, uda);
+}
 
