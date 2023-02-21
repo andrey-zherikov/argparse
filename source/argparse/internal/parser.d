@@ -5,7 +5,7 @@ import std.typecons: Nullable, nullable;
 import argparse.config;
 import argparse.result;
 import argparse.internal.arguments: Arguments;
-import argparse.internal.subcommands;
+import argparse.internal.subcommands: DEFAULT_COMMAND;
 import argparse.internal.command: Command, createCommand;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

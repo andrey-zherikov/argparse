@@ -1,20 +1,22 @@
 module argparse.internal.command;
 
-import std.typecons: Nullable, nullable;
-import std.traits: getSymbolsByUDA;
-
 import argparse.config;
 import argparse.result;
 import argparse.api.argument: TrailingArguments, NamedArgument;
-import argparse.api.command: RemoveDefaultAttribute;
-import argparse.internal: iterateArguments;
+import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
+import argparse.internal: iterateArguments, hasNoMembersWithUDA, isOpFunction;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.commandinfo;
-import argparse.internal.subcommands: DEFAULT_COMMAND, createSubCommands;
+import argparse.internal.subcommands: DEFAULT_COMMAND, SubCommands;
 import argparse.internal.hooks: HookHandlers;
 import argparse.internal.argumentparser;
 import argparse.internal.argumentuda: getArgumentUDA, getMemberArgumentUDA;
 import argparse.internal.help: HelpArgumentUDA;
+
+import std.typecons: Nullable, nullable;
+import std.traits: getSymbolsByUDA, hasUDA, getUDAs;
+import std.sumtype: match, isSumType;
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -147,14 +149,83 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
 
     res.info = info;
 
-    enum subCommands = createSubCommands!(config, COMMAND_TYPE);
+    enum symbol = subCommandSymbol!COMMAND_TYPE;
 
-    res.subCommandInfos = subCommands.info;
-    res.subCommandByName = subCommands.byName;
-    res.subCommandCreate = subCommands.createFunc.map!(_ => () => _(receiver)).array;
+    static if(symbol.length > 0)
+    {
+        SubCommands subCommands;
 
+        static foreach(TYPE; typeof(__traits(getMember, COMMAND_TYPE, symbol)).Types)
+        {{
+            enum cmdInfo = getCommandInfo!(config, RemoveDefaultAttribute!TYPE, RemoveDefaultAttribute!TYPE.stringof);
+
+            subCommands.add!(config, COMMAND_TYPE.stringof~"."~symbol, isDefaultCommand!TYPE, cmdInfo);
+
+            res.subCommandCreate ~= () => ParsingSubCommandCreate!(config, TYPE, cmdInfo, COMMAND_TYPE, symbol)()(receiver);
+        }}
+
+        res.subCommandInfos = subCommands.info;
+        res.subCommandByName = subCommands.byName;
+    }
 
     return res;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private template subCommandSymbol(TYPE)
+{
+    import std.meta: Filter, AliasSeq;
+    import std.sumtype: isSumType;
+
+    template filter(alias sym)
+    {
+        alias mem = __traits(getMember, TYPE, sym);
+
+        enum filter = !is(mem) && (
+            hasUDA!(mem, SubCommandsUDA) ||
+            hasNoMembersWithUDA!TYPE && !isOpFunction!mem && isSumType!(typeof(mem)));
+    }
+
+    alias symbols = Filter!(filter, __traits(allMembers, TYPE));
+
+    static if(symbols.length == 0)
+        enum subCommandSymbol = "";
+    else static if(symbols.length == 1)
+        enum subCommandSymbol = symbols[0];
+    else
+        static assert(false, "Multiple subcommand members are in "~TYPE.stringof~": "~symbols.stringof);
+
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol)()
+{
+    return function (ref RECEIVER receiver)
+    {
+        auto target = &__traits(getMember, receiver, symbol);
+
+        alias create = (ref COMMAND_TYPE actualTarget)
+        => createCommand!(config, RemoveDefaultAttribute!COMMAND_TYPE, info)(actualTarget);
+
+        static if(typeof(*target).Types.length == 1)
+            return (*target).match!create;
+        else
+        {
+            // Initialize if needed
+            if((*target).match!((ref COMMAND_TYPE t) => false, _ => true))
+                *target = COMMAND_TYPE.init;
+
+            return (*target).match!(create,
+                (_)
+            {
+                assert(false, "This should never happen");
+                return Command.init;
+            }
+            );
+        }
+    };
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
