@@ -7,7 +7,7 @@ import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubComman
 import argparse.internal: iterateArguments, hasNoMembersWithUDA, isOpFunction;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.commandinfo;
-import argparse.internal.subcommands: DEFAULT_COMMAND, SubCommands;
+import argparse.internal.subcommands: SubCommands;
 import argparse.internal.hooks: HookHandlers;
 import argparse.internal.argumentparser;
 import argparse.internal.argumentuda: getArgumentUDA, getMemberArgumentUDA;
@@ -72,6 +72,12 @@ package struct Command
 
     SubCommands subCommands;
     Command delegate() pure nothrow [] subCommandCreate;
+    Command delegate() pure nothrow defaultSubCommand;
+
+    auto getDefaultSubCommand(const Command[] cmdStack) const
+    {
+        return defaultSubCommand is null ? Nullable!Command.init : nullable(defaultSubCommand());
+    }
 
     auto getSubCommand(const Command[] cmdStack, string name) const
     {
@@ -79,10 +85,7 @@ package struct Command
         if(pIndex is null)
             return Nullable!Command.init;
 
-        auto subCmd = subCommandCreate[*pIndex]();
-        subCmd.isDefault = name == DEFAULT_COMMAND;
-
-        return nullable(subCmd);
+        return nullable(subCommandCreate[*pIndex]());
     }
 
     HookHandlers hooks;
@@ -156,7 +159,13 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
         {{
             enum cmdInfo = getCommandInfo!(config, RemoveDefaultAttribute!TYPE, RemoveDefaultAttribute!TYPE.stringof);
 
-            res.subCommands.add!(config, COMMAND_TYPE.stringof~"."~symbol, isDefaultCommand!TYPE, cmdInfo);
+            static if(isDefaultCommand!TYPE)
+            {
+                assert(res.defaultSubCommand is null, "Multiple default subcommands: "~COMMAND_TYPE.stringof~"."~symbol);
+                res.defaultSubCommand = () => ParsingSubCommandCreate!(config, TYPE, cmdInfo, COMMAND_TYPE, symbol)()(receiver);
+            }
+
+            res.subCommands.add!cmdInfo;
 
             res.subCommandCreate ~= () => ParsingSubCommandCreate!(config, TYPE, cmdInfo, COMMAND_TYPE, symbol)()(receiver);
         }}
@@ -201,7 +210,11 @@ private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo in
         auto target = &__traits(getMember, receiver, symbol);
 
         alias create = (ref COMMAND_TYPE actualTarget)
-        => createCommand!(config, RemoveDefaultAttribute!COMMAND_TYPE, info)(actualTarget);
+        {
+            auto cmd = createCommand!(config, RemoveDefaultAttribute!COMMAND_TYPE, info)(actualTarget);
+            cmd.isDefault = isDefaultCommand!COMMAND_TYPE;
+            return cmd;
+        };
 
         static if(typeof(*target).Types.length == 1)
             return (*target).match!create;
@@ -213,10 +226,10 @@ private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo in
 
             return (*target).match!(create,
                 (_)
-            {
-                assert(false, "This should never happen");
-                return Command.init;
-            }
+                {
+                    assert(false, "This should never happen");
+                    return Command.init;
+                }
             );
         }
     };

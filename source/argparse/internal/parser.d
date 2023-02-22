@@ -5,7 +5,6 @@ import std.typecons: Nullable, nullable;
 import argparse.config;
 import argparse.result;
 import argparse.internal.arguments: Arguments;
-import argparse.internal.subcommands: DEFAULT_COMMAND;
 import argparse.internal.command: Command, createCommand;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -321,7 +320,7 @@ package struct Parser
 
         if(addDefaultCommand)
         {
-            auto subcmd = cmd.getSubCommand(cmdStack, DEFAULT_COMMAND);
+            auto subcmd = cmd.getDefaultSubCommand(cmdStack);
             if(!subcmd.isNull)
             {
                 cmdStack ~= subcmd.get;
