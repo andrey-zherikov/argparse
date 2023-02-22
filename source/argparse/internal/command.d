@@ -4,13 +4,12 @@ import argparse.config;
 import argparse.result;
 import argparse.api.argument: TrailingArguments, NamedArgument;
 import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
-import argparse.internal: iterateArguments, hasNoMembersWithUDA, isOpFunction;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.commandinfo;
 import argparse.internal.subcommands: SubCommands;
 import argparse.internal.hooks: HookHandlers;
 import argparse.internal.argumentparser;
-import argparse.internal.argumentuda: getArgumentUDA, getMemberArgumentUDA;
+import argparse.internal.argumentuda: ArgumentUDA, getArgumentUDA, getMemberArgumentUDA;
 import argparse.internal.help: HelpArgumentUDA;
 
 import std.typecons: Nullable, nullable;
@@ -103,6 +102,61 @@ package struct Command
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA  ).length == 0 &&
+                                            getSymbolsByUDA!(COMMAND, NamedArgument).length == 0 &&
+                                            getSymbolsByUDA!(COMMAND, SubCommands  ).length == 0;
+
+private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private template iterateArguments(TYPE)
+{
+    import std.meta: Filter;
+    import std.sumtype: isSumType;
+
+    template filter(alias sym)
+    {
+        alias mem = __traits(getMember, TYPE, sym);
+
+        enum filter = !is(mem) && (
+            hasUDA!(mem, ArgumentUDA) ||
+            hasUDA!(mem, NamedArgument) ||
+            hasNoMembersWithUDA!TYPE && !isOpFunction!mem && !isSumType!(typeof(mem)));
+    }
+
+    alias iterateArguments = Filter!(filter, __traits(allMembers, TYPE));
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private template subCommandSymbol(TYPE)
+{
+    import std.meta: Filter, AliasSeq;
+    import std.sumtype: isSumType;
+
+    template filter(alias sym)
+    {
+        alias mem = __traits(getMember, TYPE, sym);
+
+        enum filter = !is(mem) && (
+            hasUDA!(mem, SubCommandsUDA) ||
+            hasNoMembersWithUDA!TYPE && !isOpFunction!mem && isSumType!(typeof(mem)));
+    }
+
+    alias symbols = Filter!(filter, __traits(allMembers, TYPE));
+
+    static if(symbols.length == 0)
+        enum subCommandSymbol = "";
+    else static if(symbols.length == 1)
+        enum subCommandSymbol = symbols[0];
+    else
+        static assert(false, "Multiple subcommand members are in "~TYPE.stringof~": "~symbols.stringof);
+
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo info = getCommandInfo!(config, COMMAND_TYPE))(ref COMMAND_TYPE receiver)
 {
     import std.algorithm: map;
@@ -172,33 +226,6 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
     }
 
     return res;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private template subCommandSymbol(TYPE)
-{
-    import std.meta: Filter, AliasSeq;
-    import std.sumtype: isSumType;
-
-    template filter(alias sym)
-    {
-        alias mem = __traits(getMember, TYPE, sym);
-
-        enum filter = !is(mem) && (
-            hasUDA!(mem, SubCommandsUDA) ||
-            hasNoMembersWithUDA!TYPE && !isOpFunction!mem && isSumType!(typeof(mem)));
-    }
-
-    alias symbols = Filter!(filter, __traits(allMembers, TYPE));
-
-    static if(symbols.length == 0)
-        enum subCommandSymbol = "";
-    else static if(symbols.length == 1)
-        enum subCommandSymbol = symbols[0];
-    else
-        static assert(false, "Multiple subcommand members are in "~TYPE.stringof~": "~symbols.stringof);
-
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
