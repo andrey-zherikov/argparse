@@ -3,7 +3,7 @@
 
 # Parser for command-line arguments
 
-`argparse` is a self-contained flexible utility to parse command line arguments that can work at compile-time.
+`argparse` is a self-contained flexible utility to parse command line arguments.
 
 ## Features
 
