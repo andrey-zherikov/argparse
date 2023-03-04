@@ -362,9 +362,7 @@ unittest
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T("C",null,typeof(T.cmd)(Default!(T.cmd2)(T.cmd2("B"))))); return 12345; })(["-c","C","-b","B"]) == 12345);
-    import std.stdio : writeln, stderr;stderr.writeln(__FILE__," ",__LINE__);
     assert(CLI!T.parseArgs!((_) {assert(false);})(["-h"]) == 0);
-    import std.stdio : writeln, stderr;stderr.writeln(__FILE__," ",__LINE__);
     assert(CLI!T.parseArgs!((_) {assert(false);})(["--help"]) == 0);
 }
 
