@@ -985,7 +985,7 @@ to any text printed to the console (see below).
 
 ### Styles and colors
 
-The `argpase.ansi` submodule provides supported styles and colors. You can use any combinations of them:
+The `argparse.ansi` submodule provides supported styles and colors. You can use any combinations of them:
 
 **Font styles:**
 - `bold`
