@@ -267,6 +267,8 @@ package struct Parser
 
         foreach_reverse(index, cmdParser; cmdStack)
         {
+            auto cmdStack1 = cmdStack[0..index+1];
+
             static if(completionMode)
             {
                 auto res = parse!true(cmdStack1, cmdParser, arg);
@@ -307,7 +309,7 @@ package struct Parser
 
             static if(completionMode)
                 if(args.empty)
-                    return res;
+                    return res; // res contains suggestions
         }
 
         return cmdStack[0].arguments.checkRestrictions(idxParsedArgs, config);
