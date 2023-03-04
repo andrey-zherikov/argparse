@@ -3,12 +3,8 @@ module argparse.internal.help;
 import argparse.ansi;
 import argparse.config;
 import argparse.result;
-import argparse.api.argument: NamedArgument, PositionalArgument, TrailingArguments, Description, Optional, Required, Placeholder, HideFromHelp, AllowedValues;
-import argparse.api.argumentgroup: ArgumentGroup, Description;
-import argparse.api.command: CommandUDA = Command, SubCommands, Description, ShortDescription, Epilog;
 import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
-import argparse.internal.command: Command, createCommand;
 import argparse.internal.commandinfo: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.style;
@@ -149,7 +145,7 @@ package auto HelpArgumentUDA()
 {
     struct HelpArgumentParsingFunction
     {
-        static auto parse(T)(const Command[] cmdStack, Config* config, ref T receiver, string argName, string[] rawValues)
+        static auto parse(T, Command)(const Command[] cmdStack, Config* config, ref T receiver, string argName, string[] rawValues)
         {
             import std.stdio: stdout;
 
@@ -495,7 +491,7 @@ private void createUsage(void delegate(string) sink, const ref Style style, stri
         sink(style.subcommandName(" <command> [<args>]"));
 }
 
-private string getUsage(const ref Style style, const ref Command cmd, string progName)
+private string getUsage(Command)(const ref Style style, const ref Command cmd, string progName)
 {
     import std.array: appender;
 
@@ -613,7 +609,7 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
     return section;
 }
 
-private auto getSection(const ref Style style, const ref Command cmd, Section[] argSections, string progName)
+private auto getSection(Command)(const ref Style style, const ref Command cmd, Section[] argSections, string progName)
 {
     Section[] sections;
 
@@ -629,7 +625,7 @@ private auto getSection(const ref Style style, const ref Command cmd, Section[] 
     return section;
 }
 
-private void printHelp(ARGUMENTS)(void delegate(string) sink, const ref Command cmd, ARGUMENTS arguments, Config* config, string progName)
+package(argparse) void printHelp(ARGUMENTS, Command)(void delegate(string) sink, const ref Command cmd, ARGUMENTS arguments, Config* config, string progName)
 {
     import std.algorithm: each;
 
@@ -645,175 +641,4 @@ private void printHelp(ARGUMENTS)(void delegate(string) sink, const ref Command 
     immutable indent = spaces(helpPosition + 2);
 
     print(enableStyling ? sink : (string _) { _.getUnstyledText.each!sink; }, section, "", indent);
-}
-
-unittest
-{
-    static auto epilog() { return "custom epilog"; }
-    @(CommandUDA("MYPROG")
-     .Description("custom description")
-     .Epilog(epilog)
-    )
-    struct T
-    {
-        @NamedArgument  string s;
-        @(NamedArgument.Placeholder("VALUE"))  string p;
-
-        @(NamedArgument.HideFromHelp())  string hidden;
-
-        enum Fruit { apple, pear };
-        @(NamedArgument(["f","fruit"]).Required().Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
-
-        @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
-
-        @(PositionalArgument(0, "param0").Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string _param0;
-        @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
-
-        @TrailingArguments string[] args;
-    }
-
-    auto test()
-    {
-        import std.array: appender;
-
-        auto a = appender!string;
-        alias cfg = {
-            Config config;
-            config.stylingMode = Config.StylingMode.off;
-            return config;
-        };
-        auto config = cfg();
-        T receiver;
-        auto cmd = createCommand!(cfg())(receiver);
-        printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
-        return a[];
-    }
-
-    auto env = cleanStyleEnv(true);
-    scope(exit) restoreStyleEnv(env);
-
-    assert(test()  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
-        "custom description\n\n"~
-        "Required arguments:\n"~
-        "  -f {apple,pear}, --fruit {apple,pear}\n"~
-        "                   This is a help text for fruit. Very very very very very very\n"~
-        "                   very very very very very very very very very very very very\n"~
-        "                   very long text\n"~
-        "  param0           This is a help text for param0. Very very very very very very\n"~
-        "                   very very very very very very very very very very very very\n"~
-        "                   very long text\n"~
-        "  {q,a}\n\n"~
-        "Optional arguments:\n"~
-        "  -s S\n"~
-        "  -p VALUE\n"~
-        "  -i {1,4,16,8}\n"~
-        "  -h, --help       Show this help message and exit\n\n"~
-        "custom epilog\n");
-}
-
-unittest
-{
-    @(CommandUDA("MYPROG"))
-    struct T
-    {
-        @(ArgumentGroup("group1").Description("group1 description"))
-        {
-            @NamedArgument
-            {
-                string a;
-                string b;
-            }
-            @PositionalArgument(0) string p;
-        }
-
-        @(ArgumentGroup("group2").Description("group2 description"))
-        @NamedArgument
-        {
-            string c;
-            string d;
-        }
-        @PositionalArgument(1) string q;
-    }
-
-    import std.array: appender;
-
-    auto env = cleanStyleEnv(true);
-    scope(exit) restoreStyleEnv(env);
-
-    auto a = appender!string;
-    alias cfg = {
-        Config config;
-        config.stylingMode = Config.StylingMode.off;
-        return config;
-    };
-    auto config = cfg();
-    T receiver;
-    auto cmd = createCommand!(cfg())(receiver);
-    printHelp(_ => a.put(_), cmd,  [&cmd.arguments], &config, "MYPROG");
-
-    assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
-        "group1:\n"~
-        "  group1 description\n\n"~
-        "  -a A\n"~
-        "  -b B\n"~
-        "  p\n\n"~
-        "group2:\n"~
-        "  group2 description\n\n"~
-        "  -c C\n"~
-        "  -d D\n\n"~
-        "Required arguments:\n"~
-        "  q\n\n"~
-        "Optional arguments:\n"~
-        "  -h, --help    Show this help message and exit\n\n");
-}
-
-unittest
-{
-    import std.sumtype: SumType;
-
-    @(CommandUDA("MYPROG"))
-    struct T
-    {
-        @(CommandUDA("cmd1").ShortDescription("Perform cmd 1"))
-        struct CMD1
-        {
-            string a;
-        }
-        @(CommandUDA("very-long-command-name-2").ShortDescription("Perform cmd 2"))
-        struct CMD2
-        {
-            string b;
-        }
-
-        string c;
-        string d;
-
-        SumType!(CMD1, CMD2) cmd;
-    }
-
-    import std.array: appender;
-
-    auto env = cleanStyleEnv(true);
-    scope(exit) restoreStyleEnv(env);
-
-    auto a = appender!string;
-    alias cfg = {
-        Config config;
-        config.stylingMode = Config.StylingMode.off;
-        return config;
-    };
-    auto config = cfg();
-    T receiver;
-    auto cmd = createCommand!(cfg())(receiver);
-    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
-
-    assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
-        "Available commands:\n"~
-        "  cmd1          Perform cmd 1\n"~
-        "  very-long-command-name-2\n"~
-        "                Perform cmd 2\n\n"~
-        "Optional arguments:\n"~
-        "  -c C\n"~
-        "  -d D\n"~
-        "  -h, --help    Show this help message and exit\n\n");
 }

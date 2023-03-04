@@ -1,8 +1,6 @@
 module argparse;
 
 
-import argparse.internal.command: createCommand;
-
 public import argparse.api.ansi;
 public import argparse.api.argument;
 public import argparse.api.argumentgroup;
@@ -18,6 +16,14 @@ public import argparse.result;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+version(unittest)
+{
+    import argparse.internal.command : createCommand;
+    import argparse.internal.help : printHelp;
+    import argparse.ansi : cleanStyleEnv, restoreStyleEnv;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 unittest
 {
@@ -797,4 +803,178 @@ unittest
     assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a"]) != 0);
     assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","b"]) != 0);
     assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    static auto epilog() { return "custom epilog"; }
+    @(Command("MYPROG")
+     .Description("custom description")
+     .Epilog(epilog)
+    )
+    struct T
+    {
+        @NamedArgument  string s;
+        @(NamedArgument.Placeholder("VALUE"))  string p;
+
+        @(NamedArgument.HideFromHelp())  string hidden;
+
+        enum Fruit { apple, pear };
+        @(NamedArgument(["f","fruit"]).Required().Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
+
+        @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
+
+        @(PositionalArgument(0, "param0").Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string _param0;
+        @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
+
+        @TrailingArguments string[] args;
+    }
+
+    auto test()
+    {
+        import std.array: appender;
+
+        auto a = appender!string;
+        alias cfg = {
+            Config config;
+            config.stylingMode = Config.StylingMode.off;
+            return config;
+        };
+        auto config = cfg();
+        T receiver;
+        auto cmd = createCommand!(cfg())(receiver);
+        printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+        return a[];
+    }
+
+    auto env = cleanStyleEnv(true);
+    scope(exit) restoreStyleEnv(env);
+
+    assert(test()  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
+        "custom description\n\n"~
+        "Required arguments:\n"~
+        "  -f {apple,pear}, --fruit {apple,pear}\n"~
+        "                   This is a help text for fruit. Very very very very very very\n"~
+        "                   very very very very very very very very very very very very\n"~
+        "                   very long text\n"~
+        "  param0           This is a help text for param0. Very very very very very very\n"~
+        "                   very very very very very very very very very very very very\n"~
+        "                   very long text\n"~
+        "  {q,a}\n\n"~
+        "Optional arguments:\n"~
+        "  -s S\n"~
+        "  -p VALUE\n"~
+        "  -i {1,4,16,8}\n"~
+        "  -h, --help       Show this help message and exit\n\n"~
+        "custom epilog\n");
+}
+
+unittest
+{
+    @(Command("MYPROG"))
+    struct T
+    {
+        @(ArgumentGroup("group1").Description("group1 description"))
+        {
+            @NamedArgument
+            {
+                string a;
+                string b;
+            }
+            @PositionalArgument(0) string p;
+        }
+
+        @(ArgumentGroup("group2").Description("group2 description"))
+        @NamedArgument
+        {
+            string c;
+            string d;
+        }
+        @PositionalArgument(1) string q;
+    }
+
+    import std.array: appender;
+
+    auto env = cleanStyleEnv(true);
+    scope(exit) restoreStyleEnv(env);
+
+    auto a = appender!string;
+    alias cfg = {
+        Config config;
+        config.stylingMode = Config.StylingMode.off;
+        return config;
+    };
+    auto config = cfg();
+    T receiver;
+    auto cmd = createCommand!(cfg())(receiver);
+    printHelp(_ => a.put(_), cmd,  [&cmd.arguments], &config, "MYPROG");
+
+    assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
+        "group1:\n"~
+        "  group1 description\n\n"~
+        "  -a A\n"~
+        "  -b B\n"~
+        "  p\n\n"~
+        "group2:\n"~
+        "  group2 description\n\n"~
+        "  -c C\n"~
+        "  -d D\n\n"~
+        "Required arguments:\n"~
+        "  q\n\n"~
+        "Optional arguments:\n"~
+        "  -h, --help    Show this help message and exit\n\n");
+}
+
+unittest
+{
+    import std.sumtype: SumType;
+
+    @(Command("MYPROG"))
+    struct T
+    {
+        @(Command("cmd1").ShortDescription("Perform cmd 1"))
+        struct CMD1
+        {
+            string a;
+        }
+        @(Command("very-long-command-name-2").ShortDescription("Perform cmd 2"))
+        struct CMD2
+        {
+            string b;
+        }
+
+        string c;
+        string d;
+
+        SumType!(CMD1, CMD2) cmd;
+    }
+
+    import std.array: appender;
+
+    auto env = cleanStyleEnv(true);
+    scope(exit) restoreStyleEnv(env);
+
+    auto a = appender!string;
+    alias cfg = {
+        Config config;
+        config.stylingMode = Config.StylingMode.off;
+        return config;
+    };
+    auto config = cfg();
+    T receiver;
+    auto cmd = createCommand!(cfg())(receiver);
+    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+
+    assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
+        "Available commands:\n"~
+        "  cmd1          Perform cmd 1\n"~
+        "  very-long-command-name-2\n"~
+        "                Perform cmd 2\n\n"~
+        "Optional arguments:\n"~
+        "  -c C\n"~
+        "  -d D\n"~
+        "  -h, --help    Show this help message and exit\n\n");
 }
