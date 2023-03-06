@@ -44,6 +44,23 @@ private auto parsingDoneHandlers(TYPE, symbols...)()
     return handlers;
 }
 
+unittest
+{
+    static void onParsingDone(S)(ref S receiver, const Config* config)
+    {
+    }
+    @(Hooks.onParsingDone!(onParsingDone))
+    static struct S
+    {
+    }
+    struct T
+    {
+        S a;
+    }
+
+    assert(parsingDoneHandlers!(T, __traits(allMembers, T)).length == 1);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package(argparse) struct Hooks

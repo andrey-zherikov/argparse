@@ -170,6 +170,7 @@ unittest
     assert(createUDA().info.allowBooleanNegation); // make codecov happy
 
     auto res = getArgumentUDA!(Config.init, int, "default_name", createUDA()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, int, "default_name").finalize!(createUDA()).info);
     assert(!res.allowBooleanNegation);
     assert(res.names == ["default_name"]);
     assert(res.displayNames == ["default_name"]);
@@ -178,6 +179,7 @@ unittest
     assert(res.placeholder == "default_name");
 
     res = getArgumentUDA!(Config.init, int, "default_name", createUDA!"myvalue"()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, int, "default_name").finalize!(createUDA!"myvalue"()).info);
     assert(res.placeholder == "myvalue");
     assert(res.displayNames == ["myvalue"]);
 }
@@ -194,6 +196,7 @@ unittest
     assert(createUDA().info.allowBooleanNegation); // make codecov happy
 
     auto res = getArgumentUDA!(Config.init, bool, "default_name", createUDA()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, bool, "default_name").finalize!(createUDA()).info);
     assert(res.allowBooleanNegation);
     assert(res.names == ["default_name"]);
     assert(res.displayNames == ["--default_name"]);
@@ -202,6 +205,7 @@ unittest
     assert(res.placeholder == "DEFAULT_NAME");
 
     res = getArgumentUDA!(Config.init, bool, "default_name", createUDA!"myvalue"()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, bool, "default_name").finalize!(createUDA!"myvalue"()).info);
     assert(res.placeholder == "myvalue");
     assert(res.displayNames == ["--default_name"]);
 }
@@ -219,9 +223,11 @@ unittest
     assert(createUDA().info.allowBooleanNegation); // make codecov happy
 
     auto res = getArgumentUDA!(Config.init, E, "default_name", createUDA()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, E, "default_name").finalize!(createUDA()).info);
     assert(res.placeholder == "{a,b,c}");
 
     res = getArgumentUDA!(Config.init, E, "default_name", createUDA!"myvalue"()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, E, "default_name").finalize!(createUDA!"myvalue"()).info);
     assert(res.placeholder == "myvalue");
 }
 
