@@ -227,6 +227,18 @@ private auto getRestrictionGroups(TYPE, alias symbol)()
 
 private enum getRestrictionGroups(TYPE, typeof(null) symbol) = RestrictionGroup[].init;
 
+unittest
+{
+    struct T
+    {
+        @(RestrictionGroup("1"))
+        @(RestrictionGroup("2"))
+        @(RestrictionGroup("3"))
+        int a;
+    }
+
+    assert(getRestrictionGroups!(T, "a") == [RestrictionGroup("1"), RestrictionGroup("2"), RestrictionGroup("3")]);
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

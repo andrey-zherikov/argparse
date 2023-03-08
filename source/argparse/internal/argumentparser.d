@@ -1,6 +1,6 @@
 module argparse.internal.argumentparser;
 
-import argparse.api.argument: NamedArgument;
+import argparse.api.argument: NamedArgument, NumberOfValues;
 import argparse.config;
 import argparse.result;
 import argparse.param;
@@ -41,6 +41,24 @@ private alias ParsingArgument(COMMAND_STACK, RECEIVER, alias symbol, alias uda, 
             }
         }
     };
+
+unittest
+{
+    struct T { string a; }
+
+    auto test(TYPE)(string[] values)
+    {
+        Config config;
+        TYPE t;
+
+        return ParsingArgument!(string[], TYPE, "a", NamedArgument("arg-name").NumberOfValues(1), false)([], &config, t, "arg-name", values);
+    }
+
+    assert(test!T(["raw-value"]));
+    assert(!test!T(["value1","value2"]));
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package auto getArgumentParsingFunctions(Config config, COMMAND_STACK, TYPE, symbols...)()
 {
