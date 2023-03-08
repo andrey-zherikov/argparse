@@ -1,586 +1,29 @@
-module argparse.internal;
+module argparse.internal.valueparser;
 
-import argparse : NamedArgument, TrailingArguments, Default;
-import argparse.api: Config, Result, Param, RawParam;
-import argparse.internal.help;
-import argparse.internal.parser;
-import argparse.internal.lazystring;
-import argparse.internal.arguments;
-import argparse.internal.subcommands;
-import argparse.internal.argumentuda;
-import argparse.internal.hooks: Hook;
-import argparse.internal.utils: formatAllowedValues;
+import argparse.config;
+import argparse.param;
+import argparse.result;
+import argparse.internal.parsehelpers;
 import argparse.internal.enumhelpers: getEnumValues, getEnumValue;
 
 import std.traits;
-import std.sumtype: SumType, match;
-
-
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Internal API
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package mixin template ForwardMemberFunction(string dest)
+package(argparse) struct ValueParser(alias PreProcess,
+                                     alias PreValidation,
+                                     alias Parse,
+                                     alias Validation,
+                                     alias Action,
+                                     alias NoValueAction)
 {
-    import std.array: split;
-    mixin("auto "~dest.split('.')[$-1]~"(Args...)(auto ref Args args) inout { import core.lifetime: forward; return "~dest~"(forward!args); }");
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private auto checkDuplicates(alias sortedRange, string errorMsg)() {
-    static if(sortedRange.length >= 2)
-    {
-        enum value = {
-            import std.conv : to;
-
-            foreach(i; 1..sortedRange.length-1)
-                if(sortedRange[i-1] == sortedRange[i])
-                    return sortedRange[i].to!string;
-
-            return "";
-        }();
-        static assert(value.length == 0, errorMsg ~ value);
-    }
-
-    return true;
-}
-
-package bool checkArgumentNames(T)()
-{
-    enum names = {
-        import std.algorithm : sort;
-
-        string[] names;
-        static foreach (sym; getSymbolsByUDA!(T, ArgumentUDA))
-        {{
-            enum argUDA = getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA)[0];
-
-            static assert(!argUDA.info.positional || argUDA.info.names.length <= 1,
-            "Positional argument should have exactly one name: "~T.stringof~"."~sym.stringof);
-
-            static foreach (name; argUDA.info.names)
-            {
-                static assert(name.length > 0, "Argument name can't be empty: "~T.stringof~"."~sym.stringof);
-
-                names ~= name;
-            }
-        }}
-
-        return names.sort;
-    }();
-
-    return checkDuplicates!(names, "Argument name appears more than once: ");
-}
-
-private void checkArgumentName(T)(char namedArgChar)
-{
-    import std.exception: enforce;
-
-    static foreach(sym; getSymbolsByUDA!(T, ArgumentUDA))
-        static foreach(name; getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA)[0].info.names)
-            enforce(name[0] != namedArgChar, "Name of argument should not begin with '"~namedArgChar~"': "~name);
-}
-
-package bool checkPositionalIndexes(T)()
-{
-    import std.conv  : to;
-    import std.range : lockstep, iota;
-
-
-    enum positions = () {
-        import std.algorithm : sort;
-
-        uint[] positions;
-        static foreach (sym; getSymbolsByUDA!(T, ArgumentUDA))
-        {{
-            enum argUDA = getUDAs!(__traits(getMember, T, __traits(identifier, sym)), ArgumentUDA)[0];
-
-            static if (argUDA.info.positional)
-                positions ~= argUDA.info.position.get;
-        }}
-
-        return positions.sort;
-    }();
-
-    if(!checkDuplicates!(positions, "Positional arguments have duplicated position: "))
-        return false;
-
-    static foreach (i, pos; lockstep(iota(0, positions.length), positions))
-        static assert(i == pos, "Positional arguments have missed position: " ~ i.to!string);
-
-    return true;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package struct CommandArguments(RECEIVER)
-{
-    static assert(getSymbolsByUDA!(RECEIVER, TrailingArguments).length <= 1, "Type "~RECEIVER.stringof~" must have at most one 'TrailingArguments' UDA");
-
-    private enum _validate = checkArgumentNames!RECEIVER && checkPositionalIndexes!RECEIVER;
-
-    const CommandInfo info;
-    const(string)[] parentNames;
-
-    Arguments arguments;
-
-    ParseFunction!RECEIVER[] parseArguments;
-    ParseFunction!RECEIVER[] completeArguments;
-
-    alias void delegate(ref RECEIVER receiver, const Config* config) ParseFinalizer;
-    ParseFinalizer[] parseFinalizers;
-
-
-    // sub commands
-    SubCommands!RECEIVER subCommands;
-
-
-    mixin ForwardMemberFunction!"arguments.findPositionalArgument";
-    mixin ForwardMemberFunction!"arguments.findNamedArgument";
-    mixin ForwardMemberFunction!"arguments.checkRestrictions";
-
-
-
-    private this(CommandInfo info)
-    {
-        this.info = info;
-
-        subCommands.level = 0;
-    }
-    private this(PARENT)(CommandInfo info, const PARENT* parentArguments)
-    {
-        this.info = info;
-
-        parentNames = parentArguments.parentNames ~ parentArguments.info.displayNames[0];
-        subCommands.level = parentArguments.subCommands.level + 1;
-        arguments = Arguments(&parentArguments.arguments);
-    }
-
-    private void addArgument(alias symbol, alias uda)()
-    {
-        alias member = __traits(getMember, RECEIVER, symbol);
-
-        static if(__traits(compiles, getUDAs!(typeof(member), Hook.ParsingDone)) && getUDAs!(typeof(member), Hook.ParsingDone).length > 0)
-        {
-            static foreach(hook; getUDAs!(typeof(member), Hook.ParsingDone))
-                parseFinalizers ~= (ref RECEIVER receiver, const Config* config)
-                    {
-                        auto target = &__traits(getMember, receiver, symbol);
-                        hook(*target, config);
-                    };
-        }
-
-        enum restrictions = {
-            RestrictionGroup[] restrictions;
-            static foreach(gr; getUDAs!(member, RestrictionGroup))
-                restrictions ~= gr;
-            return restrictions;
-        }();
-
-        addArgumentImpl!(symbol, uda, restrictions, getUDAs!(member, Group));
-    }
-
-    private void addArgumentImpl(alias symbol, alias uda, RestrictionGroup[] restrictions = [], groups...)()
-    {
-        static assert(groups.length <= 1, "Member "~RECEIVER.stringof~"."~symbol~" has multiple 'Group' UDAs");
-        static if(groups.length > 0)
-            arguments.addArgument!(uda.info, restrictions, groups[0]);
-        else
-            arguments.addArgument!(uda.info, restrictions);
-
-        static if(__traits(compiles, { parseArguments ~= uda.parsingFunc.getParseFunc!RECEIVER; }))
-            parseArguments ~= uda.parsingFunc.getParseFunc!RECEIVER;
-        else
-            parseArguments ~= ParsingArgument!(symbol, uda, RECEIVER, false);
-
-        completeArguments ~= ParsingArgument!(symbol, uda, RECEIVER, true);
-    }
-
-    auto getParseFunction(bool completionMode)(size_t index) const
-    {
-        static if(completionMode)
-            return completeArguments[index];
-        else
-            return parseArguments[index];
-    }
-
-    auto findSubCommand(string name) const
-    {
-        return subCommands.find(name);
-    }
-
-    package void setTrailingArgs(ref RECEIVER receiver, ref string[] rawArgs) const
-    {
-        static if(getSymbolsByUDA!(RECEIVER, TrailingArguments).length == 1)
-        {
-            enum symbol = __traits(identifier, getSymbolsByUDA!(RECEIVER, TrailingArguments)[0]);
-            auto target = &__traits(getMember, receiver, symbol);
-
-            static if(__traits(compiles, { *target = rawArgs; }))
-                *target = rawArgs;
-            else
-                static assert(false, "Type '"~typeof(*target).stringof~"' of `"~
-                                     RECEIVER.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
-
-            rawArgs = [];
-        }
-    }
-
-    package void onParsingDone(ref RECEIVER receiver, const Config* config) const
-    {
-        foreach(dg; parseFinalizers)
-            dg(receiver, config);
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA  ).length == 0 &&
-                                            getSymbolsByUDA!(COMMAND, NamedArgument).length == 0 &&
-                                            getSymbolsByUDA!(COMMAND, argparse.SubCommands  ).length == 0;
-
-private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
-
-
-private void addArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
-{
-    import std.sumtype: isSumType;
-
-    enum isArgument(alias mem) = hasUDA!(mem, ArgumentUDA) ||
-                                 hasUDA!(mem, NamedArgument) ||
-                                 hasNoMembersWithUDA!COMMAND && !isOpFunction!mem && !isSumType!(typeof(mem));
-
-    static foreach(sym; __traits(allMembers, COMMAND))
-    {{
-        alias mem = __traits(getMember, COMMAND, sym);
-
-        // skip types
-        static if(!is(mem) && isArgument!mem)
-            cmd.addArgument!(sym, getMemberArgumentUDA!(config, COMMAND, sym, NamedArgument));
-    }}
-}
-
-private void addSubCommands(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
-{
-    import std.sumtype: isSumType;
-
-    enum isSubCommand(alias mem) = hasUDA!(mem, argparse.SubCommands) ||
-                                   hasNoMembersWithUDA!COMMAND && !isOpFunction!mem && isSumType!(typeof(mem));
-
-    static foreach(sym; __traits(allMembers, COMMAND))
-    {{
-        alias mem = __traits(getMember, COMMAND, sym);
-
-        // skip types
-        static if(!is(mem) && isSubCommand!mem)
-        {
-            static assert(isSumType!(typeof(mem)), COMMAND.stringof~"."~sym~" must have 'SumType' type");
-
-            static assert(getUDAs!(mem, argparse.SubCommands).length <= 1, "Member "~COMMAND.stringof~"."~sym~" has multiple 'SubCommands' UDAs");
-
-            static foreach(TYPE; typeof(mem).Types)
-                cmd.subCommands.add!(config, sym, TYPE, COMMAND)(&cmd);
-        }
-    }}
-}
-
-private void initCommandArguments(Config config, COMMAND)(ref CommandArguments!COMMAND cmd)
-{
-    import std.algorithm: sort, map, joiner;
-    import std.array: array;
-
-    addArguments!config(cmd);
-    addSubCommands!config(cmd);
-
-    if(config.addHelp)
-        cmd.addArgumentImpl!(null, getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA()));
-}
-
-package(argparse) auto commandArguments(Config config, COMMAND)()
-{
-    checkArgumentName!COMMAND(config.namedArgChar);
-
-    auto cmd = CommandArguments!COMMAND(getCommandInfo!(config, COMMAND));
-    initCommandArguments!config(cmd);
-
-    return cmd;
-}
-
-package auto commandArguments(Config config, COMMAND, CommandInfo info, PARENT)(const PARENT* parentArguments)
-{
-    checkArgumentName!COMMAND(config.namedArgChar);
-
-    auto cmd = CommandArguments!COMMAND(info, parentArguments);
-    initCommandArguments!config(cmd);
-
-    return cmd;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private template DefaultValueParseFunctions(T)
-if(!is(T == void))
-{
-    import std.conv: to;
-
-    static if(is(T == enum))
-    {
-        alias DefaultValueParseFunctions = ValueParseFunctions!(
-            void,   // pre process
-            Validators.ValueInList!(getEnumValues!T, typeof(RawParam.value)),   // pre validate
-            getEnumValue!T,   // parse
-            void,   // validate
-            void,   // action
-            void    // no-value action
-        );
-    }
-    else static if(isSomeString!T || isNumeric!T)
-    {
-        alias DefaultValueParseFunctions = ValueParseFunctions!(
-            void,   // pre process
-            void,   // pre validate
-            void,   // parse
-            void,   // validate
-            void,   // action
-            void    // no-value action
-        );
-    }
-    else static if(isBoolean!T)
-    {
-        alias DefaultValueParseFunctions = ValueParseFunctions!(
-            void,                               // pre process
-            void,                               // pre validate
-            (string value)                      // parse
-            {
-                switch(value)
-                {
-                    case "":    goto case;
-                    case "yes": goto case;
-                    case "y":   return true;
-                    case "no":  goto case;
-                    case "n":   return false;
-                    default:    return value.to!T;
-                }
-            },
-            void,                               // validate
-            void,                               // action
-            (ref T result) { result = true; }   // no-value action
-        );
-    }
-    else static if(isSomeChar!T)
-    {
-        alias DefaultValueParseFunctions = ValueParseFunctions!(
-            void,                         // pre process
-            void,                         // pre validate
-            (string value)                // parse
-            {
-                return value.length > 0 ? value[0].to!T : T.init;
-            },
-            void,                         // validate
-            void,                         // action
-            void                          // no-value action
-        );
-    }
-    else static if(isArray!T)
-    {
-        alias TElement = ForeachType!T;
-
-        static if(!isArray!TElement || isSomeString!TElement)  // 1D array
-        {
-            static if(!isStaticArray!T)
-                alias action = Actions.Append!T;
-            else
-                alias action = Actions.Assign!T;
-
-            alias DefaultValueParseFunctions = DefaultValueParseFunctions!TElement
-                .changePreProcess!splitValues
-                .changeParse!((ref T receiver, RawParam param)
-                {
-                    static if(!isStaticArray!T)
-                    {
-                        if(receiver.length < param.value.length)
-                            receiver.length = param.value.length;
-                    }
-
-                    foreach(i, value; param.value)
-                    {
-                        if(!DefaultValueParseFunctions!TElement.parse(receiver[i],
-                        RawParam(param.config, param.name, [value])))
-                            return false;
-                    }
-
-                    return true;
-                })
-                .changeAction!(action)
-                .changeNoValueAction!((ref T param) {});
-        }
-        else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
-        {
-            alias DefaultValueParseFunctions = DefaultValueParseFunctions!TElement
-                .changeAction!(Actions.Extend!TElement)
-                .changeNoValueAction!((ref T param) { param ~= TElement.init; });
-        }
-        else
-        {
-            static assert(false, "Multi-dimentional arrays are not supported: " ~ T.stringof);
-        }
-    }
-    else static if(isAssociativeArray!T)
-    {
-        import std.string : indexOf;
-        alias DefaultValueParseFunctions = ValueParseFunctions!(
-            splitValues,                                                // pre process
-            void,                                                       // pre validate
-            Parsers.PassThrough,                                        // parse
-            void,                                                       // validate
-            (ref T recepient, Param!(string[]) param)                   // action
-            {
-                alias K = KeyType!T;
-                alias V = ValueType!T;
-
-                foreach(input; param.value)
-                {
-                    auto j = indexOf(input, param.config.assignChar);
-                    if(j < 0)
-                        return false;
-
-                    K key;
-                    if(!DefaultValueParseFunctions!K.parse(key, RawParam(param.config, param.name, [input[0 .. j]])))
-                        return false;
-
-                    V value;
-                    if(!DefaultValueParseFunctions!V.parse(value, RawParam(param.config, param.name, [input[j + 1 .. $]])))
-                        return false;
-
-                    recepient[key] = value;
-                }
-                return true;
-            },
-            (ref T param) {}    // no-value action
-        );
-    }
-    else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
-    {
-        alias DefaultValueParseFunctions = ValueParseFunctions!(
-            void,                           // pre process
-            void,                           // pre validate
-            Parsers.PassThrough,            // parse
-            void,                           // validate
-            Actions.CallFunction!T,         // action
-            Actions.CallFunctionNoParam!T   // no-value action
-        );
-    }
-    else
-    {
-        alias DefaultValueParseFunctions = ValueParseFunctions!(
-            void,   // pre process
-            void,   // pre validate
-            void,   // parse
-            void,   // validate
-            void,   // action
-            void    // no-value action
-        );
-    }
-}
-
-unittest
-{
-    enum MyEnum { foo, bar, }
-
-    import std.meta: AliasSeq;
-    static foreach(T; AliasSeq!(string, bool, int, double, char, MyEnum))
-        static foreach(R; AliasSeq!(T, T[], T[][]))
-        {{
-            // ensure that this compiles
-            R receiver;
-            Config config;
-            DefaultValueParseFunctions!R.parse(receiver, RawParam(&config, "", [""]));
-        }}
-}
-
-unittest
-{
-    alias test(R) = (string[][] values)
-    {
-        auto config = Config('=', ',');
-        R receiver;
-        foreach(value; values)
-        {
-            assert(DefaultValueParseFunctions!R.parse(receiver, RawParam(&config, "", value)));
-        }
-        return receiver;
-    };
-
-    static assert(test!(string[])([["1","2","3"], [], ["4"]]) == ["1","2","3","4"]);
-    static assert(test!(string[][])([["1","2","3"], [], ["4"]]) == [["1","2","3"],[],["4"]]);
-
-    static assert(test!(string[string])([["a=bar","b=foo"], [], ["b=baz","c=boo"]]) == ["a":"bar", "b":"baz", "c":"boo"]);
-
-    static assert(test!(string[])([["1,2,3"], [], ["4"]]) == ["1","2","3","4"]);
-    static assert(test!(string[string])([["a=bar,b=foo"], [], ["b=baz,c=boo"]]) == ["a":"bar", "b":"baz", "c":"boo"]);
-
-    static assert(test!(int[])([["1","2","3"], [], ["4"]]) == [1,2,3,4]);
-    static assert(test!(int[][])([["1","2","3"], [], ["4"]]) == [[1,2,3],[],[4]]);
-
-}
-
-unittest
-{
-    import std.math: isNaN;
-    enum MyEnum { foo, bar, }
-
-    alias test(T) = (string[] values)
-    {
-        T receiver;
-        Config config;
-        assert(DefaultValueParseFunctions!T.parse(receiver, RawParam(&config, "", values)));
-        return receiver;
-    };
-
-    assert(test!string([""]) == "");
-    assert(test!string(["foo"]) == "foo");
-    assert(isNaN(test!double([""])));
-    assert(test!double(["-12.34"]) == -12.34);
-    assert(test!double(["12.34"]) == 12.34);
-    assert(test!uint(["1234"]) == 1234);
-    assert(test!int([""]) == int.init);
-    assert(test!int(["-1234"]) == -1234);
-    assert(test!char([""]) == char.init);
-    assert(test!char(["f"]) == 'f');
-    assert(test!bool([]) == true);
-    assert(test!bool([""]) == true);
-    assert(test!bool(["yes"]) == true);
-    assert(test!bool(["y"]) == true);
-    assert(test!bool(["true"]) == true);
-    assert(test!bool(["no"]) == false);
-    assert(test!bool(["n"]) == false);
-    assert(test!bool(["false"]) == false);
-    assert(test!MyEnum(["foo"]) == MyEnum.foo);
-    assert(test!MyEnum(["bar"]) == MyEnum.bar);
-    assert(test!(MyEnum[])(["bar","foo"]) == [MyEnum.bar, MyEnum.foo]);
-    assert(test!(string[string])(["a=bar","b=foo"]) == ["a":"bar", "b":"foo"]);
-    assert(test!(MyEnum[string])(["a=bar","b=foo"]) == ["a":MyEnum.bar, "b":MyEnum.foo]);
-    assert(test!(int[MyEnum])(["bar=3","foo=5"]) == [MyEnum.bar:3, MyEnum.foo:5]);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package(argparse) struct ValueParseFunctions(alias PreProcess,
-                                             alias PreValidation,
-                                             alias Parse,
-                                             alias Validation,
-                                             alias Action,
-                                             alias NoValueAction)
-{
-    alias changePreProcess   (alias func) = ValueParseFunctions!(      func, PreValidation, Parse, Validation, Action, NoValueAction);
-    alias changePreValidation(alias func) = ValueParseFunctions!(PreProcess,          func, Parse, Validation, Action, NoValueAction);
-    alias changeParse        (alias func) = ValueParseFunctions!(PreProcess, PreValidation,  func, Validation, Action, NoValueAction);
-    alias changeValidation   (alias func) = ValueParseFunctions!(PreProcess, PreValidation, Parse,       func, Action, NoValueAction);
-    alias changeAction       (alias func) = ValueParseFunctions!(PreProcess, PreValidation, Parse, Validation,   func, NoValueAction);
-    alias changeNoValueAction(alias func) = ValueParseFunctions!(PreProcess, PreValidation, Parse, Validation, Action,          func);
+    alias changePreProcess   (alias func) = ValueParser!(      func, PreValidation, Parse, Validation, Action, NoValueAction);
+    alias changePreValidation(alias func) = ValueParser!(PreProcess,          func, Parse, Validation, Action, NoValueAction);
+    alias changeParse        (alias func) = ValueParser!(PreProcess, PreValidation,  func, Validation, Action, NoValueAction);
+    alias changeValidation   (alias func) = ValueParser!(PreProcess, PreValidation, Parse,       func, Action, NoValueAction);
+    alias changeAction       (alias func) = ValueParser!(PreProcess, PreValidation, Parse, Validation,   func, NoValueAction);
+    alias changeNoValueAction(alias func) = ValueParser!(PreProcess, PreValidation, Parse, Validation, Action,          func);
 
     template addDefaults(DefaultParseFunctions)
     {
@@ -627,7 +70,7 @@ package(argparse) struct ValueParseFunctions(alias PreProcess,
     // Requirement: rawValues.length must be correct
     static Result parse(T)(ref T receiver, RawParam param)
     {
-        return addDefaults!(DefaultValueParseFunctions!T).parseImpl(receiver, param);
+        return addDefaults!(DefaultValueParser!T).parseImpl(receiver, param);
     }
     static Result parseImpl(T)(ref T receiver, ref RawParam rawParam)
     {
@@ -667,6 +110,253 @@ package(argparse) struct ValueParseFunctions(alias PreProcess,
             return Result.Success;
         }
     }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private template DefaultValueParser(T)
+if(!is(T == void))
+{
+    import std.conv: to;
+
+    static if(is(T == enum))
+    {
+        alias DefaultValueParser = ValueParser!(
+            void,   // pre process
+            ValueInList!(getEnumValues!T, typeof(RawParam.value)),   // pre validate
+            getEnumValue!T,   // parse
+            void,   // validate
+            void,   // action
+            void    // no-value action
+        );
+    }
+    else static if(isSomeString!T || isNumeric!T)
+    {
+        alias DefaultValueParser = ValueParser!(
+            void,   // pre process
+            void,   // pre validate
+            void,   // parse
+            void,   // validate
+            void,   // action
+            void    // no-value action
+        );
+    }
+    else static if(isBoolean!T)
+    {
+        alias DefaultValueParser = ValueParser!(
+            void,                               // pre process
+            void,                               // pre validate
+            (string value)                      // parse
+            {
+                switch(value)
+                {
+                    case "":    goto case;
+                    case "yes": goto case;
+                    case "y":   return true;
+                    case "no":  goto case;
+                    case "n":   return false;
+                    default:    return value.to!T;
+                }
+            },
+            void,                               // validate
+            void,                               // action
+            (ref T result) { result = true; }   // no-value action
+        );
+    }
+    else static if(isSomeChar!T)
+    {
+        alias DefaultValueParser = ValueParser!(
+            void,                         // pre process
+            void,                         // pre validate
+            (string value)                // parse
+            {
+                return value.length > 0 ? value[0].to!T : T.init;
+            },
+            void,                         // validate
+            void,                         // action
+            void                          // no-value action
+        );
+    }
+    else static if(isArray!T)
+    {
+        alias TElement = ForeachType!T;
+
+        static if(!isArray!TElement || isSomeString!TElement)  // 1D array
+        {
+            static if(!isStaticArray!T)
+                alias action = Append!T;
+            else
+                alias action = Assign!T;
+
+            alias DefaultValueParser =
+                DefaultValueParser!TElement
+                .changePreProcess!splitValues
+                .changeParse!((ref T receiver, RawParam param)
+                {
+                    static if(!isStaticArray!T)
+                    {
+                        if(receiver.length < param.value.length)
+                            receiver.length = param.value.length;
+                    }
+
+                    foreach(i, value; param.value)
+                    {
+                        if(!DefaultValueParser!TElement.parse(receiver[i],
+                        RawParam(param.config, param.name, [value])))
+                            return false;
+                    }
+
+                    return true;
+                })
+                .changeAction!(action)
+                .changeNoValueAction!((ref T param) {});
+        }
+        else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
+        {
+            alias DefaultValueParser =
+                DefaultValueParser!TElement
+                .changeAction!(Extend!TElement)
+                .changeNoValueAction!((ref T param) { param ~= TElement.init; });
+        }
+        else
+            static assert(false, "Multi-dimentional arrays are not supported: " ~ T.stringof);
+    }
+    else static if(isAssociativeArray!T)
+    {
+        import std.string : indexOf;
+        alias DefaultValueParser = ValueParser!(
+            splitValues,                               // pre process
+            void,                                      // pre validate
+            PassThrough,                               // parse
+            void,                                      // validate
+            (ref T recepient, Param!(string[]) param)  // action
+            {
+                alias K = KeyType!T;
+                alias V = ValueType!T;
+
+                foreach(input; param.value)
+                {
+                    auto j = indexOf(input, param.config.assignChar);
+                    if(j < 0)
+                        return false;
+
+                    K key;
+                    if(!DefaultValueParser!K.parse(key, RawParam(param.config, param.name, [input[0 .. j]])))
+                        return false;
+
+                    V value;
+                    if(!DefaultValueParser!V.parse(value, RawParam(param.config, param.name, [input[j + 1 .. $]])))
+                        return false;
+
+                    recepient[key] = value;
+                }
+                return true;
+            },
+            (ref T param) {}    // no-value action
+        );
+    }
+    else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
+    {
+        alias DefaultValueParser = ValueParser!(
+            void,                   // pre process
+            void,                   // pre validate
+            PassThrough,            // parse
+            void,                   // validate
+            CallFunction!T,         // action
+            CallFunctionNoParam!T   // no-value action
+        );
+    }
+    else
+    {
+        alias DefaultValueParser = ValueParser!(
+            void,   // pre process
+            void,   // pre validate
+            void,   // parse
+            void,   // validate
+            void,   // action
+            void    // no-value action
+        );
+    }
+}
+
+unittest
+{
+    enum MyEnum { foo, bar, }
+
+    import std.meta: AliasSeq;
+    static foreach(T; AliasSeq!(string, bool, int, double, char, MyEnum))
+        static foreach(R; AliasSeq!(T, T[], T[][]))
+        {{
+            // ensure that this compiles
+            R receiver;
+            Config config;
+            DefaultValueParser!R.parse(receiver, RawParam(&config, "", [""]));
+        }}
+}
+
+unittest
+{
+    alias test(R) = (string[][] values)
+    {
+        auto config = Config('=', ',');
+        R receiver;
+        foreach(value; values)
+        {
+            assert(DefaultValueParser!R.parse(receiver, RawParam(&config, "", value)));
+        }
+        return receiver;
+    };
+
+    static assert(test!(string[])([["1","2","3"], [], ["4"]]) == ["1","2","3","4"]);
+    static assert(test!(string[][])([["1","2","3"], [], ["4"]]) == [["1","2","3"],[],["4"]]);
+
+    static assert(test!(string[string])([["a=bar","b=foo"], [], ["b=baz","c=boo"]]) == ["a":"bar", "b":"baz", "c":"boo"]);
+
+    static assert(test!(string[])([["1,2,3"], [], ["4"]]) == ["1","2","3","4"]);
+    static assert(test!(string[string])([["a=bar,b=foo"], [], ["b=baz,c=boo"]]) == ["a":"bar", "b":"baz", "c":"boo"]);
+
+    static assert(test!(int[])([["1","2","3"], [], ["4"]]) == [1,2,3,4]);
+    static assert(test!(int[][])([["1","2","3"], [], ["4"]]) == [[1,2,3],[],[4]]);
+
+}
+
+unittest
+{
+    import std.math: isNaN;
+    enum MyEnum { foo, bar, }
+
+    alias test(T) = (string[] values)
+    {
+        T receiver;
+        Config config;
+        assert(DefaultValueParser!T.parse(receiver, RawParam(&config, "", values)));
+        return receiver;
+    };
+
+    assert(test!string([""]) == "");
+    assert(test!string(["foo"]) == "foo");
+    assert(isNaN(test!double([""])));
+    assert(test!double(["-12.34"]) == -12.34);
+    assert(test!double(["12.34"]) == 12.34);
+    assert(test!uint(["1234"]) == 1234);
+    assert(test!int([""]) == int.init);
+    assert(test!int(["-1234"]) == -1234);
+    assert(test!char([""]) == char.init);
+    assert(test!char(["f"]) == 'f');
+    assert(test!bool([]) == true);
+    assert(test!bool([""]) == true);
+    assert(test!bool(["yes"]) == true);
+    assert(test!bool(["y"]) == true);
+    assert(test!bool(["true"]) == true);
+    assert(test!bool(["no"]) == false);
+    assert(test!bool(["n"]) == false);
+    assert(test!bool(["false"]) == false);
+    assert(test!MyEnum(["foo"]) == MyEnum.foo);
+    assert(test!MyEnum(["bar"]) == MyEnum.bar);
+    assert(test!(MyEnum[])(["bar","foo"]) == [MyEnum.bar, MyEnum.foo]);
+    assert(test!(string[string])(["a=bar","b=foo"]) == ["a":"bar", "b":"foo"]);
+    assert(test!(MyEnum[string])(["a=bar","b=foo"]) == ["a":MyEnum.bar, "b":MyEnum.foo]);
+    assert(test!(int[MyEnum])(["bar=3","foo=5"]) == [MyEnum.bar:3, MyEnum.foo:5]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -773,7 +463,7 @@ unittest
 // void action(ref DEST receiver)
 // bool action(ref DEST receiver, Param!void param)
 // void action(ref DEST receiver, Param!void param)
-package(argparse) struct NoValueActionFunc(alias F, T)
+package struct NoValueActionFunc(alias F, T)
 {
     static bool opCall(ref T receiver, Param!void param)
     {
@@ -854,8 +544,6 @@ unittest
 
 private template ParseType(alias F, T)
 {
-    import std.traits : Unqual;
-
     static if(is(F == void))
         alias ParseType = Unqual!T;
     else static if(Parameters!F.length == 0)
@@ -927,7 +615,7 @@ private struct ParseFunc(alias F, T)
         static if(is(F == void))
         {
             foreach(value; param.value)
-                receiver = Parsers.Convert!T(value);
+                receiver = Convert!T(value);
             return true;
         }
         // T parse(string[] values)
@@ -1018,7 +706,7 @@ private struct ActionFunc(alias F, T, ParseType)
     {
         static if(is(F == void))
         {
-            Actions.Assign!(T, ParseType)(receiver, param.value);
+            Assign!(T, ParseType)(receiver, param.value);
             return true;
         }
         // bool action(ref T receiver, ParseType value)
@@ -1091,129 +779,14 @@ unittest
     assert(test!((ref string[] p, Param!(string[]) a) { p=a.value; }, string[])(["1","2","3"]) == ["1","2","3"]);
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package(argparse) struct Parsers
-{
-    static auto Convert(T)(string value)
-    {
-        import std.conv: to;
-        return value.length > 0 ? value.to!T : T.init;
-    }
-
-    static auto PassThrough(string[] values)
-    {
-        return values;
-    }
-}
-
 unittest
 {
-    assert(Parsers.Convert!int("7") == 7);
-    assert(Parsers.Convert!string("7") == "7");
-    assert(Parsers.Convert!char("7") == '7');
-
-    assert(Parsers.PassThrough(["7","8"]) == ["7","8"]);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private struct Actions
-{
-    static auto Assign(DEST, SRC=DEST)(ref DEST param, SRC value)
-    {
-        param  = value;
-    }
-
-    static auto Append(T)(ref T param, T value)
-    {
-        param ~= value;
-    }
-
-    static auto Extend(T)(ref T[] param, T value)
-    {
-        param ~= value;
-    }
-
-    static auto CallFunction(F)(ref F func, RawParam param)
-    {
-        // ... func()
-        static if(__traits(compiles, { func(); }))
-        {
-            func();
-        }
-        // ... func(string value)
-        else static if(__traits(compiles, { func(param.value[0]); }))
-        {
-            foreach(value; param.value)
-                func(value);
-        }
-        // ... func(string[] value)
-        else static if(__traits(compiles, { func(param.value); }))
-        {
-            func(param.value);
-        }
-        // ... func(RawParam param)
-        else static if(__traits(compiles, { func(param); }))
-        {
-            func(param);
-        }
-        else
-            static assert(false, "Unsupported callback: " ~ F.stringof);
-    }
-
-    static auto CallFunctionNoParam(F)(ref F func, Param!void param)
-    {
-        // ... func()
-        static if(__traits(compiles, { func(); }))
-        {
-            func();
-        }
-        // ... func(string value)
-        else static if(__traits(compiles, { func(string.init); }))
-        {
-            func(string.init);
-        }
-        // ... func(string[] value)
-        else static if(__traits(compiles, { func([]); }))
-        {
-            func([]);
-        }
-        // ... func(Param!void param)
-        else static if(__traits(compiles, { func(param); }))
-        {
-            func(param);
-        }
-        // ... func(RawParam param)
-        else static if(__traits(compiles, { func(RawParam.init); }))
-        {
-            func(RawParam(param.config, param.name));
-        }
-        else
-            static assert(false, "Unsupported callback: " ~ F.stringof);
-    }
-}
-
-unittest
-{
-    int i;
-    Actions.Assign!(int)(i,7);
-    assert(i == 7);
-}
-
-unittest
-{
-    int[] i;
-    Actions.Append!(int[])(i,[1,2,3]);
-    Actions.Append!(int[])(i,[7,8,9]);
-    assert(i == [1,2,3,7,8,9]);
-
     alias test = (int[] v1, int[] v2) {
         int[] res;
 
         Param!(int[]) param;
 
-        alias F = Actions.Append!(int[]);
+        alias F = Append!(int[]);
         param.value = v1;   ActionFunc!(F, int[], int[])(res, param);
 
         param.value = v2;   ActionFunc!(F, int[], int[])(res, param);
@@ -1221,67 +794,6 @@ unittest
         return res;
     };
     assert(test([1,2,3],[7,8,9]) == [1,2,3,7,8,9]);
-}
-
-unittest
-{
-    int[][] i;
-    Actions.Extend!(int[])(i,[1,2,3]);
-    Actions.Extend!(int[])(i,[7,8,9]);
-    assert(i == [[1,2,3],[7,8,9]]);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package(argparse) struct Validators
-{
-    template ValueInList(alias values, TYPE)
-    {
-        static auto ValueInList(Param!TYPE param)
-        {
-            import std.array : assocArray, join;
-            import std.range : repeat, front;
-            import std.conv: to;
-
-            enum valuesAA = assocArray(values, false.repeat);
-            enum allowedValues = values.to!(string[]).join(',');
-
-            static if(is(typeof(values.front) == TYPE))
-                auto paramValues = [param.value];
-            else
-                auto paramValues = param.value;
-
-            foreach(value; paramValues)
-                if(!(value in valuesAA))
-                    return Result.Error("Invalid value '", value, "' for argument '", param.name, "'.\nValid argument values are: ", allowedValues);
-
-            return Result.Success;
-        }
-        static auto ValueInList(Param!(TYPE[]) param)
-        {
-            foreach(ref value; param.value)
-            {
-                auto res = ValueInList!(values, TYPE)(Param!TYPE(param.config, param.name, value));
-                if(!res)
-                    return res;
-            }
-            return Result.Success;
-        }
-    }
-}
-
-unittest
-{
-    enum values = ["a","b","c"];
-    Config config;
-
-    assert(Validators.ValueInList!(values, string)(Param!string(&config, "", "b")));
-    assert(!Validators.ValueInList!(values, string)(Param!string(&config, "", "d")));
-
-    assert(Validators.ValueInList!(values, string)(RawParam(&config, "", ["b"])));
-    assert(Validators.ValueInList!(values, string)(RawParam(&config, "", ["b","a"])));
-    assert(!Validators.ValueInList!(values, string)(RawParam(&config, "", ["d"])));
-    assert(!Validators.ValueInList!(values, string)(RawParam(&config, "", ["b","d"])));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1316,5 +828,3 @@ unittest
     static assert(test(',', ["a,b","c","d,e,f"]) == ["a","b","c","d","e","f"]);
     static assert(test(' ', ["a,b","c","d,e,f"]) == ["a,b","c","d,e,f"]);
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

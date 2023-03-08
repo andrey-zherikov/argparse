@@ -1,12 +1,13 @@
 module argparse.internal.arguments;
 
-import argparse.internal: CommandArguments;
 import argparse.internal.utils: partiallyApply;
 import argparse.internal.lazystring;
 
-import argparse.api: Config, Result, RawParam;
+import argparse.config;
+import argparse.result;
 
 import std.typecons: Nullable;
+import std.traits: getUDAs;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -183,6 +184,18 @@ package(argparse) struct Group
     size_t[] arguments;
 }
 
+private template getMemberGroupUDA(TYPE, alias symbol)
+{
+    private enum udas = getUDAs!(__traits(getMember, TYPE, symbol), Group);
+
+    static assert(udas.length <= 1, "Member "~TYPE.stringof~"."~symbol~" has multiple 'Group' UDAs");
+    static if(udas.length > 0)
+        enum getMemberGroupUDA = udas[0];
+}
+
+private enum hasMemberGroupUDA(TYPE, alias symbol) = __traits(compiles, { enum group = getMemberGroupUDA!(TYPE, symbol); });
+
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package(argparse) struct RestrictionGroup
@@ -202,6 +215,31 @@ unittest
     assert(!RestrictionGroup.init.required);
 }
 
+private auto getRestrictionGroups(TYPE, alias symbol)()
+{
+    RestrictionGroup[] restrictions;
+
+    static foreach(gr; getUDAs!(__traits(getMember, TYPE, symbol), RestrictionGroup))
+        restrictions ~= gr;
+
+    return restrictions;
+}
+
+private enum getRestrictionGroups(TYPE, typeof(null) symbol) = RestrictionGroup[].init;
+
+unittest
+{
+    struct T
+    {
+        @(RestrictionGroup("1"))
+        @(RestrictionGroup("2"))
+        @(RestrictionGroup("3"))
+        int a;
+    }
+
+    assert(getRestrictionGroups!(T, "a") == [RestrictionGroup("1"), RestrictionGroup("2"), RestrictionGroup("3")]);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package struct Arguments
@@ -213,8 +251,6 @@ package struct Arguments
 
     // positional arguments
     size_t[] argsPositional;
-
-    const Arguments* parentArguments;
 
     Group[] userGroups;
     size_t[string] groupsByName;
@@ -231,40 +267,29 @@ package struct Arguments
     @property auto positionalArguments() const { return argsPositional; }
 
 
-    this(const Arguments* parentArguments)
+    void addArgument(TYPE, alias symbol, ArgumentInfo info)()
     {
-        this.parentArguments = parentArguments;
-    }
-
-    void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions, Group group)()
-    {
-        static if(group.name == requiredGroupName)
-            addArgument!(info, restrictions)(requiredGroup);
-        else static if(group.name == optionalGroupName)
-            addArgument!(info, restrictions)(optionalGroup);
-        else
+        static if(hasMemberGroupUDA!(TYPE, symbol))
         {
+            enum group = getMemberGroupUDA!(TYPE, symbol);
+
             auto index = (group.name in groupsByName);
             if(index !is null)
-                addArgument!(info, restrictions)(userGroups[*index]);
+                addArgumentImpl!(TYPE, symbol, info)(userGroups[*index]);
             else
             {
                 groupsByName[group.name] = userGroups.length;
                 userGroups ~= group;
-                addArgument!(info, restrictions)(userGroups[$-1]);
+                addArgumentImpl!(TYPE, symbol, info)(userGroups[$-1]);
             }
         }
-    }
-
-    void addArgument(ArgumentInfo info, RestrictionGroup[] restrictions = [])()
-    {
-        static if(info.required)
-            addArgument!(info, restrictions)(requiredGroup);
+        else static if(info.required)
+            addArgumentImpl!(TYPE, symbol, info)(requiredGroup);
         else
-            addArgument!(info, restrictions)(optionalGroup);
+            addArgumentImpl!(TYPE, symbol, info)(optionalGroup);
     }
 
-    private void addArgument(ArgumentInfo info, RestrictionGroup[] argRestrictions = [])( ref Group group)
+    private void addArgumentImpl(TYPE, alias symbol, ArgumentInfo info)(ref Group group)
     {
         static assert(info.names.length > 0);
 
@@ -290,7 +315,7 @@ package struct Arguments
         static if(info.required)
             restrictions ~= Restrictions.RequiredArg!info(index);
 
-        static foreach(restriction; argRestrictions)
+        static foreach(restriction; getRestrictionGroups!(TYPE, symbol))
             addRestriction!(info, restriction)(index);
     }
 
@@ -337,15 +362,15 @@ package struct Arguments
     }
 
 
-    auto findArgumentImpl(const size_t* pIndex) const
+    struct FindResult
     {
-        struct Result
-        {
-            size_t index = size_t.max;
-            const(ArgumentInfo)* arg;
-        }
+        size_t index = size_t.max;
+        const(ArgumentInfo)* arg;
+    }
 
-        return pIndex ? Result(*pIndex, &arguments[*pIndex]) : Result.init;
+    FindResult findArgumentImpl(const size_t* pIndex) const
+    {
+        return pIndex ? FindResult(*pIndex, &arguments[*pIndex]) : FindResult.init;
     }
 
     auto findPositionalArgument(size_t position) const
@@ -357,79 +382,6 @@ package struct Arguments
     {
         return findArgumentImpl(name in argsNamed);
     }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package alias ParseFunction(RECEIVER) = Result delegate(Config* config, const ref CommandArguments!RECEIVER cmd, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs);
-
-package alias ParsingArgument(alias symbol, alias uda, RECEIVER, bool completionMode) =
-    delegate(Config* config, const ref CommandArguments!RECEIVER cmd, string argName, ref RECEIVER receiver, string rawValue, ref string[] rawArgs)
-    {
-        static if(completionMode)
-        {
-            if(rawValue is null)
-                consumeValuesFromCLI(rawArgs, uda.info.minValuesCount.get, uda.info.maxValuesCount.get, config.namedArgChar);
-
-            return Result.Success;
-        }
-        else
-        {
-            try
-            {
-                auto rawValues = rawValue !is null ? [ rawValue ] : consumeValuesFromCLI(rawArgs, uda.info.minValuesCount.get, uda.info.maxValuesCount.get, config.namedArgChar);
-
-                auto res = uda.info.checkValuesCount(argName, rawValues.length);
-                if(!res)
-                    return res;
-
-                auto param = RawParam(config, argName, rawValues);
-
-                auto target = &__traits(getMember, receiver, symbol);
-
-                static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                    return uda.parsingFunc.parse(target, param);
-                else
-                    return uda.parsingFunc.parse(*target, param);
-            }
-            catch(Exception e)
-            {
-                return Result.Error(argName, ": ", e.msg);
-            }
-        }
-    };
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private auto consumeValuesFromCLI(ref string[] args, ulong minValuesCount, ulong maxValuesCount, char namedArgChar)
-{
-    import std.range: empty, front, popFront;
-
-    string[] values;
-
-    if(minValuesCount > 0)
-    {
-        if(minValuesCount < args.length)
-        {
-            values = args[0..minValuesCount];
-            args = args[minValuesCount..$];
-        }
-        else
-        {
-            values = args;
-            args = [];
-        }
-    }
-
-    while(!args.empty &&
-        values.length < maxValuesCount &&
-        (args.front.length == 0 || args.front[0] != namedArgChar))
-    {
-        values ~= args.front;
-        args.popFront();
-    }
-
-    return values;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,20 +1,13 @@
 module argparse.internal.help;
 
-import argparse: Description, Optional;
-import argparse.api: Config, Result;
-import argparse.internal: CommandArguments, commandArguments;
+import argparse.ansi;
+import argparse.config;
+import argparse.result;
 import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
-import argparse.internal.subcommands: CommandInfo;
+import argparse.internal.commandinfo: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.style;
-
-import argparse.ansi;
-
-version(unittest)
-{
-    import argparse;
-}
 
 import std.sumtype: SumType, match;
 
@@ -152,17 +145,21 @@ package auto HelpArgumentUDA()
 {
     struct HelpArgumentParsingFunction
     {
-        static auto getParseFunc(T)()
+        static auto parse(T, Command)(const Command[] cmdStack, Config* config, ref T receiver, string argName, string[] rawValues)
         {
-            return delegate(Config* config, const ref CommandArguments!T cmd, string argName, ref T receiver, string rawValue, ref string[] rawArgs)
-            {
-                import std.stdio: stdout;
+            import std.stdio: stdout;
 
-                auto output = stdout.lockingTextWriter();
-                printHelp(_ => output.put(_), cmd, config);
+            import std.algorithm: map;
+            import std.array: join, array;
 
-                return Result(0);
-            };
+            string progName = cmdStack.map!((ref _) => _.displayName.length > 0 ? _.displayName : getProgramName()).join(" ");
+
+            auto args = cmdStack.map!((ref _) => &_.arguments).array;
+
+            auto output = stdout.lockingTextWriter();
+            printHelp(_ => output.put(_), cmdStack[$-1], args, config, progName);
+
+            return Result(0);
         }
     }
 
@@ -471,47 +468,51 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printUsage(T)(void delegate(string) sink, const ref Style style, in CommandArguments!T cmd)
+private void createUsage(void delegate(string) sink, const ref Style style, string progName, const(Arguments)* arguments, bool hasSubCommands)
 {
-    import std.algorithm: map;
-    import std.array: join;
+    import std.algorithm: filter, each, map;
 
-    string progName = style.programName((cmd.parentNames ~ (cmd.info.displayNames.length > 0 ? cmd.info.displayNames[0] : "")).map!(_ => _.length > 0 ? _ : getProgramName()).join(" "));
-
-    sink("Usage: ");
-
-    auto usage = cmd.info.usage.get;
-    if(usage.length > 0)
-        substituteProg(sink, usage, progName);
-    else
+    alias print = (r) => r
+    .filter!((ref _) => !_.hideFromHelp)
+    .each!((ref _)
     {
-        import std.algorithm: filter, each, map;
+        sink(" ");
+        printUsage(sink, style, _);
+    });
 
-        alias print = (r) => r
-            .filter!((ref _) => !_.hideFromHelp)
-            .each!((ref _)
-            {
-                sink(" ");
-                printUsage(sink, style, _);
-            });
+    sink(progName);
 
-        sink(progName);
+    // named args
+    print(arguments.arguments.filter!((ref _) => !_.positional));
+    // positional args
+    print(arguments.positionalArguments.map!(ref (_) => arguments.arguments[_]));
+    // sub commands
+    if(hasSubCommands)
+        sink(style.subcommandName(" <command> [<args>]"));
+}
 
-        // named args
-        print(cmd.arguments.arguments.filter!((ref _) => !_.positional));
-        // positional args
-        print(cmd.arguments.positionalArguments.map!(ref (_) => cmd.arguments.arguments[_]));
-        // sub commands
-        if(cmd.subCommands.length > 0)
-            sink(style.subcommandName(" <command> [<args>]"));
-    }
+private string getUsage(Command)(const ref Style style, const ref Command cmd, string progName)
+{
+    import std.array: appender;
 
-    sink("\n");
+    auto usage = appender!string;
+
+    usage.put("Usage: ");
+
+    auto usageText = cmd.info.usage.get;
+    if(usageText.length > 0)
+        substituteProg(_ => usage.put(_), usageText, progName);
+    else
+        createUsage(_ => usage.put(_), style, progName, &cmd.arguments, cmd.subCommands.info.length > 0);
+
+    usage.put("\n");
+
+    return usage[];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto getSections(const ref Style style, const(Arguments)* arguments)
+private auto getSections(ARGUMENTS)(const ref Style style, ARGUMENTS arguments)
 {
     import std.algorithm: filter, map;
     import std.array: appender, array;
@@ -546,10 +547,10 @@ private auto getSections(const ref Style style, const(Arguments)* arguments)
     Section[] sections;
     size_t[string] sectionMap;
 
-    for(; arguments; arguments = arguments.parentArguments)
+    foreach_reverse(ref args; arguments)
     {
         //user-defined groups first, then required args and then optional args
-        foreach(ref group; chain(arguments.userGroups, [arguments.requiredGroup, arguments.optionalGroup]))
+        foreach(ref group; chain(args.userGroups, [args.requiredGroup, args.optionalGroup]))
         {
             auto p = (group.name in sectionMap);
             ulong index;
@@ -564,7 +565,7 @@ private auto getSections(const ref Style style, const(Arguments)* arguments)
             sections[index].entries.match!(
                 (ref Item[] items) {
                     items ~= group.arguments
-                        .map!(_ => &arguments.arguments[_])
+                        .map!(_ => &args.arguments[_])
                         .filter!((const _) => showArg(*_))
                         .map!((const _) => getItem(*_))
                         .array;
@@ -608,29 +609,23 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
     return section;
 }
 
-private auto getSection(T)(const ref Style style, in CommandArguments!T cmd)
+private auto getSection(Command)(const ref Style style, const ref Command cmd, Section[] argSections, string progName)
 {
-    import std.array: appender;
-
-    auto usage = appender!string;
-
-    printUsage(_ => usage.put(_), style, cmd);
-
     Section[] sections;
 
     // sub commands
-    if(cmd.subCommands.length > 0)
+    if(cmd.subCommands.info.length > 0)
         sections ~= getSection(style, cmd.subCommands.info);
 
-    sections ~= getSections(style, &cmd.arguments);
+    sections ~= argSections;
 
-    auto section = Section(usage[], cmd.info.description, cmd.info.epilog);
+    auto section = Section(getUsage(style, cmd, progName), cmd.info.description, cmd.info.epilog);
     section.entries = sections;
 
     return section;
 }
 
-package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd, Config* config)
+package(argparse) void printHelp(ARGUMENTS, Command)(void delegate(string) sink, const ref Command cmd, ARGUMENTS arguments, Config* config, string progName)
 {
     import std.algorithm: each;
 
@@ -639,163 +634,11 @@ package void printHelp(T)(void delegate(string) sink, in CommandArguments!T cmd,
 
     auto helpStyle = enableStyling ? config.helpStyle : Style.None;
 
-    auto section = getSection(helpStyle, cmd);
+    auto argSections = getSections(helpStyle, arguments);
+    auto section = getSection(helpStyle, cmd, argSections, helpStyle.programName(progName));
 
     immutable helpPosition = section.maxItemNameLength(20) + 4;
     immutable indent = spaces(helpPosition + 2);
 
     print(enableStyling ? sink : (string _) { _.getUnstyledText.each!sink; }, section, "", indent);
-}
-
-unittest
-{
-    static auto epilog() { return "custom epilog"; }
-    @(Command("MYPROG")
-     .Description("custom description")
-     .Epilog(epilog)
-    )
-    struct T
-    {
-        @NamedArgument  string s;
-        @(NamedArgument.Placeholder("VALUE"))  string p;
-
-        @(NamedArgument.HideFromHelp())  string hidden;
-
-        enum Fruit { apple, pear };
-        @(NamedArgument(["f","fruit"]).Required().Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
-
-        @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
-
-        @(PositionalArgument(0, "param0").Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string _param0;
-        @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
-
-        @TrailingArguments string[] args;
-    }
-
-    auto test()
-    {
-        import std.array: appender;
-
-        auto a = appender!string;
-        Config config;
-        config.stylingMode = Config.StylingMode.off;
-        printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
-        return a[];
-    }
-
-    auto env = cleanStyleEnv(true);
-    scope(exit) restoreStyleEnv(env);
-
-    assert(test()  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
-        "custom description\n\n"~
-        "Required arguments:\n"~
-        "  -f {apple,pear}, --fruit {apple,pear}\n"~
-        "                   This is a help text for fruit. Very very very very very very\n"~
-        "                   very very very very very very very very very very very very\n"~
-        "                   very long text\n"~
-        "  param0           This is a help text for param0. Very very very very very very\n"~
-        "                   very very very very very very very very very very very very\n"~
-        "                   very long text\n"~
-        "  {q,a}\n\n"~
-        "Optional arguments:\n"~
-        "  -s S\n"~
-        "  -p VALUE\n"~
-        "  -i {1,4,16,8}\n"~
-        "  -h, --help       Show this help message and exit\n\n"~
-        "custom epilog\n");
-}
-
-unittest
-{
-    @Command("MYPROG")
-    struct T
-    {
-        @(ArgumentGroup("group1").Description("group1 description"))
-        {
-            @NamedArgument
-            {
-                string a;
-                string b;
-            }
-            @PositionalArgument(0) string p;
-        }
-
-        @(ArgumentGroup("group2").Description("group2 description"))
-        @NamedArgument
-        {
-            string c;
-            string d;
-        }
-        @PositionalArgument(1) string q;
-    }
-
-    import std.array: appender;
-
-    auto env = cleanStyleEnv(true);
-    scope(exit) restoreStyleEnv(env);
-
-    auto a = appender!string;
-    Config config;
-    config.stylingMode = Config.StylingMode.off;
-    printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
-
-    assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
-        "group1:\n"~
-        "  group1 description\n\n"~
-        "  -a A\n"~
-        "  -b B\n"~
-        "  p\n\n"~
-        "group2:\n"~
-        "  group2 description\n\n"~
-        "  -c C\n"~
-        "  -d D\n\n"~
-        "Required arguments:\n"~
-        "  q\n\n"~
-        "Optional arguments:\n"~
-        "  -h, --help    Show this help message and exit\n\n");
-}
-
-unittest
-{
-    import std.sumtype: SumType;
-
-    @Command("MYPROG")
-    struct T
-    {
-        @(Command("cmd1").ShortDescription("Perform cmd 1"))
-        struct CMD1
-        {
-            string a;
-        }
-        @(Command("very-long-command-name-2").ShortDescription("Perform cmd 2"))
-        struct CMD2
-        {
-            string b;
-        }
-
-        string c;
-        string d;
-
-        SumType!(CMD1, CMD2) cmd;
-    }
-
-    import std.array: appender;
-
-    auto env = cleanStyleEnv(true);
-    scope(exit) restoreStyleEnv(env);
-
-    auto a = appender!string;
-    Config config;
-    config.stylingMode = Config.StylingMode.off;
-    printHelp(_ => a.put(_), commandArguments!(Config.init, T), &config);
-
-    assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
-        "Available commands:\n"~
-        "  cmd1          Perform cmd 1\n"~
-        "  very-long-command-name-2\n"~
-        "                Perform cmd 2\n\n"~
-        "Optional arguments:\n"~
-        "  -c C\n"~
-        "  -d D\n"~
-        "  -h, --help    Show this help message and exit\n\n");
 }

@@ -1,6 +1,6 @@
 module argparse.internal.argumentuda;
 
-import argparse.api: Config;
+import argparse.config;
 import argparse.internal.arguments: ArgumentInfo;
 import argparse.internal.utils: formatAllowedValues;
 import argparse.internal.enumhelpers: getEnumValues;
@@ -9,11 +9,11 @@ import std.traits;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) struct ArgumentUDA(ValueParseFunctions)
+package(argparse) struct ArgumentUDA(ValueParser)
 {
     ArgumentInfo info;
 
-    alias parsingFunc = ValueParseFunctions;
+    alias parsingFunc = ValueParser;
 
     auto addDefaults(T)(ArgumentUDA!T uda)
     {
@@ -26,7 +26,10 @@ package(argparse) struct ArgumentUDA(ValueParseFunctions)
         if(newInfo.minValuesCount.isNull()) newInfo.minValuesCount = uda.info.minValuesCount;
         if(newInfo.maxValuesCount.isNull()) newInfo.maxValuesCount = uda.info.maxValuesCount;
 
-        return ArgumentUDA!(parsingFunc.addDefaults!(uda.parsingFunc))(newInfo);
+        static if(is(ValueParser == void))
+            return ArgumentUDA!ValueParser(newInfo);
+        else
+            return ArgumentUDA!(ValueParser.addDefaults!T)(newInfo);
     }
 }
 
@@ -95,7 +98,7 @@ if(!is(TYPE == void))
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package template getArgumentUDA(Config config, MEMBERTYPE, string defaultName)
+private template getArgumentUDAImpl(Config config, MEMBERTYPE, string defaultName)
 {
     auto finalize(alias initUDA)()
     {
@@ -141,14 +144,17 @@ package template getArgumentUDA(Config config, MEMBERTYPE, string defaultName)
 
         return uda;
     }
-
-    static if(__traits(compiles, getUDAs!(MEMBERTYPE, ArgumentUDA)) && getUDAs!(MEMBERTYPE, ArgumentUDA).length == 1)
-        alias fromUDA(alias initUDA) = finalize!(initUDA.addDefaults(getUDAs!(MEMBERTYPE, ArgumentUDA)[0]));
-    else
-        alias fromUDA(alias initUDA) = finalize!initUDA;
 }
 
-package alias getArgumentUDA(Config config, MEMBERTYPE, string defaultName, alias initUDA) = getArgumentUDA!(config, MEMBERTYPE, defaultName).fromUDA!initUDA;
+package template getArgumentUDA(Config config, MEMBERTYPE, string defaultName, alias initUDA)
+{
+    static if(__traits(compiles, getUDAs!(MEMBERTYPE, ArgumentUDA)) && getUDAs!(MEMBERTYPE, ArgumentUDA).length == 1)
+        enum uda = initUDA.addDefaults(getUDAs!(MEMBERTYPE, ArgumentUDA)[0]);
+    else
+        alias uda = initUDA;
+
+    enum getArgumentUDA = getArgumentUDAImpl!(config, MEMBERTYPE, defaultName).finalize!uda;
+}
 
 
 unittest
@@ -164,6 +170,7 @@ unittest
     assert(createUDA().info.allowBooleanNegation); // make codecov happy
 
     auto res = getArgumentUDA!(Config.init, int, "default_name", createUDA()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, int, "default_name").finalize!(createUDA()).info);
     assert(!res.allowBooleanNegation);
     assert(res.names == ["default_name"]);
     assert(res.displayNames == ["default_name"]);
@@ -172,6 +179,7 @@ unittest
     assert(res.placeholder == "default_name");
 
     res = getArgumentUDA!(Config.init, int, "default_name", createUDA!"myvalue"()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, int, "default_name").finalize!(createUDA!"myvalue"()).info);
     assert(res.placeholder == "myvalue");
     assert(res.displayNames == ["myvalue"]);
 }
@@ -188,6 +196,7 @@ unittest
     assert(createUDA().info.allowBooleanNegation); // make codecov happy
 
     auto res = getArgumentUDA!(Config.init, bool, "default_name", createUDA()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, bool, "default_name").finalize!(createUDA()).info);
     assert(res.allowBooleanNegation);
     assert(res.names == ["default_name"]);
     assert(res.displayNames == ["--default_name"]);
@@ -196,6 +205,7 @@ unittest
     assert(res.placeholder == "DEFAULT_NAME");
 
     res = getArgumentUDA!(Config.init, bool, "default_name", createUDA!"myvalue"()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, bool, "default_name").finalize!(createUDA!"myvalue"()).info);
     assert(res.placeholder == "myvalue");
     assert(res.displayNames == ["--default_name"]);
 }
@@ -213,22 +223,28 @@ unittest
     assert(createUDA().info.allowBooleanNegation); // make codecov happy
 
     auto res = getArgumentUDA!(Config.init, E, "default_name", createUDA()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, E, "default_name").finalize!(createUDA()).info);
     assert(res.placeholder == "{a,b,c}");
 
     res = getArgumentUDA!(Config.init, E, "default_name", createUDA!"myvalue"()).info;
+    assert(res == getArgumentUDAImpl!(Config.init, E, "default_name").finalize!(createUDA!"myvalue"()).info);
     assert(res.placeholder == "myvalue");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-package enum getMemberArgumentUDA(alias config, TYPE, alias symbol, alias defaultUDA) = {
-    alias member = __traits(getMember, TYPE, symbol);
 
-    enum udas = getUDAs!(member, ArgumentUDA);
+package template getMemberArgumentUDA(Config config, TYPE, alias symbol, alias defaultUDA)
+{
+    private alias member = __traits(getMember, TYPE, symbol);
+
+    private enum udas = getUDAs!(member, ArgumentUDA);
     static assert(udas.length <= 1, "Member "~TYPE.stringof~"."~symbol~" has multiple '*Argument' UDAs");
 
     static if(udas.length > 0)
-        return getArgumentUDA!(config, typeof(member), symbol, udas[0]);
+        private enum uda = udas[0];
     else
-        return getArgumentUDA!(config, typeof(member), symbol, defaultUDA);
-}();
+        private alias uda = defaultUDA;
+
+    enum getMemberArgumentUDA = getArgumentUDA!(config, typeof(member), symbol, uda);
+}
 

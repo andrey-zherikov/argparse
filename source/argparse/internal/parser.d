@@ -1,8 +1,44 @@
 module argparse.internal.parser;
 
-import argparse.api: Config, Result;
-import argparse.internal;
-import argparse.internal.subcommands;
+import std.typecons: Nullable, nullable;
+
+import argparse.config;
+import argparse.result;
+import argparse.internal.arguments: Arguments;
+import argparse.internal.command: Command, createCommand;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private string[] consumeValuesFromCLI(ref string[] args, ulong minValuesCount, ulong maxValuesCount, char namedArgChar)
+{
+    import std.range: empty, front, popFront;
+
+    string[] values;
+
+    if(minValuesCount > 0)
+    {
+        if(minValuesCount < args.length)
+        {
+            values = args[0..minValuesCount];
+            args = args[minValuesCount..$];
+        }
+        else
+        {
+            values = args;
+            args = [];
+        }
+    }
+
+    while(!args.empty &&
+        values.length < maxValuesCount &&
+        (args.front.length == 0 || args.front[0] != namedArgChar))
+    {
+        values ~= args.front;
+        args.popFront();
+    }
+
+    return values;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,12 +52,12 @@ package struct Parser
     struct NamedShort {
         string name;
         string nameWithDash;
-        string value = null;  // null when there is no value
+        string value = null;  // null when there is no "=value"
     }
     struct NamedLong {
         string name;
         string nameWithDash;
-        string value = null;  // null when there is no value
+        string value = null;  // null when there is no "=value"
     }
 
     alias Argument = SumType!(Unknown, EndOfArgs, Positional, NamedShort, NamedLong);
@@ -34,13 +70,9 @@ package struct Parser
     bool[size_t] idxParsedArgs;
     size_t idxNextPositional = 0;
 
-    struct CmdParser
-    {
-        Result delegate(const ref Argument) parse;
-        Result delegate(const ref Argument) complete;
-        bool isDefault;
-    }
-    CmdParser[] cmdStack;
+
+    Command[] cmdStack;
+
 
     Argument splitArgumentNameValue(string arg)
     {
@@ -68,67 +100,56 @@ package struct Parser
         : Argument(NamedShort(config.convertCase(nameWithDash[1..$]), nameWithDash, value));
     }
 
-    auto parseArgument(T, PARSE)(const ref CommandArguments!T cmd, PARSE parse, ref T receiver, string value, string nameWithDash, size_t argIndex)
+    auto parseArgument(bool completionMode, FOUNDARG)(const Command[] cmdStack, const ref Command cmd, FOUNDARG foundArg, string value, string nameWithDash)
     {
-        auto res = parse(config, cmd, nameWithDash, receiver, value, args);
-        if(!res)
-            return res;
+        scope(exit) idxParsedArgs[foundArg.index] = true;
 
-        idxParsedArgs[argIndex] = true;
+        auto rawValues = value !is null ? [value] : consumeValuesFromCLI(args, foundArg.arg.minValuesCount.get, foundArg.arg.maxValuesCount.get, config.namedArgChar);
 
-        return Result.Success;
+        static if(completionMode)
+            return cmd.completeArgument(cmdStack, config, foundArg.index, nameWithDash, rawValues);
+        else
+            return cmd.parseArgument(cmdStack, config, foundArg.index, nameWithDash, rawValues);
     }
 
-    auto parseSubCommand(T)(const ref CommandArguments!T cmd, ref T receiver)
+    auto parseSubCommand(const Command[] cmdStack1, const ref Command cmd)
     {
         import std.range: front, popFront;
 
-        auto found = cmd.findSubCommand(config.convertCase(args.front));
-        if(found.parse is null)
+        auto subcmd = cmd.getSubCommand(cmdStack, config.convertCase(args.front));
+        if(subcmd.isNull)
             return Result.UnknownArgument;
 
-        if(found.level < cmdStack.length)
-            cmdStack.length = found.level;
+        if(cmdStack1.length < cmdStack.length)
+            cmdStack.length = cmdStack1.length;
 
-        cmdStack ~= CmdParser((const ref arg) => found.parse(this, arg, false, receiver), (const ref arg) => found.complete(this, arg, false, receiver));
+        addCommand(subcmd.get, false);
 
-        found.initialize(receiver);
         args.popFront();
 
         return Result.Success;
     }
 
-    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, bool isDefaultCmd, ref T receiver, Unknown)
+    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, Unknown)
     {
         static if(completionMode)
         {
-            import std.range: chain;
-            import std.algorithm: filter, map;
-            import std.string: startsWith;
-            import std.array: array, join;
-
             if(args.length == 1)
-            {
-                auto suggestions = chain(cmd.arguments.arguments.map!(_ => _.displayNames).join, cmd.subCommands.byName.keys);
-
-                // empty last arg means that we need to provide all args and subcommands, otherwise they are filtered
-                return Result(0, Result.Status.success, "",
-                            args[0] == "" ? suggestions.array : suggestions.filter!(_ => _.startsWith(args[0])).array);
-            }
+                return Result(0, Result.Status.success, "", cmd.suggestions(args[0]));
         }
 
         return Result.UnknownArgument;
     }
 
-    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, bool isDefaultCmd, ref T receiver, EndOfArgs)
+    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, EndOfArgs)
     {
         static if(!completionMode)
         {
             import std.range: popFront;
 
-            args.popFront();
+            args.popFront(); // remove "--"
 
-            cmd.setTrailingArgs(receiver, args);
+            cmd.setTrailingArgs(args);
             unrecognizedArgs ~= args;
         }
 
@@ -137,13 +158,13 @@ package struct Parser
         return Result.Success;
     }
 
-    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, bool isDefaultCmd, ref T receiver, Positional)
+    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, Positional)
     {
         auto foundArg = cmd.findPositionalArgument(idxNextPositional);
         if(foundArg.arg is null)
-            return parseSubCommand(cmd, receiver);
+            return parseSubCommand(cmdStack, cmd);
 
-        auto res = parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, null, foundArg.arg.names[0], foundArg.index);
+        auto res = parseArgument!completionMode(cmdStack, cmd, foundArg, null, foundArg.arg.names[0]);
         if(!res)
             return res;
 
@@ -152,7 +173,7 @@ package struct Parser
         return Result.Success;
     }
 
-    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, bool isDefaultCmd, ref T receiver, NamedLong arg)
+    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, NamedLong arg)
     {
         import std.algorithm : startsWith;
         import std.range: popFront;
@@ -171,25 +192,25 @@ package struct Parser
         if(foundArg.arg is null)
             return Result.UnknownArgument;
 
-        if(isDefaultCmd && foundArg.arg.ignoreInDefaultCommand)
+        if(cmd.isDefault && foundArg.arg.ignoreInDefaultCommand)
             return Result.UnknownArgument;
 
         args.popFront();
-        return parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
+        return parseArgument!completionMode(cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);
     }
 
-    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, bool isDefaultCmd, ref T receiver, NamedShort arg)
+    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, NamedShort arg)
     {
         import std.range: popFront;
 
         auto foundArg = cmd.findNamedArgument(arg.name);
         if(foundArg.arg !is null)
         {
-            if(isDefaultCmd && foundArg.arg.ignoreInDefaultCommand)
+            if(cmd.isDefault && foundArg.arg.ignoreInDefaultCommand)
                 return Result.UnknownArgument;
 
             args.popFront();
-            return parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, arg.value, arg.nameWithDash, foundArg.index);
+            return parseArgument!completionMode(cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);
         }
 
         // Try to parse "-ABC..." where "A","B","C" are different single-letter arguments
@@ -219,7 +240,7 @@ package struct Parser
                 arg.name = "";
             }
 
-            auto res = parseArgument(cmd, cmd.getParseFunction!completionMode(foundArg.index), receiver, value, "-"~name, foundArg.index);
+            auto res = parseArgument!completionMode(cmdStack, cmd, foundArg, value, "-"~name);
             if(!res)
                 return res;
         }
@@ -229,32 +250,35 @@ package struct Parser
         return Result.Success;
     }
 
-    auto parse(bool completionMode, T)(const ref CommandArguments!T cmd, bool isDefaultCmd, ref T receiver, Argument arg)
+    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, Argument arg)
     {
         import std.sumtype: match;
 
-        return arg.match!(_ => parse!completionMode(cmd, isDefaultCmd, receiver, _));
+        return arg.match!(_ => parse!completionMode(cmdStack, cmd, _));
     }
 
     auto parse(bool completionMode)(Argument arg)
     {
-        import std.range: front, popFront;
+        import std.range: front, popFront, popBack, back;
 
         auto result = Result.Success;
 
         const argsCount = args.length;
 
-        foreach_reverse(cmdParser; cmdStack)
+        foreach_reverse(index, cmdParser; cmdStack)
         {
+            auto cmdStack1 = cmdStack[0..index+1];
+
             static if(completionMode)
             {
-                auto res = cmdParser.complete(arg);
+                auto res = parse!true(cmdStack1, cmdParser, arg);
+
                 if(res)
                     result.suggestions ~= res.suggestions;
             }
             else
             {
-                auto res = cmdParser.parse(arg);
+                auto res = parse!false(cmdStack1, cmdParser, arg);
 
                 if(res.status != Result.Status.unknownArgument)
                     return res;
@@ -270,28 +294,9 @@ package struct Parser
         return result;
     }
 
-    auto parseAll(bool completionMode, T)(const ref CommandArguments!T cmd, ref T receiver)
+    auto parseAll(bool completionMode)()
     {
-        import std.range: empty, front;
-
-        cmdStack ~= CmdParser(
-        (const ref arg)
-        {
-            return parse!completionMode(cmd, false, receiver, arg);
-        },
-        (const ref arg)
-        {
-            return parse!completionMode(cmd, false, receiver, arg);
-        });
-
-        auto found = cmd.findSubCommand(DEFAULT_COMMAND);
-        if(found.parse !is null)
-        {
-            auto p = CmdParser((const ref arg) => found.parse(this, arg, true, receiver));
-            p.isDefault = true;
-            cmdStack ~= p;
-            found.initialize(receiver);
-        }
+        import std.range: empty, front, back;
 
         while(!args.empty)
         {
@@ -304,10 +309,37 @@ package struct Parser
 
             static if(completionMode)
                 if(args.empty)
-                    return res;
+                    return res; // res contains suggestions
         }
 
-        return cmd.checkRestrictions(idxParsedArgs, config);
+        return cmdStack[0].arguments.checkRestrictions(idxParsedArgs, config);
+    }
+
+    void addCommand(Command cmd, bool addDefaultCommand)
+    {
+        cmdStack ~= cmd;
+
+
+        if(addDefaultCommand)
+        {
+            auto subcmd = cmd.getDefaultSubCommand(cmdStack);
+            if(!subcmd.isNull)
+            {
+                cmdStack ~= subcmd.get;
+
+                //import std.stdio : writeln, stderr;stderr.writeln("-- addCommand 1 ", cmd.getSubCommand);
+                //
+                //cmd = cmd.getSubCommand(DEFAULT_COMMAND);
+                //import std.stdio : writeln, stderr;stderr.writeln("-- addCommand 2 ", cmd);
+            }
+        }
+        //do
+        //{
+        //    cmd = cmd.getSubCommand(DEFAULT_COMMAND);
+        //    if(cmd.parse !is null)
+        //        cmdStack ~= cmd;
+        //}
+        //while(cmd.parse !is null);
     }
 }
 
@@ -339,8 +371,10 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
 
     auto parser = Parser(&config, args);
 
-    auto command = commandArguments!(origConfig, COMMAND);
-    auto res = parser.parseAll!completionMode(command, receiver);
+    auto cmd = createCommand!(origConfig, COMMAND)(receiver);
+    parser.addCommand(cmd, true);
+
+    auto res = parser.parseAll!completionMode;
 
     static if(!completionMode)
     {
@@ -351,7 +385,7 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
             if(config.stylingMode == Config.StylingMode.autodetect)
                 config.setStylingMode(detectSupport() ? Config.StylingMode.on : Config.StylingMode.off);
 
-            command.onParsingDone(receiver, &config);
+            cmd.onParsingDone(&config);
         }
         else if(res.errorMsg.length > 0)
             config.onError(res.errorMsg);

@@ -1,337 +1,29 @@
 module argparse;
 
 
-import argparse.internal: ValueParseFunctions, Validators, commandArguments, Parsers, NoValueActionFunc;
-import argparse.internal.parser: callParser;
-import argparse.internal.style: Style;
-import argparse.internal.arguments: ArgumentInfo, Group, RestrictionGroup;
-import argparse.internal.subcommands: CommandInfo;
-import argparse.internal.argumentuda: ArgumentUDA;
-import argparse.internal.hooks: Hooks;
-import argparse.internal.utils: formatAllowedValues;
-import argparse.internal.enumhelpers: EnumValue;
+public import argparse.api.ansi;
+public import argparse.api.argument;
+public import argparse.api.argumentgroup;
+public import argparse.api.cli;
+public import argparse.api.command;
+public import argparse.api.enums;
+public import argparse.api.restriction;
 
-public import argparse.api;
-
+public import argparse.config;
+public import argparse.param;
+public import argparse.result;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-public auto ref Description(T)(auto ref ArgumentUDA!T uda, string text)
+version(unittest)
 {
-    uda.info.description = text;
-    return uda;
-}
-
-public auto ref Description(T)(auto ref ArgumentUDA!T uda, string delegate() text)
-{
-    uda.info.description = text;
-    return uda;
-}
-
-public auto ref HideFromHelp(T)(auto ref ArgumentUDA!T uda, bool hide = true)
-{
-    uda.info.hideFromHelp = hide;
-    return uda;
-}
-
-public auto ref Placeholder(T)(auto ref ArgumentUDA!T uda, string value)
-{
-    uda.info.placeholder = value;
-    return uda;
-}
-
-public auto ref Required(T)(auto ref ArgumentUDA!T uda)
-{
-    uda.info.required = true;
-    return uda;
-}
-
-public auto ref Optional(T)(auto ref ArgumentUDA!T uda)
-{
-    uda.info.required = false;
-    return uda;
-}
-
-public auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong num)
-{
-    uda.info.minValuesCount = num;
-    uda.info.maxValuesCount = num;
-    return uda;
-}
-
-public auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong min, ulong max)
-{
-    uda.info.minValuesCount = min;
-    uda.info.maxValuesCount = max;
-    return uda;
-}
-
-public auto ref MinNumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong min)
-{
-    assert(min <= uda.info.maxValuesCount.get(ulong.max));
-
-    uda.info.minValuesCount = min;
-    return uda;
-}
-
-public auto ref MaxNumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong max)
-{
-    assert(max >= uda.info.minValuesCount.get(0));
-
-    uda.info.maxValuesCount = max;
-    return uda;
-}
-
-
-unittest
-{
-    ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void)) arg;
-    assert(!arg.info.hideFromHelp);
-    assert(!arg.info.required);
-    assert(arg.info.minValuesCount.isNull);
-    assert(arg.info.maxValuesCount.isNull);
-
-    arg = arg.Description("desc").Placeholder("text");
-    assert(arg.info.description.get == "desc");
-    assert(arg.info.placeholder == "text");
-
-    arg = arg.Description(() => "qwer").Placeholder("text");
-    assert(arg.info.description.get == "qwer");
-
-    arg = arg.HideFromHelp().Required().NumberOfValues(10);
-    assert(arg.info.hideFromHelp);
-    assert(arg.info.required);
-    assert(arg.info.minValuesCount.get == 10);
-    assert(arg.info.maxValuesCount.get == 10);
-
-    arg = arg.Optional().NumberOfValues(20,30);
-    assert(!arg.info.required);
-    assert(arg.info.minValuesCount.get == 20);
-    assert(arg.info.maxValuesCount.get == 30);
-
-    arg = arg.MinNumberOfValues(2).MaxNumberOfValues(3);
-    assert(arg.info.minValuesCount.get == 2);
-    assert(arg.info.maxValuesCount.get == 3);
-
-    // values shouldn't be changed
-    arg.addDefaults(ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void)).init);
-    assert(arg.info.placeholder == "text");
-    assert(arg.info.description.get == "qwer");
-    assert(arg.info.hideFromHelp);
-    assert(!arg.info.required);
-    assert(arg.info.minValuesCount.get == 2);
-    assert(arg.info.maxValuesCount.get == 3);
+    import argparse.internal.command : createCommand;
+    import argparse.internal.help : printHelp;
+    import argparse.ansi : cleanStyleEnv, restoreStyleEnv;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-auto PositionalArgument(uint pos)
-{
-    auto arg = ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo()).Required();
-    arg.info.position = pos;
-    return arg;
-}
-
-auto PositionalArgument(uint pos, string name)
-{
-    return PositionalArgument(pos).Placeholder(name);
-}
-
-auto NamedArgument(string[] name...)
-{
-    return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo(name.dup)).Optional();
-}
-
-auto NamedArgument(string name)
-{
-    return ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, void))(ArgumentInfo([name])).Optional();
-}
-
-struct TrailingArguments {}
-
-
-unittest
-{
-    auto arg = PositionalArgument(3, "foo");
-    assert(arg.info.required);
-    assert(arg.info.positional);
-    assert(arg.info.position == 3);
-    assert(arg.info.placeholder == "foo");
-}
-
-unittest
-{
-    auto arg = NamedArgument("foo");
-    assert(!arg.info.required);
-    assert(!arg.info.positional);
-    assert(arg.info.names == ["foo"]);
-}
-
-unittest
-{
-    auto arg = NamedArgument(["foo","bar"]);
-    assert(!arg.info.required);
-    assert(!arg.info.positional);
-    assert(arg.info.names == ["foo","bar"]);
-}
-
-unittest
-{
-    auto arg = NamedArgument("foo","bar");
-    assert(!arg.info.required);
-    assert(!arg.info.positional);
-    assert(arg.info.names == ["foo","bar"]);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-public auto ref Description(T : Group)(auto ref T group, string text)
-{
-    group.description = text;
-    return group;
-}
-
-public auto ref Description(T : Group)(auto ref T group, string delegate() text)
-{
-    group.description = text;
-    return group;
-}
-
-auto ArgumentGroup(string name)
-{
-    return Group(name);
-}
-
-unittest
-{
-    auto g = ArgumentGroup("name").Description("description");
-    assert(g.name == "name");
-    assert(g.description.get == "description");
-
-    g = g.Description(() => "descr");
-    assert(g.description.get == "descr");
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-public auto ref Required(T : RestrictionGroup)(auto ref T group)
-{
-    group.required = true;
-    return group;
-}
-
-public auto RequiredTogether(string file=__FILE__, uint line = __LINE__)()
-{
-    import std.conv: to;
-    return RestrictionGroup(file~":"~line.to!string, RestrictionGroup.Type.together);
-}
-
-public auto MutuallyExclusive(string file=__FILE__, uint line = __LINE__)()
-{
-    import std.conv: to;
-    return RestrictionGroup(file~":"~line.to!string, RestrictionGroup.Type.exclusive);
-}
-
-
-unittest
-{
-    assert(RestrictionGroup.init.Required.required);
-
-    auto t = RequiredTogether();
-    assert(t.location.length > 0);
-    assert(t.type == RestrictionGroup.Type.together);
-
-    auto e = MutuallyExclusive();
-    assert(e.location.length > 0);
-    assert(e.type == RestrictionGroup.Type.exclusive);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-struct SubCommands {}
-
-// Default subcommand
-struct Default(COMMAND)
-{
-    COMMAND command;
-    alias command this;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-public auto ref Usage(T : CommandInfo)(auto ref T cmd, string text)
-{
-    cmd.usage = text;
-    return cmd;
-}
-
-public auto ref Usage(T : CommandInfo)(auto ref T cmd, string delegate() text)
-{
-    cmd.usage = text;
-    return cmd;
-}
-
-public auto ref Description(T : CommandInfo)(auto ref T cmd, string text)
-{
-    cmd.description = text;
-    return cmd;
-}
-
-public auto ref Description(T : CommandInfo)(auto ref T cmd, string delegate() text)
-{
-    cmd.description = text;
-    return cmd;
-}
-
-public auto ref ShortDescription(T : CommandInfo)(auto ref T cmd, string text)
-{
-    cmd.shortDescription = text;
-    return cmd;
-}
-
-public auto ref ShortDescription(T : CommandInfo)(auto ref T cmd, string delegate() text)
-{
-    cmd.shortDescription = text;
-    return cmd;
-}
-
-public auto ref Epilog(T : CommandInfo)(auto ref T cmd, string text)
-{
-    cmd.epilog = text;
-    return cmd;
-}
-
-public auto ref Epilog(T : CommandInfo)(auto ref T cmd, string delegate() text)
-{
-    cmd.epilog = text;
-    return cmd;
-}
-
-unittest
-{
-    CommandInfo c;
-    c = c.Usage("usg").Description("desc").ShortDescription("sum").Epilog("epi");
-    assert(c.names == [""]);
-    assert(c.usage.get == "usg");
-    assert(c.description.get == "desc");
-    assert(c.shortDescription.get == "sum");
-    assert(c.epilog.get == "epi");
-}
-
-unittest
-{
-    CommandInfo c;
-    c = c.Usage(() => "usg").Description(() => "desc").ShortDescription(() => "sum").Epilog(() => "epi");
-    assert(c.names == [""]);
-    assert(c.usage.get == "usg");
-    assert(c.description.get == "desc");
-    assert(c.shortDescription.get == "sum");
-    assert(c.epilog.get == "epi");
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 unittest
 {
@@ -357,7 +49,8 @@ unittest
         return config;
     }();
 
-    auto a = commandArguments!(config, T);
+    T receiver;
+    auto a = createCommand!config(receiver);
     assert(a.arguments.requiredGroup.arguments == [2,4]);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -376,7 +69,8 @@ unittest
         return config;
     }();
 
-    auto a = commandArguments!(config, T);
+    T receiver;
+    auto a = createCommand!config(receiver);
     assert(a.arguments.requiredGroup.arguments == []);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -390,7 +84,7 @@ unittest
         @(NamedArgument("2"))
         int a;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T1); }));
+    static assert(!__traits(compiles, { T1 t; enum c = createCommand!(Config.init)(t); }));
 
     struct T2
     {
@@ -399,34 +93,31 @@ unittest
         @(NamedArgument("1"))
         int b;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T2); }));
+    static assert(!__traits(compiles, { T2 t; enum c = createCommand!(Config.init)(t); }));
 
     struct T3
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(0)) int b;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T3); }));
+    static assert(!__traits(compiles, { T3 t; enum c = createCommand!(Config.init)(t); }));
 
     struct T4
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(2)) int b;
     }
-    static assert(!__traits(compiles, { enum c = commandArguments!(Config.init, T4); }));
+    static assert(!__traits(compiles, { T4 t; enum c = createCommand!(Config.init)(t); }));
 }
 
 unittest
 {
-    import std.exception;
-
     struct T
     {
         @(NamedArgument("--"))
         int a;
     }
     static assert(!__traits(compiles, { enum p = CLI!T.parseArgs!((T t){})([]); }));
-    assertThrown(CLI!T.parseArgs!((T t){})([]));
 }
 
 unittest
@@ -457,14 +148,8 @@ unittest
         int no_c;
     }
 
-    auto p = commandArguments!(Config.init, params);
-    assert(p.findNamedArgument("a").arg is null);
-    assert(p.findNamedArgument("b").arg !is null);
-    assert(p.findNamedArgument("boo").arg !is null);
-    assert(p.findPositionalArgument(0).arg !is null);
-    assert(p.findPositionalArgument(1).arg is null);
-    assert(p.getParseFunction!false(p.findNamedArgument("b").index) !is null);
-    assert(p.getParseFunction!true(p.findNamedArgument("b").index) !is null);
+    params receiver;
+    auto a = createCommand!(Config.init)(receiver);
 }
 
 unittest
@@ -683,160 +368,6 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-template CLI(Config config, COMMANDS...)
-{
-    mixin template main(alias newMain)
-    {
-        import std.sumtype: SumType, match;
-
-        private struct Program
-        {
-            SumType!COMMANDS cmd;   // Sub-commands
-        }
-
-        private auto forwardMain(Args...)(Program prog, auto ref Args args)
-        {
-            import core.lifetime: forward;
-            return prog.cmd.match!(_ => newMain(_, forward!args));
-        }
-
-        mixin CLI!(config, Program).main!forwardMain;
-    }
-}
-
-template CLI(Config config, COMMAND)
-{
-    static Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
-    {
-        return callParser!(config, false)(receiver, args, unrecognizedArgs);
-    }
-
-    static Result parseKnownArgs(ref COMMAND receiver, ref string[] args)
-    {
-        string[] unrecognizedArgs;
-
-        auto res = parseKnownArgs(receiver, args, unrecognizedArgs);
-        if(res)
-            args = unrecognizedArgs;
-
-        return res;
-    }
-
-    static Result parseArgs(ref COMMAND receiver, string[] args)
-    {
-        auto res = parseKnownArgs(receiver, args);
-        if(res && args.length > 0)
-        {
-            res = Result.Error("Unrecognized arguments: ", args);
-            config.onError(res.errorMsg);
-        }
-
-        return res;
-    }
-
-    static int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)
-        if(__traits(compiles, { newMain(COMMAND.init); }))
-    {
-        alias value = initialValue;
-
-        auto res = parseArgs(value, args);
-        if(!res)
-            return res.resultCode;
-
-        static if(__traits(compiles, { int a = cast(int) newMain(value); }))
-            return cast(int) newMain(value);
-        else
-        {
-            newMain(value);
-            return 0;
-        }
-    }
-
-    static int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)
-        if(__traits(compiles, { newMain(COMMAND.init, string[].init); }))
-    {
-        alias value = initialValue;
-
-        auto res = parseKnownArgs(value, args);
-        if(!res)
-            return res.resultCode;
-
-        static if(__traits(compiles, { int a = cast(int) newMain(value, args); }))
-            return cast(int) newMain(value, args);
-        else
-        {
-            newMain(value, args);
-            return 0;
-        }
-    }
-
-    string[] completeArgs(string[] args)
-    {
-        import std.algorithm: sort, uniq;
-        import std.array: array;
-
-        COMMAND dummy;
-        string[] unrecognizedArgs;
-
-        auto res = callParser!(config, true)(dummy, args.length == 0 ? [""] : args, unrecognizedArgs);
-
-        return res ? res.suggestions.dup.sort.uniq.array : [];
-    }
-
-    int complete(string[] args)
-    {
-        import argparse.internal.completer;
-        import std.sumtype: match;
-
-        // dmd fails with core.exception.OutOfMemoryError@core\lifetime.d(137): Memory allocation failed
-        // if we call anything from CLI!(config, Complete!COMMAND) so we have to directly call parser here
-
-        Complete!COMMAND receiver;
-        string[] unrecognizedArgs;
-
-        auto res = callParser!(config, false)(receiver, args, unrecognizedArgs);
-        if(!res)
-            return 1;
-
-        if(res && unrecognizedArgs.length > 0)
-        {
-            import std.conv: to;
-            config.onError("Unrecognized arguments: "~unrecognizedArgs.to!string);
-            return 1;
-        }
-
-        receiver.cmd.match!(_ => _.execute!config());
-
-        return 0;
-    }
-
-    mixin template mainComplete()
-    {
-        int main(string[] argv)
-        {
-            return CLI!(config, COMMAND).complete(argv[1..$]);
-        }
-    }
-
-    mixin template main(alias newMain)
-    {
-        version(argparse_completion)
-        {
-            mixin CLI!(config, COMMAND).mainComplete;
-        }
-        else
-        {
-            int main(string[] argv)
-            {
-                return CLI!(config, COMMAND).parseArgs!(newMain)(argv[1..$]);
-            }
-        }
-    }
-}
-
-alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS);
-
-
 unittest
 {
     struct T
@@ -913,17 +444,6 @@ unittest
     static assert(__traits(compiles, { mixin CLI!T.main!((params, args) => 0); }));
 }
 
-
-
-
-
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// User defined attributes
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 unittest
 {
     struct T
@@ -939,153 +459,8 @@ unittest
 }
 
 
-public auto PreValidation(alias func, T)(auto ref ArgumentUDA!T uda)
-{
-    return ArgumentUDA!(uda.parsingFunc.changePreValidation!func)(uda.tupleof);
-}
-
-public auto Parse(alias func, T)(auto ref ArgumentUDA!T uda)
-{
-    auto desc = ArgumentUDA!(uda.parsingFunc.changeParse!func)(uda.tupleof);
-
-    static if(__traits(compiles, { func(string.init); }))
-        desc.info.minValuesCount = desc.info.maxValuesCount = 1;
-    else
-    {
-        desc.info.minValuesCount = 0;
-        desc.info.maxValuesCount = ulong.max;
-    }
-
-    return desc;
-}
-
-public auto Validation(alias func, T)(auto ref ArgumentUDA!T uda)
-{
-    return ArgumentUDA!(uda.parsingFunc.changeValidation!func)(uda.tupleof);
-}
-
-public auto Action(alias func, T)(auto ref ArgumentUDA!T uda)
-{
-    return ArgumentUDA!(uda.parsingFunc.changeAction!func)(uda.tupleof);
-}
-
-public auto ActionNoValue(alias func, T)(auto ref ArgumentUDA!T uda)
-{
-    auto desc = ArgumentUDA!(uda.parsingFunc.changeNoValueAction!func)(uda.tupleof);
-    desc.info.minValuesCount = 0;
-    return desc;
-}
-
-public auto AllowNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
-{
-    return uda.ActionNoValue!(() => valueToUse);
-}
-
-
 unittest
 {
-    auto uda = NamedArgument().PreValidation!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, FUNC, void, void, void, void)), alias FUNC));
-    assert(!is(FUNC == void));
-}
-
-unittest
-{
-    auto uda = NamedArgument().Parse!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, FUNC, void, void, void)), alias FUNC));
-    assert(!is(FUNC == void));
-}
-
-unittest
-{
-    auto uda = NamedArgument().Parse!((string _) => _);
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, FUNC, void, void, void)), alias FUNC));
-    assert(!is(FUNC == void));
-    assert(uda.info.minValuesCount == 1);
-    assert(uda.info.maxValuesCount == 1);
-}
-
-unittest
-{
-    auto uda = NamedArgument().Parse!((string[] _) => _);
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, FUNC, void, void, void)), alias FUNC));
-    assert(!is(FUNC == void));
-    assert(uda.info.minValuesCount == 0);
-    assert(uda.info.maxValuesCount == ulong.max);
-}
-
-unittest
-{
-    auto uda = NamedArgument().Validation!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, FUNC, void, void)), alias FUNC));
-    assert(!is(FUNC == void));
-}
-
-unittest
-{
-    auto uda = NamedArgument().Action!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, void, FUNC, void)), alias FUNC));
-    assert(!is(FUNC == void));
-}
-
-unittest
-{
-    auto uda = NamedArgument().AllowNoValue!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, FUNC)), alias FUNC));
-    assert(!is(FUNC == void));
-    assert(uda.info.minValuesCount == 0);
-}
-
-
-public auto RequireNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
-{
-    auto desc = uda.AllowNoValue!valueToUse;
-    desc.info.minValuesCount = 0;
-    desc.info.maxValuesCount = 0;
-    return desc;
-}
-
-
-unittest
-{
-    auto uda = NamedArgument().RequireNoValue!"value";
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParseFunctions!(void, void, void, void, void, FUNC)), alias FUNC));
-    assert(!is(FUNC == void));
-    assert(uda.info.minValuesCount == 0);
-    assert(uda.info.maxValuesCount == 0);
-}
-
-
-public auto Counter(T)(auto ref ArgumentUDA!T uda)
-{
-    struct CounterParsingFunction
-    {
-        static Result parse(T)(ref T receiver, const ref RawParam param)
-        {
-            assert(param.value.length == 0);
-
-            ++receiver;
-
-            return Result.Success;
-        }
-    }
-
-    auto desc = ArgumentUDA!(CounterParsingFunction)(uda.tupleof);
-    desc.info.minValuesCount = 0;
-    desc.info.maxValuesCount = 0;
-    return desc;
-}
-
-
-unittest
-{
-    auto uda = NamedArgument().Counter();
-    assert(is(typeof(uda) : ArgumentUDA!TYPE, TYPE));
-    assert(is(TYPE));
-    assert(!is(TYPE == void));
-    assert(uda.info.minValuesCount == 0);
-    assert(uda.info.maxValuesCount == 0);
-
     struct T
     {
         @(NamedArgument.Counter()) int a;
@@ -1095,26 +470,8 @@ unittest
 }
 
 
-auto AllowedValues(alias values, ARG)(ARG arg)
-{
-    import std.array : assocArray;
-    import std.range : repeat;
-    import std.traits: KeyType;
-
-    enum valuesAA = assocArray(values, false.repeat);
-
-    auto desc = arg.Validation!(Validators.ValueInList!(values, KeyType!(typeof(valuesAA))));
-    if(desc.info.placeholder.length == 0)
-        desc.info.placeholder = formatAllowedValues!values;
-
-    return desc;
-}
-
-
 unittest
 {
-    assert(NamedArgument.AllowedValues!([1,3,5]).info.placeholder == "{1,3,5}");
-
     struct T
     {
         @(NamedArgument.AllowedValues!([1,3,5])) int a;
@@ -1336,19 +693,6 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-auto Command(string[] name...)
-{
-    return CommandInfo(name.dup);
-}
-
-unittest
-{
-    auto a = Command("MYPROG");
-    assert(a.names == ["MYPROG"]);
-}
-
-
-
 unittest
 {
     @Command("MYPROG")
@@ -1459,101 +803,176 @@ unittest
     assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-@(NamedArgument
-.Description("Colorize the output. If value is omitted then 'always' is used.")
-.AllowedValues!(["always","auto","never"])
-.NumberOfValues(0, 1)
-.Parse!(Parsers.PassThrough)
-.Action!(AnsiStylingArgument.action)
-.ActionNoValue!(AnsiStylingArgument.action)
-)
-@(Hooks.onParsingDone!(AnsiStylingArgument.finalize))
-private struct AnsiStylingArgument
+unittest
 {
-    Config.StylingMode stylingMode = Config.StylingMode.autodetect;
-
-    alias stylingMode this;
-
-    string toString() const
+    static auto epilog() { return "custom epilog"; }
+    @(Command("MYPROG")
+     .Description("custom description")
+     .Epilog(epilog)
+    )
+    struct T
     {
-        import std.conv: to;
-        return stylingMode.to!string;
+        @NamedArgument  string s;
+        @(NamedArgument.Placeholder("VALUE"))  string p;
+
+        @(NamedArgument.HideFromHelp())  string hidden;
+
+        enum Fruit { apple, pear };
+        @(NamedArgument(["f","fruit"]).Required().Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
+
+        @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
+
+        @(PositionalArgument(0, "param0").Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string _param0;
+        @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
+
+        @TrailingArguments string[] args;
     }
 
-    void set(const Config* config, Config.StylingMode mode)
+    auto test()
     {
-        config.setStylingMode(stylingMode = mode);
+        import std.array: appender;
+
+        auto a = appender!string;
+        alias cfg = {
+            Config config;
+            config.stylingMode = Config.StylingMode.off;
+            return config;
+        };
+        auto config = cfg();
+        T receiver;
+        auto cmd = createCommand!(cfg())(receiver);
+        printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+        return a[];
     }
-    static void action(ref AnsiStylingArgument receiver, RawParam param)
+
+    auto env = cleanStyleEnv(true);
+    scope(exit) restoreStyleEnv(env);
+
+    assert(test()  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
+        "custom description\n\n"~
+        "Required arguments:\n"~
+        "  -f {apple,pear}, --fruit {apple,pear}\n"~
+        "                   This is a help text for fruit. Very very very very very very\n"~
+        "                   very very very very very very very very very very very very\n"~
+        "                   very long text\n"~
+        "  param0           This is a help text for param0. Very very very very very very\n"~
+        "                   very very very very very very very very very very very very\n"~
+        "                   very long text\n"~
+        "  {q,a}\n\n"~
+        "Optional arguments:\n"~
+        "  -s S\n"~
+        "  -p VALUE\n"~
+        "  -i {1,4,16,8}\n"~
+        "  -h, --help       Show this help message and exit\n\n"~
+        "custom epilog\n");
+}
+
+unittest
+{
+    @(Command("MYPROG"))
+    struct T
     {
-        switch(param.value[0])
+        @(ArgumentGroup("group1").Description("group1 description"))
         {
-            case "always":  receiver.set(param.config, Config.StylingMode.on);         return;
-            case "auto":    receiver.set(param.config, Config.StylingMode.autodetect); return;
-            case "never":   receiver.set(param.config, Config.StylingMode.off);        return;
-            default:
+            @NamedArgument
+            {
+                string a;
+                string b;
+            }
+            @PositionalArgument(0) string p;
         }
+
+        @(ArgumentGroup("group2").Description("group2 description"))
+        @NamedArgument
+        {
+            string c;
+            string d;
+        }
+        @PositionalArgument(1) string q;
     }
-    static void action(ref AnsiStylingArgument receiver, Param!void param)
-    {
-        receiver.set(param.config, Config.StylingMode.on);
-    }
-    static void finalize(ref AnsiStylingArgument receiver, const Config* config)
-    {
-        receiver.set(config, config.stylingMode);
-    }
-}
 
-auto ansiStylingArgument()
-{
-    return AnsiStylingArgument.init;
-}
+    import std.array: appender;
 
-unittest
-{
-    import std.conv: to;
+    auto env = cleanStyleEnv(true);
+    scope(exit) restoreStyleEnv(env);
 
-    assert(ansiStylingArgument == AnsiStylingArgument.init);
-    assert(ansiStylingArgument.toString() == Config.StylingMode.autodetect.to!string);
-
-    Config config;
-    config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.stylingMode = mode; };
-
-    AnsiStylingArgument arg;
-    AnsiStylingArgument.action(arg, Param!void(&config));
-
-    assert(config.stylingMode == Config.StylingMode.on);
-    assert(arg.toString() == Config.StylingMode.on.to!string);
-}
-
-unittest
-{
-    auto test(string value)
-    {
+    auto a = appender!string;
+    alias cfg = {
         Config config;
-        config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.stylingMode = mode; };
+        config.stylingMode = Config.StylingMode.off;
+        return config;
+    };
+    auto config = cfg();
+    T receiver;
+    auto cmd = createCommand!(cfg())(receiver);
+    printHelp(_ => a.put(_), cmd,  [&cmd.arguments], &config, "MYPROG");
 
-        AnsiStylingArgument arg;
-        AnsiStylingArgument.action(arg, RawParam(&config, "", [value]));
-        return config.stylingMode;
-    }
-
-    assert(test("always") == Config.StylingMode.on);
-    assert(test("auto")   == Config.StylingMode.autodetect);
-    assert(test("never")  == Config.StylingMode.off);
-    assert(test("")       == Config.StylingMode.autodetect);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-auto ArgumentValue(string[] name...)
-{
-    return EnumValue(name.dup);
+    assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
+        "group1:\n"~
+        "  group1 description\n\n"~
+        "  -a A\n"~
+        "  -b B\n"~
+        "  p\n\n"~
+        "group2:\n"~
+        "  group2 description\n\n"~
+        "  -c C\n"~
+        "  -d D\n\n"~
+        "Required arguments:\n"~
+        "  q\n\n"~
+        "Optional arguments:\n"~
+        "  -h, --help    Show this help message and exit\n\n");
 }
 
 unittest
 {
-    assert(ArgumentValue("a","b").values == ["a","b"]);
+    import std.sumtype: SumType;
+
+    @(Command("MYPROG"))
+    struct T
+    {
+        @(Command("cmd1").ShortDescription("Perform cmd 1"))
+        struct CMD1
+        {
+            string a;
+        }
+        @(Command("very-long-command-name-2").ShortDescription("Perform cmd 2"))
+        struct CMD2
+        {
+            string b;
+        }
+
+        string c;
+        string d;
+
+        SumType!(CMD1, CMD2) cmd;
+    }
+
+    import std.array: appender;
+
+    auto env = cleanStyleEnv(true);
+    scope(exit) restoreStyleEnv(env);
+
+    auto a = appender!string;
+    alias cfg = {
+        Config config;
+        config.stylingMode = Config.StylingMode.off;
+        return config;
+    };
+    auto config = cfg();
+    T receiver;
+    auto cmd = createCommand!(cfg())(receiver);
+    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+
+    assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
+        "Available commands:\n"~
+        "  cmd1          Perform cmd 1\n"~
+        "  very-long-command-name-2\n"~
+        "                Perform cmd 2\n\n"~
+        "Optional arguments:\n"~
+        "  -c C\n"~
+        "  -d D\n"~
+        "  -h, --help    Show this help message and exit\n\n");
 }

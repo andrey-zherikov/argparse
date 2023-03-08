@@ -1,9 +1,11 @@
 module argparse.internal.completer;
 
-import argparse : CLI, Command, SubCommands, Default, Description, ShortDescription, MutuallyExclusive, NamedArgument, TrailingArguments;
-import argparse.api: Config;
-
-import argparse.internal.subcommands: CommandInfo;
+import argparse.config;
+import argparse.api.argument: NamedArgument, Description, TrailingArguments;
+import argparse.api.command: Command, SubCommands, Default, Description, ShortDescription;
+import argparse.api.restriction: MutuallyExclusive;
+import argparse.internal.commandinfo: CommandInfo;
+import argparse.internal.parser: callParser;
 
 import std.traits: getUDAs;
 import std.sumtype: SumType;
@@ -41,6 +43,21 @@ unittest
     struct T {}
 
     assert(defaultCommandName!T == Runtime.args[0].baseName);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package(argparse) string[] completeArgs(Config config, COMMAND)(string[] args)
+{
+    import std.algorithm: sort, uniq;
+    import std.array: array;
+
+    COMMAND dummy;
+    string[] unrecognizedArgs;
+
+    auto res = callParser!(config, true)(dummy, args.length == 0 ? [""] : args, unrecognizedArgs);
+
+    return res ? res.suggestions.dup.sort.uniq.array : [];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,7 +206,7 @@ package(argparse) struct Complete(COMMAND)
                     args ~= "";
             }
 
-            CLI!(config, COMMAND).completeArgs(args).each!writeln;
+            completeArgs!(config, COMMAND)(args).each!writeln;
         }
     }
 

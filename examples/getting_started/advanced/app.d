@@ -70,6 +70,7 @@ mixin CLI!(config(), Advanced).main!((args, unparsed)
     // use actual styling mode to print output
     auto style = Advanced.color == Config.StylingMode.on ? red.onWhite : noStyle;
     writeln(style("Styling mode: "), Advanced.color);
+    assert(Advanced.color == Config.StylingMode.on || Advanced.color == Config.StylingMode.off);
 
     return 0;
 });
