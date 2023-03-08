@@ -329,7 +329,7 @@ package struct Arguments
                 restrictionGroups ~= restriction;
 
                 static if(restriction.required)
-                    restrictions ~= (a,b,c) => Restrictions.RequiredAnyOf(a, b, c, restrictionGroups[index].arguments);
+                    restrictions ~= (a, in b, in c) => Restrictions.RequiredAnyOf(a, b, c, restrictionGroups[index].arguments);
 
                 enum checkFunc =
                     {
@@ -340,7 +340,7 @@ package struct Arguments
                         }
                     }();
 
-                restrictions ~= (a,b,c) => checkFunc(a, b, c, restrictionGroups[index].arguments);
+                restrictions ~= (a, in b, in c) => checkFunc(a, b, c, restrictionGroups[index].arguments);
 
                 return index;
             }();
