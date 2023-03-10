@@ -210,7 +210,7 @@ an object that contains parsed arguments.
   compile-time checking of the type of the first parameter (see examples for details).
 - Optionally `newMain` function can take a `string[]` parameter as a second argument. Providing such a function will
   mean that `argparse` will parse known arguments only and all unknown ones will be passed as a second parameter to
-  `newMain` function. If `newMain` function doesn't have such parameter then `argparse` will error out if the is an
+  `newMain` function. If `newMain` function doesn't have such parameter then `argparse` will error out if there is an
   unknown argument provided in command line.
 - Optionally `newMain` can return a result that can be cast to `int`. In this case, this result will be returned from
   standard `main` function.
