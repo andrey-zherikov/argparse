@@ -207,7 +207,7 @@ an object that contains parsed arguments.
 - It must accept all `COMMANDS` types as a first parameter if `CLI` template is used with multiple `COMMANDS...`.
   `argparse` uses `std.sumtype.match` for matching. Possible implementation of such `newMain` function would be a
   function that is overridden for every command type from `COMMANDS`. Another example would be a lambda that does
-  compile-time checking of the type of the first parameter (see examples for details).
+  compile-time checking of the type of the first parameter (see examples below for details).
 - Optionally `newMain` function can take a `string[]` parameter as a second argument. Providing such a function will
   mean that `argparse` will parse known arguments only and all unknown ones will be passed as a second parameter to
   `newMain` function. If `newMain` function doesn't have such parameter then `argparse` will error out if there is an
@@ -264,32 +264,87 @@ mixin CLI!(cmd1, cmd2).main!((args, unparsed)
 });
 ```
 
-### Complete argument parsing
+### Providing a new `main` function without wrapping standard `main`
 
-`CLI` template provides `parseArgs` function that parses the command line and ensures that there are no unknown
-arguments specified in command line. It has the following signature:
+If wrapping of standard `main` function doesn't fit your needs (e.g. you need to do some initialization before parsing
+the command line) then you can use `CLI!(...).parseArgs` function:
 
-`Result parseArgs(ref COMMAND receiver, string[] args))`
+`int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)`
 
 **Parameters:**
 
-- `receiver` - the object that's populated with parsed values.
-- `args` - raw command line arguments.
+- `newMain` - function that's called with object of type `COMMAND` as a first parameter filled with the data parsed from
+  command line; optionally it can take `string[]` as a second parameter which will contain unknown arguments
+  (see [Wrapper for main function](#wrapper-for-main-function) section for details).
+- `args` - raw command line arguments (excluding `argv[0]` - first command line argument in `main` function).
+- `initialValue` - initial value for the object passed to `newMain` function.
 
 **Return value:**
 
-An object that can be cast to `bool` to check whether the parsing was successful or not.
+If there is an error happened during the parsing then non-zero value is returned. In case of no error, if `newMain`
+function returns a value that can be cast to `int` then this value is returned or `0` otherwise.
 
 **Usage example:**
 
 ```d
-struct T
+struct COMMAND
 {
     string a;
     string b;
 }
 
-assert(CLI!T.parseArgs!((T t) { assert(t == T("A","B")); })(["-a", "A", "-b", "B"]) == 0);
+int my_main(COMMAND command)
+{
+    // Do whatever is needed
+    return 0;
+}
+
+int main(string[] args)
+{
+    // Do initialization here
+    // If needed, termination code can be done as 'scope(exit) { ...code... }' here as well
+
+    return CLI!COMMAND.parseArgs!my_main(args[1..$]);
+}
+```
+
+### Providing an object for values of command line arguments
+
+For the cases when providing `newMain` function is not possible or feasible, `parseArgs` function can accept a reference
+to an object that receives the values of command line arguments:
+
+`Result parseArgs(ref COMMAND receiver, string[] args))`
+
+**Parameters:**
+
+- `receiver` - object that is populated with parsed values.
+- `args` - raw command line arguments (excluding `argv[0]` - first command line argument in `main` function).
+
+**Return value:**
+
+An object that can be cast to `bool` to check whether the parsing was successful or not. Note that this function will
+error out if command line contains unknown arguments.
+
+**Usage example:**
+
+```d
+struct COMMAND
+{
+    string a;
+    string b;
+}
+
+int main(string[] argv)
+{
+    COMMAND cmd;
+
+    if(!CLI!COMMAND.parseArgs(cmd, argv[1..$]))
+      return 1; // parsing failure
+      
+    // Do whatever is needed
+    
+    return 0;
+}
 ```
 
 
@@ -297,14 +352,14 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T("A","B")); })(["-a", "A", "-b", "B
 
 Sometimes a program may only parse a few of the command-line arguments, processing the remaining arguments in different
 way. In these cases, `CLI!(...).parseKnownArgs` function can be used. It works much like `CLI!(...).parseArgs` except
-that it does not produce an error when extra arguments are present. It has the following signatures:
+that it does not produce an error when unknown arguments are present. It has the following signatures:
 
 - `Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)`
 
   **Parameters:**
 
   - `receiver` - the object that's populated with parsed values.
-  - `args` - raw command line arguments.
+  - `args` - raw command line arguments (excluding `argv[0]` - first command line argument in `main` function).
   - `unrecognizedArgs` - raw command line arguments that were not parsed.
 
   **Return value:**
@@ -316,7 +371,8 @@ that it does not produce an error when extra arguments are present. It has the f
   **Parameters:**
 
   - `receiver` - the object that's populated with parsed values.
-  - `args` - raw command line arguments that are modified to have parsed arguments removed.
+  - `args` - raw command line arguments that are modified to have parsed arguments removed (excluding `argv[0]` - first
+    command line argument in `main` function).
 
   **Return value:**
 
@@ -338,41 +394,6 @@ assert(result == T("A"));
 assert(args == ["-c", "C"]);
 ```
 
-
-### Calling another `main` function after parsing
-
-Sometimes it's useful to call some function with an object that has all command line arguments parsed. For this usage,
-`argparse` provides `CLI!(...).parseArgs` template function that has the following signature:
-
-`int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)`
-
-**Parameters:**
-
-- `newMain` - function that's called with object of type `COMMAND` as a first parameter filled with the data parsed from
-  command line; optionally it can take `string[]` as a second parameter which will contain unknown arguments
-  (`parseKnownArgs` function will be used underneath in this case).
-- `args` - raw command line arguments.
-- `initialValue` - initial value for the object passed to `func`.
-
-**Return value:**
-
-If there is an error happened during the parsing then non-zero value is returned. If `newMain` function returns a
-value that can be cast to `int` then this value is returned. Otherwise, `0` is returned.
-
-**Usage example:**
-
-```d
-int my_main(T command)
-{
-    // do something
-    return 0;
-}
-
-int main(string[] args)
-{
-    return CLI!T.parseArgs!my_main(args);
-}
-```
 
 ## Shell completion
 
