@@ -42,7 +42,7 @@ struct Advanced
     static auto color = ansiStylingArgument;
 }
 
-// Customize prsing config
+// Customize parsing config
 auto config()
 {
     Config cfg;
