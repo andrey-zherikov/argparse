@@ -61,16 +61,17 @@ struct Config
     bool addHelp = true;
 
     /**
-       Styling and coloring mode.
+       Styling.
+     */
+    Style styling = Style.Default;
+
+    /**
+       Styling mode.
        Defaults to auto-detectection of the capability.
      */
     enum StylingMode { autodetect, on, off }
     StylingMode stylingMode = StylingMode.autodetect;
 
-    /**
-       Help style.
-     */
-    Style helpStyle = Style.Default;
 
     /**
        Delegate that processes error messages if they happen during argument parsing.

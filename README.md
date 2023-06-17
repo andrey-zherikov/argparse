@@ -876,6 +876,11 @@ There are some customizations supported on argument level for both `PositionalAr
 - `HideFromHelp` - can be used to indicate that the argument shouldn't be printed in help message.
 - `Placeholder` - provides custom text that it used to indicate the value of the argument in help message.
 
+### Help text styling
+
+`argparse` uses `Config.styling` to determine what style should be applied to different parts of the help text.
+Please refer to [Styling scheme](#styling-scheme) for available settings.
+
 ### Example
 
 Here is an example of how this customization can be used:
@@ -1116,18 +1121,6 @@ mixin CLI!Arguments.main!((args)
       writeln("Colors are disabled");
 });
 ```
-
-### Help text styling scheme
-
-`argparse` uses `Config.helpStyle` to determine what style should be applied to different parts of help text.
-This parameter has the following members that can be tuned:
-
-- `programName`: style for the program name. Default is `bold`.
-- `subcommandName`: style for the subcommand name. Default is `bold`.
-- `argumentGroupTitle`: style for the title of argument group. Default is `bold.underline`.
-- `namedArgumentName`: style for the name of named argument. Default is `lightYellow`.
-- `namedArgumentValue`: style for the value of named argument. Default is `italic`.
-- `positionalArgumentValue`: style for the value of positional argument. Default is `lightYellow`.
 
 ### Heuristics for enabling styling
 
@@ -1596,24 +1589,26 @@ not be called.
 
 Default is `true`.
 
-### Help styling mode
+### Styling mode
 
 `Config.stylingMode` - styling mode that is used to print help text. It has the following type: `enum StylingMode { autodetect, on, off }`.
+If it's set to `Config.StylingMode.on` then styling is **always enabled**.
+If it's set to `Config.StylingMode.off` then styling is **always disabled**.
 
-Default value is `Config.StylingMode.autodetect`.
+Default value is `Config.StylingMode.autodetect` which means that styling will be enabled when possible.
 
 See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 
-### Help styling scheme
+### Styling scheme
 
-`Config.helpStyle` - contains help text style. It has the following members:
+`Config.styling` - contains help text style. It has the following members:
 
-- `programName`: style for the program name.
-- `subcommandName`: style for the subcommand name.
-- `argumentGroupTitle`: style for the title of argument group.
-- `namedArgumentName`: style for the name of named argument.
-- `namedArgumentValue`: style for the value of named argument.
-- `positionalArgumentValue`: style for the value of positional argument.
+- `programName`: style for the program name. Default is `bold`.
+- `subcommandName`: style for the subcommand name. Default is `bold`.
+- `argumentGroupTitle`: style for the title of argument group. Default is `bold.underline`.
+- `namedArgumentName`: style for the name of named argument. Default is `lightYellow`.
+- `namedArgumentValue`: style for the value of named argument. Default is `italic`.
+- `positionalArgumentValue`: style for the value of positional argument. Default is `lightYellow`.
 
 See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 
