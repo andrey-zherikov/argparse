@@ -94,38 +94,4 @@ struct Config
     {
         return errorHandlerFunc = func;
     }
-
-
-    package void onError(string message) const nothrow
-    {
-        import std.stdio: stderr, writeln;
-
-        try
-        {
-            if(errorHandlerFunc)
-                errorHandlerFunc(message);
-            else
-                stderr.writeln("Error: ", message);
-        }
-        catch(Exception e)
-        {
-            throw new Error(e.msg);
-        }
-    }
-}
-
-unittest
-{
-    enum text = "--just testing error func--";
-
-    bool called = false;
-
-    Config c;
-    c.errorHandler = (string s)
-    {
-        assert(s == text);
-        called = true;
-    };
-    c.onError(text);
-    assert(called);
 }

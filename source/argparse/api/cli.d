@@ -8,6 +8,26 @@ import argparse.internal.completer: completeArgs, Complete;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Private helper for error output
+
+private void onError(Config config)(string message) nothrow
+{
+    static if(config.errorHandlerFunc)
+        config.errorHandlerFunc(message);
+    else
+        try
+        {
+            import std.stdio: stderr, writeln;
+
+            stderr.writeln("Error: ", message);
+        }
+        catch(Exception e)
+        {
+            throw new Error(e.msg);
+        }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Public API for CLI wrapper
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,7 +56,12 @@ template CLI(Config config, COMMAND)
 {
     static Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
     {
-        return callParser!(config, false)(receiver, args, unrecognizedArgs);
+        auto res = callParser!(config, false)(receiver, args, unrecognizedArgs);
+
+        if(!res && res.errorMsg.length > 0)
+            onError!config(res.errorMsg);
+
+        return res;
     }
 
     static Result parseKnownArgs(ref COMMAND receiver, ref string[] args)
@@ -56,7 +81,7 @@ template CLI(Config config, COMMAND)
         if(res && args.length > 0)
         {
             res = Result.Error("Unrecognized arguments: ", args);
-            config.onError(res.errorMsg);
+            onError!config(res.errorMsg);
         }
 
         return res;
@@ -115,12 +140,17 @@ template CLI(Config config, COMMAND)
 
         auto res = callParser!(config, false)(receiver, args, unrecognizedArgs);
         if(!res)
+        {
+            if(res.errorMsg.length > 0)
+                onError!config(res.errorMsg);
+
             return 1;
+        }
 
         if(res && unrecognizedArgs.length > 0)
         {
             import std.conv: to;
-            config.onError("Unrecognized arguments: "~unrecognizedArgs.to!string);
+            onError!config("Unrecognized arguments: "~unrecognizedArgs.to!string);
             return 1;
         }
 

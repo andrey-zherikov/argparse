@@ -387,8 +387,6 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
 
             cmd.onParsingDone(&config);
         }
-        else if(res.errorMsg.length > 0)
-            config.onError(res.errorMsg);
     }
 
     return res;
