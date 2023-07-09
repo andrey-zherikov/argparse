@@ -67,13 +67,6 @@ struct Config
     enum StylingMode { autodetect, on, off }
     StylingMode stylingMode = StylingMode.autodetect;
 
-    package void delegate(StylingMode)[] setStylingModeHandlers;
-    package void setStylingMode(StylingMode mode) const
-    {
-        foreach(dg; setStylingModeHandlers)
-            dg(mode);
-    }
-
     /**
        Help style.
      */

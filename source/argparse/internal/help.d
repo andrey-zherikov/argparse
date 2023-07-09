@@ -3,6 +3,7 @@ module argparse.internal.help;
 import argparse.ansi;
 import argparse.config;
 import argparse.result;
+import argparse.api.ansi: ansiStylingArgument;
 import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
 import argparse.internal.commandinfo: CommandInfo;
@@ -629,10 +630,7 @@ package(argparse) void printHelp(ARGUMENTS, Command)(void delegate(string) sink,
 {
     import std.algorithm: each;
 
-    bool enableStyling = config.stylingMode == Config.StylingMode.on ||
-        config.stylingMode == Config.StylingMode.autodetect && detectSupport();
-
-    auto helpStyle = enableStyling ? config.helpStyle : Style.None;
+    auto helpStyle = ansiStylingArgument.isEnabled ? config.helpStyle : Style.None;
 
     auto argSections = getSections(helpStyle, arguments);
     auto section = getSection(helpStyle, cmd, argSections, helpStyle.programName(progName));
@@ -640,5 +638,5 @@ package(argparse) void printHelp(ARGUMENTS, Command)(void delegate(string) sink,
     immutable helpPosition = section.maxItemNameLength(20) + 4;
     immutable indent = spaces(helpPosition + 2);
 
-    print(enableStyling ? sink : (string _) { _.getUnstyledText.each!sink; }, section, "", indent);
+    print(ansiStylingArgument.isEnabled ? sink : (string _) { _.getUnstyledText.each!sink; }, section, "", indent);
 }

@@ -202,11 +202,11 @@ unittest
         return 12345;
     })(["-a","aa","-g"]) == 12345);
     assert(CLI!T.parseArgs!((T t) {
-        assert(t.color == Config.StylingMode.on);
+        assert(t.color);
         return 12345;
     })(["--color"]) == 12345);
     assert(CLI!T.parseArgs!((T t) {
-        assert(t.color == Config.StylingMode.off);
+        assert(!t.color);
         return 12345;
     })(["--color","never"]) == 12345);
 }
@@ -831,27 +831,22 @@ unittest
         @TrailingArguments string[] args;
     }
 
-    auto test()
-    {
-        import std.array: appender;
+    import std.array: appender;
 
-        auto a = appender!string;
-        alias cfg = {
-            Config config;
-            config.stylingMode = Config.StylingMode.off;
-            return config;
-        };
-        auto config = cfg();
-        T receiver;
-        auto cmd = createCommand!(cfg())(receiver);
-        printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
-        return a[];
-    }
+    Config config;
 
-    auto env = cleanStyleEnv(true);
-    scope(exit) restoreStyleEnv(env);
+    auto a = appender!string;
 
-    assert(test()  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
+    T receiver;
+    auto cmd = createCommand!(Config.init)(receiver);
+
+    auto isEnabled = ansiStylingArgument.isEnabled;
+    scope(exit) ansiStylingArgument.isEnabled = isEnabled;
+    ansiStylingArgument.isEnabled = false;
+
+    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+
+    assert(a[]  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
         "custom description\n\n"~
         "Required arguments:\n"~
         "  -f {apple,pear}, --fruit {apple,pear}\n"~
@@ -896,19 +891,19 @@ unittest
 
     import std.array: appender;
 
-    auto env = cleanStyleEnv(true);
-    scope(exit) restoreStyleEnv(env);
+    Config config;
 
     auto a = appender!string;
-    alias cfg = {
-        Config config;
-        config.stylingMode = Config.StylingMode.off;
-        return config;
-    };
-    auto config = cfg();
+
     T receiver;
-    auto cmd = createCommand!(cfg())(receiver);
-    printHelp(_ => a.put(_), cmd,  [&cmd.arguments], &config, "MYPROG");
+    auto cmd = createCommand!(Config.init)(receiver);
+
+    auto isEnabled = ansiStylingArgument.isEnabled;
+    scope(exit) ansiStylingArgument.isEnabled = isEnabled;
+    ansiStylingArgument.isEnabled = false;
+
+    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
         "group1:\n"~
@@ -952,18 +947,17 @@ unittest
 
     import std.array: appender;
 
-    auto env = cleanStyleEnv(true);
-    scope(exit) restoreStyleEnv(env);
+    Config config;
 
     auto a = appender!string;
-    alias cfg = {
-        Config config;
-        config.stylingMode = Config.StylingMode.off;
-        return config;
-    };
-    auto config = cfg();
+
     T receiver;
-    auto cmd = createCommand!(cfg())(receiver);
+    auto cmd = createCommand!(Config.init)(receiver);
+
+    auto isEnabled = ansiStylingArgument.isEnabled;
+    scope(exit) ansiStylingArgument.isEnabled = isEnabled;
+    ansiStylingArgument.isEnabled = false;
+
     printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~

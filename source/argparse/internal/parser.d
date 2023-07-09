@@ -4,6 +4,7 @@ import std.typecons: Nullable, nullable;
 
 import argparse.config;
 import argparse.result;
+import argparse.api.ansi: ansiStylingArgument;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.command: Command, createCommand;
 
@@ -366,8 +367,11 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
 {
     import argparse.ansi: detectSupport;
 
+    ansiStylingArgument.isEnabled = origConfig.stylingMode == Config.StylingMode.on ||
+                                    origConfig.stylingMode == Config.StylingMode.autodetect && detectSupport();
+
     auto config = origConfig;
-    config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.stylingMode = mode; };
+    config.stylingMode = ansiStylingArgument.isEnabled ? Config.StylingMode.on : Config.StylingMode.off;
 
     auto parser = Parser(&config, args);
 
@@ -381,9 +385,6 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
         if(res)
         {
             unrecognizedArgs = parser.unrecognizedArgs;
-
-            if(config.stylingMode == Config.StylingMode.autodetect)
-                config.setStylingMode(detectSupport() ? Config.StylingMode.on : Config.StylingMode.off);
 
             cmd.onParsingDone(&config);
         }
