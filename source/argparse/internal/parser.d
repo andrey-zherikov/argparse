@@ -383,11 +383,7 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
     static if(!completionMode)
     {
         if(res)
-        {
             unrecognizedArgs = parser.unrecognizedArgs;
-
-            cmd.onParsingDone(&config);
-        }
     }
 
     return res;

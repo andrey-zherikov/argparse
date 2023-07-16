@@ -7,7 +7,6 @@ import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubComman
 import argparse.internal.arguments: Arguments;
 import argparse.internal.commandinfo;
 import argparse.internal.subcommands: SubCommands;
-import argparse.internal.hooks: HookHandlers;
 import argparse.internal.argumentparser;
 import argparse.internal.argumentuda: ArgumentUDA, getArgumentUDA, getMemberArgumentUDA;
 import argparse.internal.help: HelpArgumentUDA;
@@ -85,13 +84,6 @@ package struct Command
             return Nullable!Command.init;
 
         return nullable(subCommandCreate[*pIndex]());
-    }
-
-    HookHandlers hooks;
-
-    void onParsingDone(const Config* config) const
-    {
-        hooks.onParsingDone(config);
     }
 
     Result checkRestrictions(in bool[size_t] cliArgs, Config* config) const
@@ -195,8 +187,6 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
             (const Command[] cmdStack, Config* config, string argName, string[] argValue)
                 => Result.Success;
     }}
-
-    res.hooks.bind!(COMMAND_TYPE, iterateArguments!COMMAND_TYPE)(receiver);
 
     res.setTrailingArgs = (ref string[] args)
     {
