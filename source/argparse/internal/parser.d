@@ -43,7 +43,7 @@ private string[] consumeValuesFromCLI(ref string[] args, ulong minValuesCount, u
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct Parser
+private struct Parser
 {
     import std.sumtype: SumType;
 
