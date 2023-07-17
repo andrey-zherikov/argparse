@@ -7,7 +7,6 @@ import argparse.api.argument: TrailingArguments, NamedArgument, NumberOfValues;
 import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.commandinfo;
-import argparse.internal.argumentparser;
 import argparse.internal.argumentuda: ArgumentUDA, getArgumentUDA, getMemberArgumentUDA;
 import argparse.internal.help: HelpArgumentUDA;
 
