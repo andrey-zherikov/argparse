@@ -90,6 +90,21 @@ unittest
     assert(!test!T(["value1","value2"]));
 }
 
+unittest
+{
+    struct T
+    {
+        void func() { throw new Exception("My Message."); }
+    }
+
+    Config config;
+    T t;
+
+    auto res = ParsingArgument!(string[], T, "func", NamedArgument("arg-name").NumberOfValues(0), false)([], &config, t, "arg-name", []);
+
+    assert(res.isError("arg-name: My Message."));
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package auto getArgumentParsingFunctions(Config config, COMMAND_STACK, TYPE, symbols...)()

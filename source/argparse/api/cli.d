@@ -10,22 +10,37 @@ import argparse.internal.completer: completeArgs, Complete;
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Private helper for error output
 
-private void onError(Config config)(string message) nothrow
+private void defaultErrorPrinter(string message)
+{
+    import std.stdio: stderr, writeln;
+
+    stderr.writeln("Error: ", message);
+}
+
+private void onError(Config config, alias printer = defaultErrorPrinter)(string message) nothrow
 {
     static if(config.errorHandlerFunc)
         config.errorHandlerFunc(message);
     else
         try
         {
-            import std.stdio: stderr, writeln;
-
-            stderr.writeln("Error: ", message);
+            printer(message);
         }
         catch(Exception e)
         {
             throw new Error(e.msg);
         }
 }
+
+unittest
+{
+    import std.exception;
+
+    alias printer = (s) { throw new Exception("My Message."); };
+
+    assert(collectExceptionMsg!Error(onError!(Config.init, printer)("text")) == "My Message.");
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Public API for CLI wrapper
@@ -141,6 +156,7 @@ template CLI(Config config, COMMAND)
         auto res = callParser!(config, false)(receiver, args, unrecognizedArgs);
         if(!res)
         {
+            // This never happens
             if(res.errorMsg.length > 0)
                 onError!config(res.errorMsg);
 

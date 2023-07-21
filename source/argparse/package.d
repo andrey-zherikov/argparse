@@ -165,11 +165,6 @@ unittest
         assert(args == []);
         return 12345;
     })(["-a","A","--"]) == 12345);
-    assert(CLI!T.parseArgs!((T t, string[] args) {
-        assert(t == T("A"));
-        assert(args == []);
-        return 12345;
-    })(["-a","A","--"]) == 12345);
 
     {
         T args;
@@ -179,6 +174,39 @@ unittest
 
         assert(args == T("A","B"));
     }
+}
+
+unittest
+{
+    struct T
+    {
+        string a;
+    }
+
+    import std.exception;
+
+    assert(collectExceptionMsg(
+        CLI!T.parseArgs!((T t, string[] args) {
+            assert(t == T.init);
+            assert(args.length == 0);
+            throw new Exception("My Message.");
+        })([]))
+    == "My Message.");
+    assert(collectExceptionMsg(
+        CLI!T.parseArgs!((T t, string[] args) {
+            assert(t == T("aa"));
+            assert(args == ["-g"]);
+            throw new Exception("My Message.");
+        })(["-a","aa","-g"]))
+    == "My Message.");
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T.init);
+        assert(args.length == 0);
+    })([]) == 0);
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T("aa"));
+        assert(args == ["-g"]);
+    })(["-a","aa","-g"]) == 0);
 }
 
 unittest

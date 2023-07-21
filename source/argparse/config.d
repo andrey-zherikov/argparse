@@ -88,3 +88,23 @@ struct Config
         return errorHandlerFunc = func;
     }
 }
+
+unittest
+{
+    auto f = function(string s) nothrow {};
+
+    Config c;
+    assert(!c.errorHandlerFunc);
+    assert((c.errorHandler = f));
+    assert(c.errorHandlerFunc);
+}
+
+unittest
+{
+    auto f = delegate(string s) nothrow {};
+
+    Config c;
+    assert(!c.errorHandlerFunc);
+    assert((c.errorHandler = f) == f);
+    assert(c.errorHandlerFunc == f);
+}
