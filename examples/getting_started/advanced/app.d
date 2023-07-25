@@ -68,9 +68,8 @@ mixin CLI!(config(), Advanced).main!((args, unparsed)
     writeln("Unparsed args: ", unparsed);
 
     // use actual styling mode to print output
-    auto style = Advanced.color == Config.StylingMode.on ? red.onWhite : noStyle;
-    writeln(style("Styling mode: "), Advanced.color);
-    assert(Advanced.color == Config.StylingMode.on || Advanced.color == Config.StylingMode.off);
+    auto style = Advanced.color ? red.onWhite : noStyle;
+    writeln(style("Styling mode: "), Advanced.color ? "on" : "off");
 
     return 0;
 });

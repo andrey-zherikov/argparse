@@ -1,14 +1,12 @@
 module argparse.internal.command;
 
 import argparse.config;
+import argparse.param;
 import argparse.result;
-import argparse.api.argument: TrailingArguments, NamedArgument;
+import argparse.api.argument: TrailingArguments, NamedArgument, NumberOfValues;
 import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.commandinfo;
-import argparse.internal.subcommands: SubCommands;
-import argparse.internal.hooks: HookHandlers;
-import argparse.internal.argumentparser;
 import argparse.internal.argumentuda: ArgumentUDA, getArgumentUDA, getMemberArgumentUDA;
 import argparse.internal.help: HelpArgumentUDA;
 
@@ -16,6 +14,118 @@ import std.typecons: Nullable, nullable;
 import std.traits: getSymbolsByUDA, hasUDA, getUDAs;
 import std.sumtype: match, isSumType;
 
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package struct SubCommands
+{
+    size_t[string] byName;
+
+    CommandInfo[] info;
+
+
+    void add(CommandInfo cmdInfo)()
+    {
+        immutable index = info.length;
+
+        static foreach(name; cmdInfo.names)
+        {{
+            assert(!(name in byName), "Duplicated name of subcommand: "~name);
+            byName[name] = index;
+        }}
+
+        info ~= cmdInfo;
+    }
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private alias ParseFunction(COMMAND_STACK, RECEIVER) = Result delegate(const COMMAND_STACK cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues);
+
+private alias ParsingArgument(COMMAND_STACK, RECEIVER, alias symbol, alias uda, bool completionMode) =
+    delegate(const COMMAND_STACK cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues)
+    {
+        static if(completionMode)
+        {
+            return Result.Success;
+        }
+        else
+        {
+            try
+            {
+                auto res = uda.info.checkValuesCount(argName, rawValues.length);
+                if(!res)
+                    return res;
+
+                auto param = RawParam(config, argName, rawValues);
+
+                auto target = &__traits(getMember, receiver, symbol);
+
+                static if(is(typeof(target) == function) || is(typeof(target) == delegate))
+                    return uda.parsingFunc.parse(target, param);
+                else
+                    return uda.parsingFunc.parse(*target, param);
+            }
+            catch(Exception e)
+            {
+                return Result.Error(argName, ": ", e.msg);
+            }
+        }
+    };
+
+unittest
+{
+    struct T { string a; }
+
+    auto test(TYPE)(string[] values)
+    {
+        Config config;
+        TYPE t;
+
+        return ParsingArgument!(string[], TYPE, "a", NamedArgument("arg-name").NumberOfValues(1), false)([], &config, t, "arg-name", values);
+    }
+
+    assert(test!T(["raw-value"]));
+    assert(!test!T(["value1","value2"]));
+}
+
+unittest
+{
+    struct T
+    {
+        void func() { throw new Exception("My Message."); }
+    }
+
+    Config config;
+    T t;
+
+    auto res = ParsingArgument!(string[], T, "func", NamedArgument("arg-name").NumberOfValues(0), false)([], &config, t, "arg-name", []);
+
+    assert(res.isError("arg-name: My Message."));
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package auto getArgumentParsingFunctions(Config config, COMMAND_STACK, TYPE, symbols...)()
+{
+    ParseFunction!(COMMAND_STACK, TYPE)[] res;
+
+    static foreach(symbol; symbols)
+        res ~= ParsingArgument!(COMMAND_STACK, TYPE, symbol, getMemberArgumentUDA!(config, TYPE, symbol, NamedArgument), false);
+
+    return res;
+}
+
+package auto getArgumentCompletionFunctions(Config config, COMMAND_STACK, TYPE, symbols...)()
+{
+    ParseFunction!(COMMAND_STACK, TYPE)[] res;
+
+    static foreach(symbol; symbols)
+        res ~= ParsingArgument!(COMMAND_STACK, TYPE, symbol, getMemberArgumentUDA!(config, TYPE, symbol, NamedArgument), true);
+
+    return res;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -87,13 +197,6 @@ package struct Command
         return nullable(subCommandCreate[*pIndex]());
     }
 
-    HookHandlers hooks;
-
-    void onParsingDone(const Config* config) const
-    {
-        hooks.onParsingDone(config);
-    }
-
     Result checkRestrictions(in bool[size_t] cliArgs, Config* config) const
     {
         return arguments.checkRestrictions(cliArgs, config);
@@ -102,9 +205,9 @@ package struct Command
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA  ).length == 0 &&
-                                            getSymbolsByUDA!(COMMAND, NamedArgument).length == 0 &&
-                                            getSymbolsByUDA!(COMMAND, SubCommands  ).length == 0;
+private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA   ).length == 0 &&
+                                            getSymbolsByUDA!(COMMAND, NamedArgument ).length == 0 &&
+                                            getSymbolsByUDA!(COMMAND, SubCommands).length == 0;
 
 private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
 
@@ -195,8 +298,6 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
             (const Command[] cmdStack, Config* config, string argName, string[] argValue)
                 => Result.Success;
     }}
-
-    res.hooks.bind!(COMMAND_TYPE, iterateArguments!COMMAND_TYPE)(receiver);
 
     res.setTrailingArgs = (ref string[] args)
     {

@@ -4,6 +4,7 @@ import std.typecons: Nullable, nullable;
 
 import argparse.config;
 import argparse.result;
+import argparse.api.ansi: ansiStylingArgument;
 import argparse.internal.arguments: Arguments;
 import argparse.internal.command: Command, createCommand;
 
@@ -42,7 +43,7 @@ private string[] consumeValuesFromCLI(ref string[] args, ulong minValuesCount, u
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct Parser
+private struct Parser
 {
     import std.sumtype: SumType;
 
@@ -366,8 +367,11 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
 {
     import argparse.ansi: detectSupport;
 
+    ansiStylingArgument.isEnabled = origConfig.stylingMode == Config.StylingMode.on ||
+                                    origConfig.stylingMode == Config.StylingMode.autodetect && detectSupport();
+
     auto config = origConfig;
-    config.setStylingModeHandlers ~= (Config.StylingMode mode) { config.stylingMode = mode; };
+    config.stylingMode = ansiStylingArgument.isEnabled ? Config.StylingMode.on : Config.StylingMode.off;
 
     auto parser = Parser(&config, args);
 
@@ -379,16 +383,7 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
     static if(!completionMode)
     {
         if(res)
-        {
             unrecognizedArgs = parser.unrecognizedArgs;
-
-            if(config.stylingMode == Config.StylingMode.autodetect)
-                config.setStylingMode(detectSupport() ? Config.StylingMode.on : Config.StylingMode.off);
-
-            cmd.onParsingDone(&config);
-        }
-        else if(res.errorMsg.length > 0)
-            config.onError(res.errorMsg);
     }
 
     return res;
