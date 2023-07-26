@@ -506,7 +506,18 @@ unittest
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T(3)); return 12345; })(["-a", "3"]) == 12345);
-    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a", "2"]) != 0);    // "kiwi" is not allowed
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a", "2"]) != 0);    // "2" is not allowed
+}
+
+unittest
+{
+    struct T
+    {
+        @(PositionalArgument(0).AllowedValues!([1,3,5])) int a;
+    }
+
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(3)); return 12345; })(["3"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["2"]) != 0);    // "2" is not allowed
 }
 
 unittest
