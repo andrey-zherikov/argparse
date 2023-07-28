@@ -1606,7 +1606,7 @@ See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 - `programName`: style for the program name. Default is `bold`.
 - `subcommandName`: style for the subcommand name. Default is `bold`.
 - `argumentGroupTitle`: style for the title of argument group. Default is `bold.underline`.
-- `namedArgumentName`: style for the name of named argument. Default is `lightYellow`.
+- `argumentName`: style for the argument name. Default is `lightYellow`.
 - `namedArgumentValue`: style for the value of named argument. Default is `italic`.
 - `positionalArgumentValue`: style for the value of positional argument. Default is `lightYellow`.
 - `errorMessagePrefix`: style for "Error:" prefix in error messages. Default is `red`.

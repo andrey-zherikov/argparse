@@ -11,7 +11,7 @@ package(argparse) struct Style
     TextStyle programName;
     TextStyle subcommandName;
     TextStyle argumentGroupTitle;
-    TextStyle namedArgumentName;
+    TextStyle argumentName;
     TextStyle namedArgumentValue;
     TextStyle positionalArgumentValue;
 
@@ -23,7 +23,7 @@ package(argparse) struct Style
         bold,           // programName
         bold,           // subcommandName
         bold.underline, // argumentGroupTitle
-        lightYellow,    // namedArgumentName
+        lightYellow,    // argumentName
         italic,         // namedArgumentValue
         lightYellow,    // positionalArgumentValue
         red,            // errorMessagePrefix
@@ -33,6 +33,6 @@ package(argparse) struct Style
 unittest
 {
     assert(Style.Default.argumentGroupTitle("bbb") == bold.underline("bbb").toString);
-    assert(Style.Default.namedArgumentName("bbb") == lightYellow("bbb").toString);
+    assert(Style.Default.argumentName("bbb") == lightYellow("bbb").toString);
     assert(Style.Default.namedArgumentValue("bbb") == italic("bbb").toString);
 }
