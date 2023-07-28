@@ -630,7 +630,7 @@ package(argparse) void printHelp(ARGUMENTS, Command)(void delegate(string) sink,
 {
     import std.algorithm: each;
 
-    auto style = ansiStylingArgument.isEnabled ? config.styling : Style.None;
+    auto style = ansiStylingArgument ? config.styling : Style.None;
 
     auto argSections = getSections(style, arguments);
     auto section = getSection(style, cmd, argSections, style.programName(progName));
@@ -638,5 +638,5 @@ package(argparse) void printHelp(ARGUMENTS, Command)(void delegate(string) sink,
     immutable helpPosition = section.maxItemNameLength(20) + 4;
     immutable indent = spaces(helpPosition + 2);
 
-    print(ansiStylingArgument.isEnabled ? sink : (string _) { _.getUnstyledText.each!sink; }, section, "", indent);
+    print(ansiStylingArgument ? sink : (string _) { _.getUnstyledText.each!sink; }, section, "", indent);
 }

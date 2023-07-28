@@ -371,7 +371,7 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
                                     origConfig.stylingMode == Config.StylingMode.autodetect && detectSupport();
 
     auto config = origConfig;
-    config.stylingMode = ansiStylingArgument.isEnabled ? Config.StylingMode.on : Config.StylingMode.off;
+    config.stylingMode = ansiStylingArgument ? Config.StylingMode.on : Config.StylingMode.off;
 
     auto parser = Parser(&config, args);
 
