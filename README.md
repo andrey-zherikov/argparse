@@ -1591,7 +1591,7 @@ Default is `true`.
 
 ### Styling mode
 
-`Config.stylingMode` - styling mode that is used to print help text. It has the following type: `enum StylingMode { autodetect, on, off }`.
+`Config.stylingMode` - styling mode for the text output (error messages and help screen). It has the following type: `enum StylingMode { autodetect, on, off }`.
 If it's set to `Config.StylingMode.on` then styling is **always enabled**.
 If it's set to `Config.StylingMode.off` then styling is **always disabled**.
 
@@ -1601,7 +1601,7 @@ See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 
 ### Styling scheme
 
-`Config.styling` - contains help text style. It has the following members:
+`Config.styling` - contains style for the text output (error messages and help screen). It has the following members:
 
 - `programName`: style for the program name. Default is `bold`.
 - `subcommandName`: style for the subcommand name. Default is `bold`.
@@ -1609,6 +1609,7 @@ See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 - `namedArgumentName`: style for the name of named argument. Default is `lightYellow`.
 - `namedArgumentValue`: style for the value of named argument. Default is `italic`.
 - `positionalArgumentValue`: style for the value of positional argument. Default is `lightYellow`.
+- `errorMessagePrefix`: style for "Error:" prefix in error messages. Default is `red`.
 
 See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 

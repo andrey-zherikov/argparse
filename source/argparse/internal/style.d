@@ -15,6 +15,8 @@ package(argparse) struct Style
     TextStyle namedArgumentValue;
     TextStyle positionalArgumentValue;
 
+    TextStyle errorMessagePrefix;
+
     enum None = Style.init;
 
     enum Default = Style(
@@ -24,6 +26,7 @@ package(argparse) struct Style
         lightYellow,    // namedArgumentName
         italic,         // namedArgumentValue
         lightYellow,    // positionalArgumentValue
+        red,            // errorMessagePrefix
     );
 }
 
