@@ -146,7 +146,7 @@ package auto HelpArgumentUDA()
 {
     struct HelpArgumentParsingFunction
     {
-        static auto parse(T, Command)(const Command[] cmdStack, Config* config, ref T receiver, string argName, string[] rawValues)
+        static auto parse(Config config, T, Command)(const Command[] cmdStack, ref T receiver, string argName, string[] rawValues)
         {
             import std.stdio: stdout;
 
@@ -158,7 +158,7 @@ package auto HelpArgumentUDA()
             auto args = cmdStack.map!((ref _) => &_.arguments).array;
 
             auto output = stdout.lockingTextWriter();
-            printHelp(_ => output.put(_), cmdStack[$-1], args, config, progName);
+            printHelp!config(_ => output.put(_), cmdStack[$-1], args, progName);
 
             return Result(0);
         }
@@ -626,7 +626,7 @@ private auto getSection(Command)(const ref Style style, const ref Command cmd, S
     return section;
 }
 
-package(argparse) void printHelp(ARGUMENTS, Command)(void delegate(string) sink, const ref Command cmd, ARGUMENTS arguments, Config* config, string progName)
+package(argparse) void printHelp(Config config, ARGUMENTS, Command)(void delegate(string) sink, const ref Command cmd, ARGUMENTS arguments, string progName)
 {
     import std.algorithm: each;
 

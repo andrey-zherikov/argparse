@@ -41,10 +41,10 @@ package struct SubCommands
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private alias ParseFunction(COMMAND_STACK, RECEIVER) = Result delegate(const COMMAND_STACK cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues);
+private alias ParseFunction(COMMAND_STACK, RECEIVER) = Result delegate(const COMMAND_STACK cmdStack, ref RECEIVER receiver, string argName, string[] rawValues);
 
-private alias ParsingArgument(COMMAND_STACK, RECEIVER, alias symbol, alias uda, bool completionMode) =
-    delegate(const COMMAND_STACK cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues)
+private alias ParsingArgument(Config config, COMMAND_STACK, RECEIVER, alias symbol, alias uda, bool completionMode) =
+    delegate(const COMMAND_STACK cmdStack, ref RECEIVER receiver, string argName, string[] rawValues)
     {
         static if(completionMode)
         {
@@ -58,7 +58,8 @@ private alias ParsingArgument(COMMAND_STACK, RECEIVER, alias symbol, alias uda, 
                 if(!res)
                     return res;
 
-                auto param = RawParam(config, argName, rawValues);
+                immutable cfg = config;
+                auto param = RawParam(&cfg, argName, rawValues);
 
                 auto target = &__traits(getMember, receiver, symbol);
 
@@ -80,10 +81,9 @@ unittest
 
     auto test(TYPE)(string[] values)
     {
-        Config config;
         TYPE t;
 
-        return ParsingArgument!(string[], TYPE, "a", NamedArgument("arg-name").NumberOfValues(1), false)([], &config, t, "arg-name", values);
+        return ParsingArgument!(Config.init, string[], TYPE, "a", NamedArgument("arg-name").NumberOfValues(1), false)([], t, "arg-name", values);
     }
 
     assert(test!T(["raw-value"]));
@@ -97,10 +97,9 @@ unittest
         void func() { throw new Exception("My Message."); }
     }
 
-    Config config;
     T t;
 
-    auto res = ParsingArgument!(string[], T, "func", NamedArgument("arg-name").NumberOfValues(0), false)([], &config, t, "arg-name", []);
+    auto res = ParsingArgument!(Config.init, string[], T, "func", NamedArgument("arg-name").NumberOfValues(0), false)([], t, "arg-name", []);
 
     assert(res.isError("arg-name: My Message."));
 }
@@ -112,7 +111,7 @@ package auto getArgumentParsingFunctions(Config config, COMMAND_STACK, TYPE, sym
     ParseFunction!(COMMAND_STACK, TYPE)[] res;
 
     static foreach(symbol; symbols)
-        res ~= ParsingArgument!(COMMAND_STACK, TYPE, symbol, getMemberArgumentUDA!(config, TYPE, symbol, NamedArgument), false);
+        res ~= ParsingArgument!(config, COMMAND_STACK, TYPE, symbol, getMemberArgumentUDA!(config, TYPE, symbol, NamedArgument), false);
 
     return res;
 }
@@ -122,7 +121,7 @@ package auto getArgumentCompletionFunctions(Config config, COMMAND_STACK, TYPE, 
     ParseFunction!(COMMAND_STACK, TYPE)[] res;
 
     static foreach(symbol; symbols)
-        res ~= ParsingArgument!(COMMAND_STACK, TYPE, symbol, getMemberArgumentUDA!(config, TYPE, symbol, NamedArgument), true);
+        res ~= ParsingArgument!(config, COMMAND_STACK, TYPE, symbol, getMemberArgumentUDA!(config, TYPE, symbol, NamedArgument), true);
 
     return res;
 }
@@ -142,17 +141,17 @@ package struct Command
         return arguments.findPositionalArgument(position);
     }
 
-    alias ParseFunction = Result delegate(const Command[] cmdStack, Config* config, string argName, string[] argValue);
+    alias ParseFunction = Result delegate(const Command[] cmdStack, string argName, string[] argValue);
     ParseFunction[] parseFunctions;
     ParseFunction[] completeFunctions;
 
-    Result parseArgument(const Command[] cmdStack, Config* config, size_t argIndex, string argName, string[] argValue) const
+    Result parseArgument(const Command[] cmdStack, size_t argIndex, string argName, string[] argValue) const
     {
-        return parseFunctions[argIndex](cmdStack, config, argName, argValue);
+        return parseFunctions[argIndex](cmdStack, argName, argValue);
     }
-    Result completeArgument(const Command[] cmdStack, Config* config, size_t argIndex, string argName, string[] argValue) const
+    Result completeArgument(const Command[] cmdStack, size_t argIndex, string argName, string[] argValue) const
     {
-        return completeFunctions[argIndex](cmdStack, config, argName, argValue);
+        return completeFunctions[argIndex](cmdStack, argName, argValue);
     }
 
     void delegate(ref string[] args) setTrailingArgs;
@@ -197,9 +196,9 @@ package struct Command
         return nullable(subCommandCreate[*pIndex]());
     }
 
-    Result checkRestrictions(in bool[size_t] cliArgs, Config* config) const
+    Result checkRestrictions(in bool[size_t] cliArgs) const
     {
-        return arguments.checkRestrictions(cliArgs, config);
+        return arguments.checkRestrictions(cliArgs);
     }
 }
 
@@ -271,31 +270,31 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
     {{
         enum uda = getMemberArgumentUDA!(config, COMMAND_TYPE, symbol, NamedArgument);
 
-        res.arguments.addArgument!(COMMAND_TYPE, symbol, uda.info);
+        res.arguments.addArgument!(config, COMMAND_TYPE, symbol, uda.info);
     }}
 
     res.parseFunctions = getArgumentParsingFunctions!(config, Command[], COMMAND_TYPE, iterateArguments!COMMAND_TYPE).map!(_ =>
-        (const Command[] cmdStack, Config* config, string argName, string[] argValue)
-            => _(cmdStack, config, receiver, argName, argValue)
+        (const Command[] cmdStack, string argName, string[] argValue)
+            => _(cmdStack, receiver, argName, argValue)
         ).array;
 
     res.completeFunctions = getArgumentCompletionFunctions!(config, Command[], COMMAND_TYPE, iterateArguments!COMMAND_TYPE).map!(_ =>
-        (const Command[] cmdStack, Config* config, string argName, string[] argValue)
-            => _(cmdStack, config, receiver, argName, argValue)
+        (const Command[] cmdStack, string argName, string[] argValue)
+            => _(cmdStack, receiver, argName, argValue)
         ).array;
 
     static if(config.addHelp)
     {{
         enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
 
-        res.arguments.addArgument!(COMMAND_TYPE, null, uda.info);
+        res.arguments.addArgument!(config, COMMAND_TYPE, null, uda.info);
 
         res.parseFunctions ~=
-            (const Command[] cmdStack, Config* config, string argName, string[] argValue)
-                => uda.parsingFunc.parse!COMMAND_TYPE(cmdStack, config, receiver, argName, argValue);
+            (const Command[] cmdStack, string argName, string[] argValue)
+                => uda.parsingFunc.parse!(config, COMMAND_TYPE)(cmdStack, receiver, argName, argValue);
 
         res.completeFunctions ~=
-            (const Command[] cmdStack, Config* config, string argName, string[] argValue)
+            (const Command[] cmdStack, string argName, string[] argValue)
                 => Result.Success;
     }}
 

@@ -872,8 +872,6 @@ unittest
 
     import std.array: appender;
 
-    Config config;
-
     auto a = appender!string;
 
     T receiver;
@@ -883,7 +881,7 @@ unittest
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;
     ansiStylingArgument.isEnabled = false;
 
-    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+    printHelp!(Config.init)(_ => a.put(_), cmd, [&cmd.arguments], "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
         "custom description\n\n"~
@@ -930,8 +928,6 @@ unittest
 
     import std.array: appender;
 
-    Config config;
-
     auto a = appender!string;
 
     T receiver;
@@ -941,7 +937,7 @@ unittest
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;
     ansiStylingArgument.isEnabled = false;
 
-    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+    printHelp!(Config.init)(_ => a.put(_), cmd, [&cmd.arguments], "MYPROG");
 
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
@@ -986,8 +982,6 @@ unittest
 
     import std.array: appender;
 
-    Config config;
-
     auto a = appender!string;
 
     T receiver;
@@ -997,7 +991,7 @@ unittest
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;
     ansiStylingArgument.isEnabled = false;
 
-    printHelp(_ => a.put(_), cmd, [&cmd.arguments], &config, "MYPROG");
+    printHelp!(Config.init)(_ => a.put(_), cmd, [&cmd.arguments], "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~
