@@ -382,22 +382,29 @@ if(config.stylingMode != Config.StylingMode.autodetect)
     return res;
 }
 
+private auto enableStyling(Config config)(bool enable)
+{
+    Config c = config;
+    c.stylingMode = enable ? Config.StylingMode.on : Config.StylingMode.off;
+    return c;
+}
+
+unittest
+{
+    assert(enableStyling!(Config.init)(true).stylingMode == Config.StylingMode.on);
+    assert(enableStyling!(Config.init)(false).stylingMode == Config.StylingMode.off);
+}
+
 package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 if(config.stylingMode == Config.StylingMode.autodetect)
 {
     import argparse.ansi: detectSupport;
 
-    auto setStylingMode(Config.StylingMode mode)
-    {
-        Config c = config;
-        c.stylingMode = mode;
-        return c;
-    }
 
     if(detectSupport())
-        return callParser!(setStylingMode(Config.StylingMode.on), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
+        return callParser!(enableStyling!config(true), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
     else
-        return callParser!(setStylingMode(Config.StylingMode.off), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
+        return callParser!(enableStyling!config(false), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
