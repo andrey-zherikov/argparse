@@ -35,7 +35,7 @@ package(argparse) struct ArgumentInfo
     Nullable!ulong minValuesCount;
     Nullable!ulong maxValuesCount;
 
-    auto checkValuesCount(string argName, ulong count) const
+    auto checkValuesCount(Config config)(string argName, ulong count) const
     {
         immutable min = minValuesCount.get;
         immutable max = maxValuesCount.get;
@@ -45,17 +45,13 @@ package(argparse) struct ArgumentInfo
             return Result.Success;
 
         if(min == max && count != min)
-        {
-            return Result.Error("argument ",argName,": expected ",min,min == 1 ? " value" : " values");
-        }
+            return Result.Error("Argument '",config.styling.argumentName(argName),"': expected ",min,min == 1 ? " value" : " values");
+
         if(count < min)
-        {
-            return Result.Error("argument ",argName,": expected at least ",min,min == 1 ? " value" : " values");
-        }
+            return Result.Error("Argument '",config.styling.argumentName(argName),"': expected at least ",min,min == 1 ? " value" : " values");
+
         if(count > max)
-        {
-            return Result.Error("argument ",argName,": expected at most ",max,max == 1 ? " value" : " values");
-        }
+            return Result.Error("Argument '",config.styling.argumentName(argName),"': expected at most ",max,max == 1 ? " value" : " values");
 
         return Result.Success;
     }
@@ -75,28 +71,28 @@ unittest
         return info;
     }
 
-    assert(info(2,4).checkValuesCount("", 1).isError("expected at least 2 values"));
-    assert(info(2,4).checkValuesCount("", 2));
-    assert(info(2,4).checkValuesCount("", 3));
-    assert(info(2,4).checkValuesCount("", 4));
-    assert(info(2,4).checkValuesCount("", 5).isError("expected at most 4 values"));
+    assert(info(2,4).checkValuesCount!(Config.init)("", 1).isError("expected at least 2 values"));
+    assert(info(2,4).checkValuesCount!(Config.init)("", 2));
+    assert(info(2,4).checkValuesCount!(Config.init)("", 3));
+    assert(info(2,4).checkValuesCount!(Config.init)("", 4));
+    assert(info(2,4).checkValuesCount!(Config.init)("", 5).isError("expected at most 4 values"));
 
-    assert(info(2,2).checkValuesCount("", 1).isError("expected 2 values"));
-    assert(info(2,2).checkValuesCount("", 2));
-    assert(info(2,2).checkValuesCount("", 3).isError("expected 2 values"));
+    assert(info(2,2).checkValuesCount!(Config.init)("", 1).isError("expected 2 values"));
+    assert(info(2,2).checkValuesCount!(Config.init)("", 2));
+    assert(info(2,2).checkValuesCount!(Config.init)("", 3).isError("expected 2 values"));
 
-    assert(info(1,1).checkValuesCount("", 0).isError("expected 1 value"));
-    assert(info(1,1).checkValuesCount("", 1));
-    assert(info(1,1).checkValuesCount("", 2).isError("expected 1 value"));
+    assert(info(1,1).checkValuesCount!(Config.init)("", 0).isError("expected 1 value"));
+    assert(info(1,1).checkValuesCount!(Config.init)("", 1));
+    assert(info(1,1).checkValuesCount!(Config.init)("", 2).isError("expected 1 value"));
 
-    assert(info(0,1).checkValuesCount("", 0));
-    assert(info(0,1).checkValuesCount("", 1));
-    assert(info(0,1).checkValuesCount("", 2).isError("expected at most 1 value"));
+    assert(info(0,1).checkValuesCount!(Config.init)("", 0));
+    assert(info(0,1).checkValuesCount!(Config.init)("", 1));
+    assert(info(0,1).checkValuesCount!(Config.init)("", 2).isError("expected at most 1 value"));
 
-    assert(info(1,2).checkValuesCount("", 0).isError("expected at least 1 value"));
-    assert(info(1,2).checkValuesCount("", 1));
-    assert(info(1,2).checkValuesCount("", 2));
-    assert(info(1,2).checkValuesCount("", 3).isError("expected at most 2 values"));
+    assert(info(1,2).checkValuesCount!(Config.init)("", 0).isError("expected at least 1 value"));
+    assert(info(1,2).checkValuesCount!(Config.init)("", 1));
+    assert(info(1,2).checkValuesCount!(Config.init)("", 2));
+    assert(info(1,2).checkValuesCount!(Config.init)("", 3).isError("expected at most 2 values"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,7 +107,7 @@ package struct Restrictions
         {
             return (index in cliArgs) ?
                 Result.Success :
-                Result.Error("The following argument is required: ", info.displayName);
+                Result.Error("The following argument is required: '", config.styling.argumentName(info.displayName), "'");
         })(index);
     }
 
@@ -134,7 +130,8 @@ package struct Restrictions
                 missedIndex = index;
 
             if(foundIndex != size_t.max && missedIndex != size_t.max)
-                return Result.Error("Missed argument '", allArgs[missedIndex].displayName, "' - it is required by argument '", allArgs[foundIndex].displayName);
+                return Result.Error("Missed argument '", config.styling.argumentName(allArgs[missedIndex].displayName),
+                    "' - it is required by argument '", config.styling.argumentName(allArgs[foundIndex].displayName), "'");
         }
 
         return Result.Success;
@@ -153,7 +150,8 @@ package struct Restrictions
                 if(foundIndex == size_t.max)
                     foundIndex = index;
                 else
-                    return Result.Error("Argument '", allArgs[foundIndex].displayName, "' is not allowed with argument '", allArgs[index].displayName,"'");
+                    return Result.Error("Argument '", config.styling.argumentName(allArgs[foundIndex].displayName),
+                        "' is not allowed with argument '", config.styling.argumentName(allArgs[index].displayName),"'");
             }
 
         return Result.Success;
@@ -171,7 +169,8 @@ package struct Restrictions
             if(index in cliArgs)
                 return Result.Success;
 
-        return Result.Error("One of the following arguments is required: '", restrictionArgs.map!(_ => allArgs[_].displayName).join("', '"), "'");
+        return Result.Error("One of the following arguments is required: '",
+            restrictionArgs.map!(_ => config.styling.argumentName(allArgs[_].displayName)).join("', '"), "'");
     }
 }
 
