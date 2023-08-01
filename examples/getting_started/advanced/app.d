@@ -48,7 +48,7 @@ auto config()
     Config cfg;
 
     cfg.styling.programName = blue.onYellow;
-    cfg.styling.namedArgumentName = bold.italic.cyan.onRed;
+    cfg.styling.argumentName = bold.italic.cyan.onRed;
 
     return cfg;
 }

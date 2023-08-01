@@ -54,7 +54,7 @@ private alias ParsingArgument(Config config, COMMAND_STACK, RECEIVER, alias symb
         {
             try
             {
-                auto res = uda.info.checkValuesCount(argName, rawValues.length);
+                auto res = uda.info.checkValuesCount!config(argName, rawValues.length);
                 if(!res)
                     return res;
 
@@ -70,7 +70,7 @@ private alias ParsingArgument(Config config, COMMAND_STACK, RECEIVER, alias symb
             }
             catch(Exception e)
             {
-                return Result.Error(argName, ": ", e.msg);
+                return Result.Error("Argument '", config.styling.argumentName(argName), ": ", e.msg);
             }
         }
     };
@@ -101,7 +101,7 @@ unittest
 
     auto res = ParsingArgument!(Config.init, string[], T, "func", NamedArgument("arg-name").NumberOfValues(0), false)([], t, "arg-name", []);
 
-    assert(res.isError("arg-name: My Message."));
+    assert(res.isError(Config.init.styling.argumentName("arg-name")~": My Message."));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

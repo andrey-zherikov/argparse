@@ -2,7 +2,8 @@ module argparse.api.cli;
 
 import argparse.config;
 import argparse.result;
-
+import argparse.api.ansi: ansiStylingArgument;
+import argparse.ansi: getUnstyledText;
 import argparse.internal.parser: callParser;
 import argparse.internal.completer: completeArgs, Complete;
 
@@ -10,21 +11,26 @@ import argparse.internal.completer: completeArgs, Complete;
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Private helper for error output
 
-private void defaultErrorPrinter(string message)
+private void defaultErrorPrinter(T...)(T message)
 {
     import std.stdio: stderr, writeln;
 
-    stderr.writeln("Error: ", message);
+    stderr.writeln(message);
 }
 
 private void onError(Config config, alias printer = defaultErrorPrinter)(string message) nothrow
 {
+    import std.algorithm.iteration: joiner;
+
     static if(config.errorHandlerFunc)
         config.errorHandlerFunc(message);
     else
         try
         {
-            printer(message);
+            if(ansiStylingArgument)
+                printer(config.styling.errorMessagePrefix("Error: "), message);
+            else
+                printer("Error: ", message.getUnstyledText.joiner);
         }
         catch(Exception e)
         {
@@ -36,7 +42,10 @@ unittest
 {
     import std.exception;
 
-    alias printer = (s) { throw new Exception("My Message."); };
+    static void printer(T...)(T m)
+    {
+        throw new Exception("My Message.");
+    }
 
     assert(collectExceptionMsg!Error(onError!(Config.init, printer)("text")) == "My Message.");
 }
