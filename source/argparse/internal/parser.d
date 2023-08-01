@@ -43,7 +43,7 @@ private string[] consumeValuesFromCLI(ref string[] args, ulong minValuesCount, u
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private struct Parser
+private struct Parser(Config config)
 {
     import std.sumtype: SumType;
 
@@ -63,8 +63,6 @@ private struct Parser
 
     alias Argument = SumType!(Unknown, EndOfArgs, Positional, NamedShort, NamedLong);
 
-    Config* config;
-
     string[] args;
     string[] unrecognizedArgs;
 
@@ -75,7 +73,7 @@ private struct Parser
     Command[] cmdStack;
 
 
-    Argument splitArgumentNameValue(string arg)
+    static Argument splitArgumentNameValue(string arg)
     {
         import std.string : indexOf;
 
@@ -108,9 +106,9 @@ private struct Parser
         auto rawValues = value !is null ? [value] : consumeValuesFromCLI(args, foundArg.arg.minValuesCount.get, foundArg.arg.maxValuesCount.get, config.namedArgChar);
 
         static if(completionMode)
-            return cmd.completeArgument(cmdStack, config, foundArg.index, nameWithDash, rawValues);
+            return cmd.completeArgument(cmdStack, foundArg.index, nameWithDash, rawValues);
         else
-            return cmd.parseArgument(cmdStack, config, foundArg.index, nameWithDash, rawValues);
+            return cmd.parseArgument(cmdStack, foundArg.index, nameWithDash, rawValues);
     }
 
     auto parseSubCommand(const Command[] cmdStack1, const ref Command cmd)
@@ -313,7 +311,7 @@ private struct Parser
                     return res; // res contains suggestions
         }
 
-        return cmdStack[0].arguments.checkRestrictions(idxParsedArgs, config);
+        return cmdStack[0].checkRestrictions(idxParsedArgs);
     }
 
     void addCommand(Command cmd, bool addDefaultCommand)
@@ -346,36 +344,31 @@ private struct Parser
 
 unittest
 {
-    Config config;
-    assert(Parser(&config).splitArgumentNameValue("") == Parser.Argument(Parser.Unknown.init));
-    assert(Parser(&config).splitArgumentNameValue("-") == Parser.Argument(Parser.Unknown.init));
-    assert(Parser(&config).splitArgumentNameValue("--") == Parser.Argument(Parser.EndOfArgs.init));
-    assert(Parser(&config).splitArgumentNameValue("abc=4") == Parser.Argument(Parser.Positional.init));
-    assert(Parser(&config).splitArgumentNameValue("-abc") == Parser.Argument(Parser.NamedShort("abc", "-abc", null)));
-    assert(Parser(&config).splitArgumentNameValue("--abc") == Parser.Argument(Parser.NamedLong("abc", "--abc", null)));
-    assert(Parser(&config).splitArgumentNameValue("-abc=fd") == Parser.Argument(Parser.NamedShort("abc", "-abc", "fd")));
-    assert(Parser(&config).splitArgumentNameValue("--abc=fd") == Parser.Argument(Parser.NamedLong("abc", "--abc", "fd")));
-    assert(Parser(&config).splitArgumentNameValue("-abc=") == Parser.Argument(Parser.NamedShort("abc", "-abc", "")));
-    assert(Parser(&config).splitArgumentNameValue("--abc=") == Parser.Argument(Parser.NamedLong("abc", "--abc", "")));
-    assert(Parser(&config).splitArgumentNameValue("-=abc") == Parser.Argument(Parser.NamedShort("", "-", "abc")));
-    assert(Parser(&config).splitArgumentNameValue("--=abc") == Parser.Argument(Parser.NamedLong("", "--", "abc")));
+    alias P = Parser!(Config.init);
+    assert(P.splitArgumentNameValue("") == P.Argument(P.Unknown.init));
+    assert(P.splitArgumentNameValue("-") == P.Argument(P.Unknown.init));
+    assert(P.splitArgumentNameValue("--") == P.Argument(P.EndOfArgs.init));
+    assert(P.splitArgumentNameValue("abc=4") == P.Argument(P.Positional.init));
+    assert(P.splitArgumentNameValue("-abc") == P.Argument(P.NamedShort("abc", "-abc", null)));
+    assert(P.splitArgumentNameValue("--abc") == P.Argument(P.NamedLong("abc", "--abc", null)));
+    assert(P.splitArgumentNameValue("-abc=fd") == P.Argument(P.NamedShort("abc", "-abc", "fd")));
+    assert(P.splitArgumentNameValue("--abc=fd") == P.Argument(P.NamedLong("abc", "--abc", "fd")));
+    assert(P.splitArgumentNameValue("-abc=") == P.Argument(P.NamedShort("abc", "-abc", "")));
+    assert(P.splitArgumentNameValue("--abc=") == P.Argument(P.NamedLong("abc", "--abc", "")));
+    assert(P.splitArgumentNameValue("-=abc") == P.Argument(P.NamedShort("", "-", "abc")));
+    assert(P.splitArgumentNameValue("--=abc") == P.Argument(P.NamedLong("", "--", "abc")));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) static Result callParser(Config origConfig, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
+package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
+if(config.stylingMode != Config.StylingMode.autodetect)
 {
-    import argparse.ansi: detectSupport;
+    ansiStylingArgument.isEnabled = config.stylingMode == Config.StylingMode.on;
 
-    ansiStylingArgument.isEnabled = origConfig.stylingMode == Config.StylingMode.on ||
-                                    origConfig.stylingMode == Config.StylingMode.autodetect && detectSupport();
+    auto parser = Parser!config(args);
 
-    auto config = origConfig;
-    config.stylingMode = ansiStylingArgument.isEnabled ? Config.StylingMode.on : Config.StylingMode.off;
-
-    auto parser = Parser(&config, args);
-
-    auto cmd = createCommand!(origConfig, COMMAND)(receiver);
+    auto cmd = createCommand!(config, COMMAND)(receiver);
     parser.addCommand(cmd, true);
 
     auto res = parser.parseAll!completionMode;
@@ -387,6 +380,31 @@ package(argparse) static Result callParser(Config origConfig, bool completionMod
     }
 
     return res;
+}
+
+private auto enableStyling(Config config)(bool enable)
+{
+    Config c = config;
+    c.stylingMode = enable ? Config.StylingMode.on : Config.StylingMode.off;
+    return c;
+}
+
+unittest
+{
+    assert(enableStyling!(Config.init)(true).stylingMode == Config.StylingMode.on);
+    assert(enableStyling!(Config.init)(false).stylingMode == Config.StylingMode.off);
+}
+
+package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
+if(config.stylingMode == Config.StylingMode.autodetect)
+{
+    import argparse.ansi: detectSupport;
+
+
+    if(detectSupport())
+        return callParser!(enableStyling!config(true), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
+    else
+        return callParser!(enableStyling!config(false), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
