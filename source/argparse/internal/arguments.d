@@ -101,13 +101,13 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package alias Restriction = Result delegate(Config* config, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs);
+package alias Restriction = Result delegate(in bool[size_t] cliArgs, in ArgumentInfo[] allArgs);
 
 package struct Restrictions
 {
-    static Restriction RequiredArg(ArgumentInfo info)(size_t index)
+    static Restriction RequiredArg(Config config, ArgumentInfo info)(size_t index)
     {
-        return partiallyApply!((size_t index, Config* config, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs)
+        return partiallyApply!((size_t index, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs)
         {
             return (index in cliArgs) ?
                 Result.Success :
@@ -115,8 +115,8 @@ package struct Restrictions
         })(index);
     }
 
-    static Result RequiredTogether(Config* config,
-                                   in bool[size_t] cliArgs,
+    static Result RequiredTogether(Config config)
+                                  (in bool[size_t] cliArgs,
                                    in ArgumentInfo[] allArgs,
                                    in size_t[] restrictionArgs)
     {
@@ -140,8 +140,8 @@ package struct Restrictions
         return Result.Success;
     }
 
-    static Result MutuallyExclusive(Config* config,
-                                    in bool[size_t] cliArgs,
+    static Result MutuallyExclusive(Config config)
+                                   (in bool[size_t] cliArgs,
                                     in ArgumentInfo[] allArgs,
                                     in size_t[] restrictionArgs)
     {
@@ -159,8 +159,8 @@ package struct Restrictions
         return Result.Success;
     }
 
-    static Result RequiredAnyOf(Config* config,
-                                in bool[size_t] cliArgs,
+    static Result RequiredAnyOf(Config config)
+                               (in bool[size_t] cliArgs,
                                 in ArgumentInfo[] allArgs,
                                 in size_t[] restrictionArgs)
     {
@@ -267,7 +267,7 @@ package struct Arguments
     @property auto positionalArguments() const { return argsPositional; }
 
 
-    void addArgument(TYPE, alias symbol, ArgumentInfo info)()
+    void addArgument(Config config, TYPE, alias symbol, ArgumentInfo info)()
     {
         static if(hasMemberGroupUDA!(TYPE, symbol))
         {
@@ -275,21 +275,21 @@ package struct Arguments
 
             auto index = (group.name in groupsByName);
             if(index !is null)
-                addArgumentImpl!(TYPE, symbol, info)(userGroups[*index]);
+                addArgumentImpl!(config, TYPE, symbol, info)(userGroups[*index]);
             else
             {
                 groupsByName[group.name] = userGroups.length;
                 userGroups ~= group;
-                addArgumentImpl!(TYPE, symbol, info)(userGroups[$-1]);
+                addArgumentImpl!(config, TYPE, symbol, info)(userGroups[$-1]);
             }
         }
         else static if(info.required)
-            addArgumentImpl!(TYPE, symbol, info)(requiredGroup);
+            addArgumentImpl!(config, TYPE, symbol, info)(requiredGroup);
         else
-            addArgumentImpl!(TYPE, symbol, info)(optionalGroup);
+            addArgumentImpl!(config, TYPE, symbol, info)(optionalGroup);
     }
 
-    private void addArgumentImpl(TYPE, alias symbol, ArgumentInfo info)(ref Group group)
+    private void addArgumentImpl(Config config, TYPE, alias symbol, ArgumentInfo info)(ref Group group)
     {
         static assert(info.names.length > 0);
 
@@ -313,13 +313,13 @@ package struct Arguments
         group.arguments ~= index;
 
         static if(info.required)
-            restrictions ~= Restrictions.RequiredArg!info(index);
+            restrictions ~= Restrictions.RequiredArg!(config, info)(index);
 
         static foreach(restriction; getRestrictionGroups!(TYPE, symbol))
-            addRestriction!(info, restriction)(index);
+            addRestriction!(config, info, restriction)(index);
     }
 
-    void addRestriction(ArgumentInfo info, RestrictionGroup restriction)(size_t argIndex)
+    private void addRestriction(Config config, ArgumentInfo info, RestrictionGroup restriction)(size_t argIndex)
     {
         auto groupIndex = (restriction.location in groupsByName);
         auto index = groupIndex !is null
@@ -329,18 +329,18 @@ package struct Arguments
                 restrictionGroups ~= restriction;
 
                 static if(restriction.required)
-                    restrictions ~= (a, in b, in c) => Restrictions.RequiredAnyOf(a, b, c, restrictionGroups[index].arguments);
+                    restrictions ~= (in a, in b) => Restrictions.RequiredAnyOf!config(a, b, restrictionGroups[index].arguments);
 
                 enum checkFunc =
                     {
                         final switch(restriction.type)
                         {
-                            case RestrictionGroup.Type.together:  return &Restrictions.RequiredTogether;
-                            case RestrictionGroup.Type.exclusive: return &Restrictions.MutuallyExclusive;
+                            case RestrictionGroup.Type.together:  return &Restrictions.RequiredTogether!config;
+                            case RestrictionGroup.Type.exclusive: return &Restrictions.MutuallyExclusive!config;
                         }
                     }();
 
-                restrictions ~= (a, in b, in c) => checkFunc(a, b, c, restrictionGroups[index].arguments);
+                restrictions ~= (in a, in b) => checkFunc(a, b, restrictionGroups[index].arguments);
 
                 return index;
             }();
@@ -349,11 +349,11 @@ package struct Arguments
     }
 
 
-    Result checkRestrictions(in bool[size_t] cliArgs, Config* config) const
+    Result checkRestrictions(in bool[size_t] cliArgs) const
     {
         foreach(restriction; restrictions)
         {
-            auto res = restriction(config, cliArgs, arguments);
+            auto res = restriction(cliArgs, arguments);
             if(!res)
                 return res;
         }
