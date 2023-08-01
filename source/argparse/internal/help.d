@@ -388,7 +388,7 @@ private void printInvocation(NAMES)(void delegate(string) sink, const ref Style 
             if(i > 0)
                 sink(", ");
 
-            sink(style.namedArgumentName(name));
+            sink(style.argumentName(name));
 
             if(info.maxValuesCount.get > 0)
             {

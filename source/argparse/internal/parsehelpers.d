@@ -142,12 +142,17 @@ package(argparse) template ValueInList(alias values, TYPE)
 {
     static auto ValueInList(Param!TYPE param)
     {
+        import std.algorithm: map;
         import std.array : assocArray, join;
         import std.range : repeat, front;
         import std.conv: to;
 
         enum valuesAA = assocArray(values, false.repeat);
-        enum allowedValues = values.to!(string[]).join(',');
+        enum allowedValues = values.to!(string[]);
+
+        auto valueStyle = (param.name.length == 0 || param.name[0] != param.config.namedArgChar) ?
+            param.config.styling.positionalArgumentValue :
+            param.config.styling.namedArgumentValue;
 
         static if(is(typeof(values.front) == TYPE))
             auto paramValues = [param.value];
@@ -156,7 +161,8 @@ package(argparse) template ValueInList(alias values, TYPE)
 
         foreach(value; paramValues)
             if(!(value in valuesAA))
-                return Result.Error("Invalid value '", value, "' for argument '", param.name, "'.\nValid argument values are: ", allowedValues);
+                return Result.Error("Invalid value '", valueStyle(value.to!string), "' for argument '", param.config.styling.argumentName(param.name),
+                    "'.\nValid argument values are: ", allowedValues.map!(_ => valueStyle(_)).join(","));
 
         return Result.Success;
     }
@@ -176,11 +182,14 @@ unittest
 {
     enum values = ["a","b","c"];
 
-    assert(ValueInList!(values, string)(Param!string(null, "", "b")));
-    assert(!ValueInList!(values, string)(Param!string(null, "", "d")));
+    import argparse.config;
+    Config config;
 
-    assert(ValueInList!(values, string)(RawParam(null, "", ["b"])));
-    assert(ValueInList!(values, string)(RawParam(null, "", ["b","a"])));
-    assert(!ValueInList!(values, string)(RawParam(null, "", ["d"])));
-    assert(!ValueInList!(values, string)(RawParam(null, "", ["b","d"])));
+    assert(ValueInList!(values, string)(Param!string(&config, "", "b")));
+    assert(!ValueInList!(values, string)(Param!string(&config, "", "d")));
+
+    assert(ValueInList!(values, string)(RawParam(&config, "", ["b"])));
+    assert(ValueInList!(values, string)(RawParam(&config, "", ["b","a"])));
+    assert(!ValueInList!(values, string)(RawParam(&config, "", ["d"])));
+    assert(!ValueInList!(values, string)(RawParam(&config, "", ["b","d"])));
 }
