@@ -280,6 +280,9 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
     {{
         enum uda = getMemberArgumentUDA!(config, COMMAND_TYPE, symbol, NamedArgument);
 
+        static foreach(name; uda.info.names)
+            static assert(name[0] != config.namedArgChar, "Argument name should not begin with '"~config.namedArgChar~"': "~name);
+
         res.arguments.addArgument!(COMMAND_TYPE, symbol, uda.info);
     }}
 
