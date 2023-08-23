@@ -1554,11 +1554,11 @@ enum cfg = {
 assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T(["1","2","3","4","5"])); })(["-a","1,2,3","-a","4","5"]) == 0);
 ```
 
-### Named argument character
+### Named argument prefix character
 
-`Config.namedArgChar` - the character that named arguments begin with.
+`Config.namedArgPrefix` - the character that named arguments begin with.
 
-Default is dash `-`.
+Default is dash (`-`).
 
 ### End of arguments
 

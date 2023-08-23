@@ -150,7 +150,7 @@ package(argparse) template ValueInList(alias values, TYPE)
         enum valuesAA = assocArray(values, false.repeat);
         enum allowedValues = values.to!(string[]);
 
-        auto valueStyle = (param.name.length == 0 || param.name[0] != param.config.namedArgChar) ?
+        auto valueStyle = (param.name.length == 0 || param.name[0] != param.config.namedArgPrefix) ?
             param.config.styling.positionalArgumentValue :
             param.config.styling.namedArgumentValue;
 

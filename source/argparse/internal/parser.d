@@ -10,7 +10,7 @@ import argparse.internal.command: Command, createCommand;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private string[] consumeValuesFromCLI(ref string[] args, ulong minValuesCount, ulong maxValuesCount, char namedArgChar)
+private string[] consumeValuesFromCLI(ref string[] args, ulong minValuesCount, ulong maxValuesCount, char namedArgPrefix)
 {
     import std.range: empty, front, popFront;
 
@@ -32,7 +32,7 @@ private string[] consumeValuesFromCLI(ref string[] args, ulong minValuesCount, u
 
     while(!args.empty &&
         values.length < maxValuesCount &&
-        (args.front.length == 0 || args.front[0] != namedArgChar))
+        (args.front.length == 0 || args.front[0] != namedArgPrefix))
     {
         values ~= args.front;
         args.popFront();
@@ -83,10 +83,10 @@ private struct Parser(Config config)
         if(arg == config.endOfArgs)
             return Argument(EndOfArgs.init);
 
-        if(arg[0] != config.namedArgChar)
+        if(arg[0] != config.namedArgPrefix)
             return Argument(Positional.init);
 
-        if(arg.length == 1 || arg.length == 2 && arg[1] == config.namedArgChar)
+        if(arg.length == 1 || arg.length == 2 && arg[1] == config.namedArgPrefix)
             return Argument.init;
 
         auto idxAssignChar = config.assignChar == char.init ? -1 : arg.indexOf(config.assignChar);
@@ -94,7 +94,7 @@ private struct Parser(Config config)
         immutable string nameWithDash = idxAssignChar < 0 ? arg  : arg[0 .. idxAssignChar];
         immutable string value        = idxAssignChar < 0 ? null : arg[idxAssignChar + 1 .. $];
 
-        return arg[1] == config.namedArgChar
+        return arg[1] == config.namedArgPrefix
         ? Argument(NamedLong (config.convertCase(nameWithDash[2..$]), nameWithDash, value))
         : Argument(NamedShort(config.convertCase(nameWithDash[1..$]), nameWithDash, value));
     }
@@ -103,7 +103,7 @@ private struct Parser(Config config)
     {
         scope(exit) idxParsedArgs[foundArg.index] = true;
 
-        auto rawValues = value !is null ? [value] : consumeValuesFromCLI(args, foundArg.arg.minValuesCount.get, foundArg.arg.maxValuesCount.get, config.namedArgChar);
+        auto rawValues = value !is null ? [value] : consumeValuesFromCLI(args, foundArg.arg.minValuesCount.get, foundArg.arg.maxValuesCount.get, config.namedArgPrefix);
 
         static if(completionMode)
             return cmd.completeArgument(cmdStack, foundArg.index, nameWithDash, rawValues);
