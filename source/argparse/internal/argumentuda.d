@@ -131,7 +131,7 @@ private template getArgumentUDAImpl(Config config, MEMBERTYPE, string defaultNam
             uda.info.displayNames = [ uda.info.placeholder ];
         else
         {
-            alias toDisplayName = _ => ( _.length == 1 ? text(config.namedArgChar, _) : text(config.namedArgChar, config.namedArgChar, _));
+            alias toDisplayName = _ => ( _.length == 1 ? text(config.namedArgPrefix, _) : text(config.namedArgPrefix, config.namedArgPrefix, _));
 
             uda.info.displayNames = uda.info.names.map!toDisplayName.array;
         }

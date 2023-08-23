@@ -14,7 +14,7 @@ import std.traits: getUDAs;
 package(argparse) struct ArgumentInfo
 {
     string[] names;
-    string[] displayNames;    // names prefixed with Config.namedArgChar
+    string[] displayNames;    // names prefixed with Config.namedArgPrefix
 
     string displayName() const
     {
