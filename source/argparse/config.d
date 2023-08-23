@@ -23,10 +23,10 @@ struct Config
     char arraySep = char.init;
 
     /**
-       The option character.
+       The prefix for argument name.
        Defaults to '-'.
      */
-    char namedArgChar = '-';
+    char namedArgPrefix = '-';
 
     /**
        The string that conventionally marks the end of all options.
