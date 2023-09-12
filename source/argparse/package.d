@@ -108,6 +108,13 @@ unittest
         @(PositionalArgument(2)) int b;
     }
     static assert(!__traits(compiles, { T4 t; enum c = createCommand!(Config.init)(t); }));
+
+    struct T5
+    {
+        @(PositionalArgument(0)) int[] a;
+        @(PositionalArgument(1)) int b;
+    }
+    static assert(!__traits(compiles, { T5 t; enum c = createCommand!(Config.init)(t); }));
 }
 
 unittest
