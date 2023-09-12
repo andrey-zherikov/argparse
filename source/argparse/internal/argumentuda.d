@@ -55,7 +55,7 @@ if(!is(TYPE == void))
     }
     else static if(isStaticArray!T)
     {
-        enum min = 1;
+        enum min = T.length;
         enum max = T.length;
     }
     else static if(isArray!T || isAssociativeArray!T)

@@ -5,7 +5,7 @@ import argparse.param;
 import argparse.result;
 import argparse.api.argument: TrailingArguments, NamedArgument, NumberOfValues;
 import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
-import argparse.internal.arguments: Arguments;
+import argparse.internal.arguments: Arguments, ArgumentInfo;
 import argparse.internal.commandinfo;
 import argparse.internal.hooks: HookHandlers;
 import argparse.internal.argumentuda: ArgumentUDA, getArgumentUDA, getMemberArgumentUDA;
@@ -273,6 +273,30 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
 {
     import std.algorithm: map;
     import std.array: array;
+    import std.meta: Filter, staticMap, staticSort;
+
+
+    enum hasArgumentUDA(alias sym) = hasUDA!(__traits(getMember, COMMAND_TYPE, sym), ArgumentUDA);
+    enum getArgumentInfo(alias sym) = getMemberArgumentUDA!(config, COMMAND_TYPE, sym, void).info;//getUDAs!(__traits(getMember, COMMAND_TYPE, sym), ArgumentUDA)[0].info;
+
+    enum positional(ArgumentInfo info) = info.positional;
+
+    enum cmp(ArgumentInfo info1, ArgumentInfo info2) = info1.position.get - info2.position.get;
+
+    enum positionalArgs = staticSort!(cmp, Filter!(positional, staticMap!(getArgumentInfo, Filter!(hasArgumentUDA, iterateArguments!COMMAND_TYPE))));
+
+    static foreach(int i, info; positionalArgs)
+    {{
+        enum int pos = info.position.get;
+
+        static if(i < pos)
+            static assert(false, "Positional argument with index "~i.stringof~" is missed in "~COMMAND_TYPE.stringof);
+        else static if(i > pos)
+            static assert(false, "Positional argument with index "~pos.stringof~" is duplicated in "~COMMAND_TYPE.stringof);
+
+        static if(pos < positionalArgs.length - 1)
+            static assert(info.minValuesCount.get == info.maxValuesCount.get, "Positional argument with index "~pos.stringof~" in "~COMMAND_TYPE.stringof~" has variable number of values.");
+    }}
 
     Command res;
 
