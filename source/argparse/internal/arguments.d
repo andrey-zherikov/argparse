@@ -24,6 +24,8 @@ package(argparse) struct ArgumentInfo
     LazyString description;
     string placeholder;
 
+    string memberSymbol;
+
     bool hideFromHelp = false;      // if true then this argument is not printed on help page
 
     bool required;
