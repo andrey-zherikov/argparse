@@ -6,8 +6,8 @@ import argparse.result;
 import argparse.api.argument: TrailingArguments, NamedArgument, NumberOfValues;
 import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
 import argparse.internal.arguments: Arguments, ArgumentInfo;
-import argparse.internal.commandinfo;
 import argparse.internal.argumentuda: ArgumentUDA, getArgumentUDA, getMemberArgumentUDA;
+import argparse.internal.commandinfo;
 import argparse.internal.help: HelpArgumentUDA;
 
 import std.typecons: Nullable, nullable;
@@ -173,10 +173,11 @@ package struct Command
     }
 
 
-    string displayName() const { return info.displayNames[0]; }
     Arguments arguments;
 
     CommandInfo info;
+
+    string displayName() const { return info.displayNames[0]; }
 
     SubCommands subCommands;
     Command delegate() pure nothrow [] subCommandCreate;
@@ -267,13 +268,15 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
 
 
     enum hasArgumentUDA(alias sym) = hasUDA!(__traits(getMember, COMMAND_TYPE, sym), ArgumentUDA);
-    enum getArgumentInfo(alias sym) = getMemberArgumentUDA!(config, COMMAND_TYPE, sym, void).info;//getUDAs!(__traits(getMember, COMMAND_TYPE, sym), ArgumentUDA)[0].info;
+    enum getArgumentInfo(alias sym) = getMemberArgumentUDA!(config, COMMAND_TYPE, sym, NamedArgument).info;
+
+    enum argumentInfos = staticMap!(getArgumentInfo, iterateArguments!COMMAND_TYPE);
 
     enum positional(ArgumentInfo info) = info.positional;
 
     enum cmp(ArgumentInfo info1, ArgumentInfo info2) = info1.position.get - info2.position.get;
 
-    enum positionalArgs = staticSort!(cmp, Filter!(positional, staticMap!(getArgumentInfo, Filter!(hasArgumentUDA, iterateArguments!COMMAND_TYPE))));
+    enum positionalArgs = staticSort!(cmp, Filter!(positional, argumentInfos));
 
     static foreach(int i, info; positionalArgs)
     {{
