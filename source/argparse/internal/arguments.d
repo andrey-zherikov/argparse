@@ -1,6 +1,5 @@
 module argparse.internal.arguments;
 
-import argparse.internal.utils: partiallyApply;
 import argparse.internal.lazystring;
 
 import argparse.config;
@@ -99,85 +98,6 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package alias Restriction = Result delegate(in bool[size_t] cliArgs, in ArgumentInfo[] allArgs);
-
-package struct Restrictions
-{
-    static Restriction RequiredArg(Config config, ArgumentInfo info)(size_t index)
-    {
-        return partiallyApply!((size_t index, in bool[size_t] cliArgs, in ArgumentInfo[] allArgs)
-        {
-            return (index in cliArgs) ?
-                Result.Success :
-                Result.Error("The following argument is required: '", config.styling.argumentName(info.displayName), "'");
-        })(index);
-    }
-
-    static Result RequiredTogether(Config config)
-                                  (in bool[size_t] cliArgs,
-                                   in ArgumentInfo[] allArgs,
-                                   in size_t[] restrictionArgs)
-    {
-        size_t foundIndex = size_t.max;
-        size_t missedIndex = size_t.max;
-
-        foreach(index; restrictionArgs)
-        {
-            if(index in cliArgs)
-            {
-                if(foundIndex == size_t.max)
-                    foundIndex = index;
-            }
-            else if(missedIndex == size_t.max)
-                missedIndex = index;
-
-            if(foundIndex != size_t.max && missedIndex != size_t.max)
-                return Result.Error("Missed argument '", config.styling.argumentName(allArgs[missedIndex].displayName),
-                    "' - it is required by argument '", config.styling.argumentName(allArgs[foundIndex].displayName), "'");
-        }
-
-        return Result.Success;
-    }
-
-    static Result MutuallyExclusive(Config config)
-                                   (in bool[size_t] cliArgs,
-                                    in ArgumentInfo[] allArgs,
-                                    in size_t[] restrictionArgs)
-    {
-        size_t foundIndex = size_t.max;
-
-        foreach(index; restrictionArgs)
-            if(index in cliArgs)
-            {
-                if(foundIndex == size_t.max)
-                    foundIndex = index;
-                else
-                    return Result.Error("Argument '", config.styling.argumentName(allArgs[foundIndex].displayName),
-                        "' is not allowed with argument '", config.styling.argumentName(allArgs[index].displayName),"'");
-            }
-
-        return Result.Success;
-    }
-
-    static Result RequiredAnyOf(Config config)
-                               (in bool[size_t] cliArgs,
-                                in ArgumentInfo[] allArgs,
-                                in size_t[] restrictionArgs)
-    {
-        import std.algorithm: map;
-        import std.array: join;
-
-        foreach(index; restrictionArgs)
-            if(index in cliArgs)
-                return Result.Success;
-
-        return Result.Error("One of the following arguments is required: '",
-            restrictionArgs.map!(_ => config.styling.argumentName(allArgs[_].displayName)).join("', '"), "'");
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 package(argparse) struct Group
 {
     string name;
@@ -199,50 +119,6 @@ private enum hasMemberGroupUDA(TYPE, alias symbol) = __traits(compiles, { enum g
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) struct RestrictionGroup
-{
-    string location;
-
-    enum Type { together, exclusive }
-    Type type;
-
-    size_t[] arguments;
-
-    bool required;
-}
-
-unittest
-{
-    assert(!RestrictionGroup.init.required);
-}
-
-private auto getRestrictionGroups(TYPE, alias symbol)()
-{
-    RestrictionGroup[] restrictions;
-
-    static foreach(gr; getUDAs!(__traits(getMember, TYPE, symbol), RestrictionGroup))
-        restrictions ~= gr;
-
-    return restrictions;
-}
-
-private enum getRestrictionGroups(TYPE, typeof(null) symbol) = RestrictionGroup[].init;
-
-unittest
-{
-    struct T
-    {
-        @(RestrictionGroup("1"))
-        @(RestrictionGroup("2"))
-        @(RestrictionGroup("3"))
-        int a;
-    }
-
-    assert(getRestrictionGroups!(T, "a") == [RestrictionGroup("1"), RestrictionGroup("2"), RestrictionGroup("3")]);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 package struct Arguments
 {
     ArgumentInfo[] arguments;
@@ -260,10 +136,6 @@ package struct Arguments
     enum optionalGroupName = "Optional arguments";
     Group requiredGroup = Group(requiredGroupName);
     Group optionalGroup = Group(optionalGroupName);
-
-    Restriction[] restrictions;
-    RestrictionGroup[] restrictionGroups;
-
 
     @property auto positionalArguments() const { return argsPositional; }
 
@@ -312,55 +184,8 @@ package struct Arguments
 
         arguments ~= info;
         group.arguments ~= index;
-
-        static if(info.required)
-            restrictions ~= Restrictions.RequiredArg!(config, info)(index);
-
-        static foreach(restriction; getRestrictionGroups!(TYPE, symbol))
-            addRestriction!(config, info, restriction)(index);
     }
 
-    private void addRestriction(Config config, ArgumentInfo info, RestrictionGroup restriction)(size_t argIndex)
-    {
-        auto groupIndex = (restriction.location in groupsByName);
-        auto index = groupIndex !is null
-            ? *groupIndex
-            : {
-                auto index = groupsByName[restriction.location] = restrictionGroups.length;
-                restrictionGroups ~= restriction;
-
-                static if(restriction.required)
-                    restrictions ~= (in a, in b) => Restrictions.RequiredAnyOf!config(a, b, restrictionGroups[index].arguments);
-
-                enum checkFunc =
-                    {
-                        final switch(restriction.type)
-                        {
-                            case RestrictionGroup.Type.together:  return &Restrictions.RequiredTogether!config;
-                            case RestrictionGroup.Type.exclusive: return &Restrictions.MutuallyExclusive!config;
-                        }
-                    }();
-
-                restrictions ~= (in a, in b) => checkFunc(a, b, restrictionGroups[index].arguments);
-
-                return index;
-            }();
-
-        restrictionGroups[index].arguments ~= argIndex;
-    }
-
-
-    Result checkRestrictions(in bool[size_t] cliArgs) const
-    {
-        foreach(restriction; restrictions)
-        {
-            auto res = restriction(cliArgs, arguments);
-            if(!res)
-                return res;
-        }
-
-        return Result.Success;
-    }
 
 
     struct FindResult

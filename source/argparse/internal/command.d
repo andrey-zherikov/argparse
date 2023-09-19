@@ -9,6 +9,7 @@ import argparse.internal.arguments: Arguments, ArgumentInfo;
 import argparse.internal.argumentuda: ArgumentUDA, getArgumentUDA, getMemberArgumentUDA;
 import argparse.internal.commandinfo;
 import argparse.internal.help: HelpArgumentUDA;
+import argparse.internal.restriction;
 
 import std.typecons: Nullable, nullable;
 import std.traits: getSymbolsByUDA, hasUDA, getUDAs;
@@ -175,6 +176,8 @@ package struct Command
 
     Arguments arguments;
 
+    Restrictions restrictions;
+
     CommandInfo info;
 
     string displayName() const { return info.displayNames[0]; }
@@ -199,7 +202,7 @@ package struct Command
 
     Result checkRestrictions(in bool[size_t] cliArgs) const
     {
-        return arguments.checkRestrictions(cliArgs);
+        return restrictions.check(cliArgs, arguments.arguments);
     }
 }
 
@@ -291,17 +294,17 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
             static assert(info.minValuesCount.get == info.maxValuesCount.get, "Positional argument with index "~pos.stringof~" in "~COMMAND_TYPE.stringof~" has variable number of values.");
     }}
 
-    Command res;
-
-    static foreach(symbol; iterateArguments!COMMAND_TYPE)
-    {{
-        enum uda = getMemberArgumentUDA!(config, COMMAND_TYPE, symbol, NamedArgument);
-
-        static foreach(name; uda.info.names)
+    static foreach(info; argumentInfos)
+        static foreach (name; info.names)
             static assert(name[0] != config.namedArgPrefix, "Argument name should not begin with '"~config.namedArgPrefix~"': "~name);
 
-        res.arguments.addArgument!(config, COMMAND_TYPE, symbol, uda.info);
-    }}
+
+    Command res;
+
+    static foreach(index, info; argumentInfos)
+        res.arguments.addArgument!(config, COMMAND_TYPE, symbol, info);
+
+    res.restrictions.add!(config, COMMAND_TYPE, argumentInfos);
 
     res.parseFunctions = getArgumentParsingFunctions!(config, Command[], COMMAND_TYPE, iterateArguments!COMMAND_TYPE).map!(_ =>
         (const Command[] cmdStack, string argName, string[] argValue)

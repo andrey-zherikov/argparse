@@ -1,6 +1,6 @@
 module argparse.api.restriction;
 
-import argparse.internal.arguments: RestrictionGroup;
+import argparse.internal.restriction: RestrictionGroup;
 
 import std.conv: to;
 
