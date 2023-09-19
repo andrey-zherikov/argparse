@@ -302,7 +302,7 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
     Command res;
 
     static foreach(index, info; argumentInfos)
-        res.arguments.addArgument!(config, COMMAND_TYPE, symbol, info);
+        res.arguments.addArgument!(config, COMMAND_TYPE, info);
 
     res.restrictions.add!(config, COMMAND_TYPE, argumentInfos);
 
@@ -320,7 +320,7 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
     {{
         enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
 
-        res.arguments.addArgument!(config, COMMAND_TYPE, null, uda.info);
+        res.arguments.addArgument!(config, COMMAND_TYPE, uda.info);
 
         res.parseFunctions ~=
             (const Command[] cmdStack, string argName, string[] argValue)

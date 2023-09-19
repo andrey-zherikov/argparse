@@ -105,7 +105,7 @@ package(argparse) struct Group
     size_t[] arguments;
 }
 
-private template getMemberGroupUDA(TYPE, alias symbol)
+private template getMemberGroupUDA(TYPE, string symbol)
 {
     private enum udas = getUDAs!(__traits(getMember, TYPE, symbol), Group);
 
@@ -140,29 +140,29 @@ package struct Arguments
     @property auto positionalArguments() const { return argsPositional; }
 
 
-    void addArgument(Config config, TYPE, alias symbol, ArgumentInfo info)()
+    void addArgument(Config config, TYPE, ArgumentInfo info)()
     {
-        static if(hasMemberGroupUDA!(TYPE, symbol))
+        static if(hasMemberGroupUDA!(TYPE, info.memberSymbol))
         {
-            enum group = getMemberGroupUDA!(TYPE, symbol);
+            enum group = getMemberGroupUDA!(TYPE, info.memberSymbol);
 
             auto index = (group.name in groupsByName);
             if(index !is null)
-                addArgumentImpl!(config, TYPE, symbol, info)(userGroups[*index]);
+                addArgumentImpl!(config, TYPE, info)(userGroups[*index]);
             else
             {
                 groupsByName[group.name] = userGroups.length;
                 userGroups ~= group;
-                addArgumentImpl!(config, TYPE, symbol, info)(userGroups[$-1]);
+                addArgumentImpl!(config, TYPE, info)(userGroups[$-1]);
             }
         }
         else static if(info.required)
-            addArgumentImpl!(config, TYPE, symbol, info)(requiredGroup);
+            addArgumentImpl!(config, TYPE, info)(requiredGroup);
         else
-            addArgumentImpl!(config, TYPE, symbol, info)(optionalGroup);
+            addArgumentImpl!(config, TYPE, info)(optionalGroup);
     }
 
-    private void addArgumentImpl(Config config, TYPE, alias symbol, ArgumentInfo info)(ref Group group)
+    private void addArgumentImpl(Config config, TYPE, ArgumentInfo info)(ref Group group)
     {
         static assert(info.names.length > 0);
 
