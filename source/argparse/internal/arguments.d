@@ -102,7 +102,7 @@ package(argparse) struct Group
 {
     string name;
     LazyString description;
-    size_t[] arguments;
+    size_t[] argIndex;
 }
 
 private template getMemberGroupUDA(TYPE, string symbol)
@@ -130,17 +130,23 @@ package struct Arguments
     size_t[] argsPositional;
 
     Group[] userGroups;
-    size_t[string] groupsByName;
+    private size_t[string] groupsByName;
 
-    enum requiredGroupName = "Required arguments";
-    enum optionalGroupName = "Optional arguments";
+    private enum requiredGroupName = "Required arguments";
+    private enum optionalGroupName = "Optional arguments";
     Group requiredGroup = Group(requiredGroupName);
     Group optionalGroup = Group(optionalGroupName);
 
     @property auto positionalArguments() const { return argsPositional; }
 
 
-    void addArgument(Config config, TYPE, ArgumentInfo info)()
+    void add(Config config, TYPE, ArgumentInfo[] infos)()
+    {
+        static foreach(info; infos)
+            add!(config, TYPE, info);
+    }
+
+    void add(Config config, TYPE, ArgumentInfo info)()
     {
         static if(hasMemberGroupUDA!(TYPE, info.memberSymbol))
         {
@@ -183,7 +189,7 @@ package struct Arguments
             }
 
         arguments ~= info;
-        group.arguments ~= index;
+        group.argIndex ~= index;
     }
 
 

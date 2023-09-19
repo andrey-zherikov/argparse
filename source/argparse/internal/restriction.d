@@ -8,7 +8,7 @@ import std.traits: getUDAs;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private alias Restriction = Result delegate(in bool[size_t] cliArgs, in ArgumentInfo[] allArgs);
+private alias Restriction = Result delegate(in bool[size_t] cliArgs);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,9 +19,9 @@ package(argparse) struct RestrictionGroup
     enum Type { together, exclusive }
     Type type;
 
-    size_t[] arguments;
-
     bool required;
+
+    private size_t[] argIndex;
 }
 
 unittest
@@ -59,136 +59,119 @@ unittest
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-private Restriction RequiredArg(Config config, ArgumentInfo info, size_t index)()
-{
-    return (in bool[size_t] cliArgs, in ArgumentInfo[] allArgs)
+private enum RequiredArg(Config config, ArgumentInfo info, size_t index) =
+    (in bool[size_t] cliArgs)
     {
         return (index in cliArgs) ?
             Result.Success :
             Result.Error("The following argument is required: '", config.styling.argumentName(info.displayName), "'");
     };
-}
 
-private Result RequiredTogether(Config config)
-                              (in bool[size_t] cliArgs,
-                               in ArgumentInfo[] allArgs,
-                               in size_t[] restrictionArgs)
-{
-    size_t foundIndex = size_t.max;
-    size_t missedIndex = size_t.max;
-
-    foreach(index; restrictionArgs)
+private enum RequiredTogether(Config config, ArgumentInfo[] allArgs) =
+    (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
     {
-        if(index in cliArgs)
+        size_t foundIndex = size_t.max;
+        size_t missedIndex = size_t.max;
+
+        foreach(index; restrictionArgs)
         {
-            if(foundIndex == size_t.max)
-                foundIndex = index;
-        }
-        else if(missedIndex == size_t.max)
-            missedIndex = index;
+            if(index in cliArgs)
+            {
+                if(foundIndex == size_t.max)
+                    foundIndex = index;
+            }
+            else if(missedIndex == size_t.max)
+                missedIndex = index;
 
-        if(foundIndex != size_t.max && missedIndex != size_t.max)
-            return Result.Error("Missed argument '", config.styling.argumentName(allArgs[missedIndex].displayName),
-                "' - it is required by argument '", config.styling.argumentName(allArgs[foundIndex].displayName), "'");
-    }
-
-    return Result.Success;
-}
-
-private Result MutuallyExclusive(Config config)
-                               (in bool[size_t] cliArgs,
-                                in ArgumentInfo[] allArgs,
-                                in size_t[] restrictionArgs)
-{
-    size_t foundIndex = size_t.max;
-
-    foreach(index; restrictionArgs)
-        if(index in cliArgs)
-        {
-            if(foundIndex == size_t.max)
-                foundIndex = index;
-            else
-                return Result.Error("Argument '", config.styling.argumentName(allArgs[foundIndex].displayName),
-                    "' is not allowed with argument '", config.styling.argumentName(allArgs[index].displayName),"'");
+            if(foundIndex != size_t.max && missedIndex != size_t.max)
+                return Result.Error("Missed argument '", config.styling.argumentName(allArgs[missedIndex].displayName),
+                    "' - it is required by argument '", config.styling.argumentName(allArgs[foundIndex].displayName), "'");
         }
 
-    return Result.Success;
-}
+        return Result.Success;
+    };
 
-private Result RequiredAnyOf(Config config)
-                           (in bool[size_t] cliArgs,
-                            in ArgumentInfo[] allArgs,
-                            in size_t[] restrictionArgs)
-{
-    import std.algorithm: map;
-    import std.array: join;
+private enum MutuallyExclusive(Config config, ArgumentInfo[] allArgs) =
+    (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
+    {
+        size_t foundIndex = size_t.max;
 
-    foreach(index; restrictionArgs)
-        if(index in cliArgs)
-            return Result.Success;
+        foreach(index; restrictionArgs)
+            if(index in cliArgs)
+            {
+                if(foundIndex == size_t.max)
+                    foundIndex = index;
+                else
+                    return Result.Error("Argument '", config.styling.argumentName(allArgs[foundIndex].displayName),
+                        "' is not allowed with argument '", config.styling.argumentName(allArgs[index].displayName),"'");
+            }
 
-    return Result.Error("One of the following arguments is required: '",
-        restrictionArgs.map!(_ => config.styling.argumentName(allArgs[_].displayName)).join("', '"), "'");
-}
+        return Result.Success;
+    };
+
+private enum RequiredAnyOf(Config config, ArgumentInfo[] allArgs) =
+    (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
+    {
+        import std.algorithm: map;
+        import std.array: join;
+
+        foreach(index; restrictionArgs)
+            if(index in cliArgs)
+                return Result.Success;
+
+        return Result.Error("One of the following arguments is required: '",
+            restrictionArgs.map!(_ => config.styling.argumentName(allArgs[_].displayName)).join("', '"), "'");
+    };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package struct Restrictions
 {
-    Restriction[] restrictions;
-    RestrictionGroup[] groups;
-    size_t[string] groupsByLocation;
+    private Restriction[] restrictions;
+    private RestrictionGroup[] groups;
+    private size_t[string] groupsByLocation;
 
 
-    private auto addGroup(Config config, RestrictionGroup group)()
+    package void add(Config config, TYPE, ArgumentInfo[] infos)()
     {
-        auto index = groupsByLocation[group.location] = groups.length;
-        groups ~= group;
-
-        static if(group.required)
-            restrictions ~= (in a, in b) => RequiredAnyOf!config(a, b, groups[index].arguments);
-
-        static if(group.type == RestrictionGroup.Type.together)
-            restrictions ~= (in a, in b) => RequiredTogether!config(a, b, groups[index].arguments);
-        else static if(group.type == RestrictionGroup.Type.exclusive)
-            restrictions ~= (in a, in b) => MutuallyExclusive!config(a, b, groups[index].arguments);
-        else static assert(false);
-
-        return index;
-    }
-
-    private void add(Config config, RestrictionGroup group, size_t argIndex)()
-    {
-        auto groupIndex = (group.location in groupsByLocation);
-        auto index = groupIndex !is null
-            ? *groupIndex
-            : addGroup!(config, group);
-
-        groups[index].arguments ~= argIndex;
-    }
-
-
-    package void add(Config config, TYPE, infos...)()
-    {
-        static foreach(index, info; infos)
+        static foreach(argIndex, info; infos)
         {
             static if(info.required)
-                restrictions ~= RequiredArg!(config, info, index);
+                restrictions ~= RequiredArg!(config, info, argIndex);
 
             static foreach(group; getRestrictionGroups!(TYPE, info.memberSymbol))
-                add!(config, group, index);
+            {{
+                auto groupIndex = (group.location in groupsByLocation);
+                if(groupIndex !is null)
+                    groups[*groupIndex].argIndex ~= argIndex;
+                else
+                {
+                    auto gIndex = groupsByLocation[group.location] = groups.length;
+                    groups ~= group;
+
+                    static if(group.required)
+                        restrictions ~= (in a) => RequiredAnyOf!(config, infos)(a, groups[gIndex].argIndex);
+
+                    static if(group.type == RestrictionGroup.Type.together)
+                        restrictions ~= (in a) => RequiredTogether!(config, infos)(a, groups[gIndex].argIndex);
+                    else static if(group.type == RestrictionGroup.Type.exclusive)
+                        restrictions ~= (in a) => MutuallyExclusive!(config, infos)(a, groups[gIndex].argIndex);
+                    else static assert(false);
+
+                    groups[gIndex].argIndex ~= argIndex;
+                }
+            }}
         }
     }
 
 
 
 
-    package Result check(in bool[size_t] cliArgs, in ArgumentInfo[] arguments) const
+    package Result check(in bool[size_t] cliArgs) const
     {
         foreach(restriction; restrictions)
         {
-            auto res = restriction(cliArgs, arguments);
+            auto res = restriction(cliArgs);
             if(!res)
                 return res;
         }
