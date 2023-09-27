@@ -6,9 +6,10 @@ import argparse.result;
 import argparse.api.argument: TrailingArguments, NamedArgument, NumberOfValues;
 import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
 import argparse.internal.arguments: Arguments, ArgumentInfo;
-import argparse.internal.commandinfo;
 import argparse.internal.argumentuda: ArgumentUDA, getArgumentUDA, getMemberArgumentUDA;
+import argparse.internal.commandinfo;
 import argparse.internal.help: HelpArgumentUDA;
+import argparse.internal.restriction;
 
 import std.typecons: Nullable, nullable;
 import std.traits: getSymbolsByUDA, hasUDA, getUDAs;
@@ -173,10 +174,13 @@ package struct Command
     }
 
 
-    string displayName() const { return info.displayNames[0]; }
     Arguments arguments;
 
+    Restrictions restrictions;
+
     CommandInfo info;
+
+    string displayName() const { return info.displayNames[0]; }
 
     SubCommands subCommands;
     Command delegate() pure nothrow [] subCommandCreate;
@@ -198,7 +202,7 @@ package struct Command
 
     Result checkRestrictions(in bool[size_t] cliArgs) const
     {
-        return arguments.checkRestrictions(cliArgs);
+        return restrictions.check(cliArgs);
     }
 }
 
@@ -266,14 +270,15 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
     import std.meta: Filter, staticMap, staticSort;
 
 
-    enum hasArgumentUDA(alias sym) = hasUDA!(__traits(getMember, COMMAND_TYPE, sym), ArgumentUDA);
-    enum getArgumentInfo(alias sym) = getMemberArgumentUDA!(config, COMMAND_TYPE, sym, void).info;//getUDAs!(__traits(getMember, COMMAND_TYPE, sym), ArgumentUDA)[0].info;
+    enum getArgumentInfo(alias sym) = getMemberArgumentUDA!(config, COMMAND_TYPE, sym, NamedArgument).info;
+
+    enum argumentInfos = staticMap!(getArgumentInfo, iterateArguments!COMMAND_TYPE);
 
     enum positional(ArgumentInfo info) = info.positional;
 
     enum cmp(ArgumentInfo info1, ArgumentInfo info2) = info1.position.get - info2.position.get;
 
-    enum positionalArgs = staticSort!(cmp, Filter!(positional, staticMap!(getArgumentInfo, Filter!(hasArgumentUDA, iterateArguments!COMMAND_TYPE))));
+    enum positionalArgs = staticSort!(cmp, Filter!(positional, argumentInfos));
 
     static foreach(int i, info; positionalArgs)
     {{
@@ -288,17 +293,15 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
             static assert(info.minValuesCount.get == info.maxValuesCount.get, "Positional argument with index "~pos.stringof~" in "~COMMAND_TYPE.stringof~" has variable number of values.");
     }}
 
-    Command res;
-
-    static foreach(symbol; iterateArguments!COMMAND_TYPE)
-    {{
-        enum uda = getMemberArgumentUDA!(config, COMMAND_TYPE, symbol, NamedArgument);
-
-        static foreach(name; uda.info.names)
+    static foreach(info; argumentInfos)
+        static foreach (name; info.names)
             static assert(name[0] != config.namedArgPrefix, "Argument name should not begin with '"~config.namedArgPrefix~"': "~name);
 
-        res.arguments.addArgument!(config, COMMAND_TYPE, symbol, uda.info);
-    }}
+
+    Command res;
+
+    res.arguments.add!(config, COMMAND_TYPE, [argumentInfos]);
+    res.restrictions.add!(config, COMMAND_TYPE, [argumentInfos]);
 
     res.parseFunctions = getArgumentParsingFunctions!(config, Command[], COMMAND_TYPE, iterateArguments!COMMAND_TYPE).map!(_ =>
         (const Command[] cmdStack, string argName, string[] argValue)
@@ -314,7 +317,7 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
     {{
         enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
 
-        res.arguments.addArgument!(config, COMMAND_TYPE, null, uda.info);
+        res.arguments.add!(config, COMMAND_TYPE, uda.info);
 
         res.parseFunctions ~=
             (const Command[] cmdStack, string argName, string[] argValue)
