@@ -51,7 +51,7 @@ unittest
 
     T receiver;
     auto a = createCommand!config(receiver);
-    assert(a.arguments.requiredGroup.arguments == [2,4]);
+    assert(a.arguments.requiredGroup.argIndex == [2,4]);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
 }
@@ -71,7 +71,7 @@ unittest
 
     T receiver;
     auto a = createCommand!config(receiver);
-    assert(a.arguments.requiredGroup.arguments == []);
+    assert(a.arguments.requiredGroup.argIndex == []);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
 }

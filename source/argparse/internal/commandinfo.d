@@ -57,7 +57,7 @@ package template getCommandInfo(Config config, COMMAND, string name = "")
     import std.traits: getUDAs;
 
     enum udas = getUDAs!(COMMAND, CommandInfo);
-    static assert(udas.length <= 1, COMMAND.stringof~" has more that one @Command UDA");
+    static assert(udas.length <= 1, COMMAND.stringof~" has multiple @Command UDA");
 
     static if(udas.length > 0)
         enum getCommandInfo = finalize!(config, udas[0]);

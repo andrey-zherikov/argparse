@@ -30,10 +30,27 @@ struct Result
 
     version(unittest)
     {
-        package bool isError(string text)
+        package bool isError(string[] text...)
         {
             import std.algorithm: canFind;
-            return (!cast(bool) this) && errorMsg.canFind(text);
+
+            if(cast(bool) this)
+                return false;   // success is not an error
+
+            foreach(s; text)
+                if(!errorMsg.canFind(s))
+                    return false;   // can't find required text
+
+            return true;    // all required text is found
         }
     }
+}
+
+unittest
+{
+    assert(!Result.Success.isError);
+
+    auto r = Result.Error("some text",",","more text");
+    assert(r.isError("some", "more"));
+    assert(!r.isError("other text"));
 }

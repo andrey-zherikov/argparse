@@ -564,7 +564,7 @@ private auto getSections(ARGUMENTS)(const ref Style style, ARGUMENTS arguments)
 
             sections[index].entries.match!(
                 (ref Item[] items) {
-                    items ~= group.arguments
+                    items ~= group.argIndex
                         .map!(_ => &args.arguments[_])
                         .filter!((const _) => showArg(*_))
                         .map!((const _) => getItem(*_))
