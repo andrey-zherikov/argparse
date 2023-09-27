@@ -45,3 +45,12 @@ struct Result
         }
     }
 }
+
+unittest
+{
+    assert(!Result.Success.isError);
+
+    auto r = Result.Error("some text",",","more text");
+    assert(r.isError("some", "more"));
+    assert(!r.isError("other text"));
+}
