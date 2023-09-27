@@ -98,7 +98,7 @@ if(!is(TYPE == void))
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private template getArgumentUDAImpl(Config config, MEMBERTYPE, string defaultName)
+private template getArgumentUDAImpl(Config config, MEMBERTYPE, string symbol)
 {
     auto finalize(alias initUDA)()
     {
@@ -112,20 +112,22 @@ private template getArgumentUDAImpl(Config config, MEMBERTYPE, string defaultNam
             uda.info.allowBooleanNegation = false;
 
         static if(initUDA.info.names.length == 0)
-            uda.info.names = [ defaultName ];
+            uda.info.names = [ symbol ];
 
         static if(initUDA.info.placeholder.length == 0)
         {
             static if(is(MEMBERTYPE == enum))
                 uda.info.placeholder = formatAllowedValues!(getEnumValues!MEMBERTYPE);
             else static if(initUDA.info.positional)
-                uda.info.placeholder = defaultName;
+                uda.info.placeholder = symbol;
             else
             {
                 import std.uni : toUpper;
-                uda.info.placeholder = defaultName.toUpper;
+                uda.info.placeholder = symbol.toUpper;
             }
         }
+
+        uda.info.memberSymbol = symbol;
 
         static if(initUDA.info.positional)
             uda.info.displayNames = [ uda.info.placeholder ];
@@ -146,14 +148,14 @@ private template getArgumentUDAImpl(Config config, MEMBERTYPE, string defaultNam
     }
 }
 
-package template getArgumentUDA(Config config, MEMBERTYPE, string defaultName, alias initUDA)
+package template getArgumentUDA(Config config, MEMBERTYPE, string symbol, alias initUDA)
 {
     static if(__traits(compiles, getUDAs!(MEMBERTYPE, ArgumentUDA)) && getUDAs!(MEMBERTYPE, ArgumentUDA).length == 1)
         enum uda = initUDA.addDefaults(getUDAs!(MEMBERTYPE, ArgumentUDA)[0]);
     else
         alias uda = initUDA;
 
-    enum getArgumentUDA = getArgumentUDAImpl!(config, MEMBERTYPE, defaultName).finalize!uda;
+    enum getArgumentUDA = getArgumentUDAImpl!(config, MEMBERTYPE, symbol).finalize!uda;
 }
 
 

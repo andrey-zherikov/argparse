@@ -312,7 +312,7 @@ private struct Parser
                     return res; // res contains suggestions
         }
 
-        return cmdStack[0].arguments.checkRestrictions(idxParsedArgs, config);
+        return cmdStack[0].checkRestrictions(idxParsedArgs, config);
     }
 
     void addCommand(Command cmd, bool addDefaultCommand)
