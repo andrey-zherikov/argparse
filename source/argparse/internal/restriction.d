@@ -225,20 +225,21 @@ package struct Restrictions
             static if(info.required)
                 checks ~= RequiredArg!(config, info, argIndex);
 
-            static foreach(group; getRestrictionGroups!(TYPE, info.memberSymbol))
-            {{
-                auto groupIndex = (group.location in groupsByLocation);
-                if(groupIndex !is null)
-                    groups[*groupIndex].argIndex ~= argIndex;
-                else
-                {
-                    auto gIndex = groupsByLocation[group.location] = groups.length;
-                    groups ~= group;
+            static if(info.memberSymbol)
+                static foreach(group; getRestrictionGroups!(TYPE, info.memberSymbol))
+                {{
+                    auto groupIndex = (group.location in groupsByLocation);
+                    if(groupIndex !is null)
+                        groups[*groupIndex].argIndex ~= argIndex;
+                    else
+                    {
+                        auto gIndex = groupsByLocation[group.location] = groups.length;
+                        groups ~= group;
 
-                    groups[gIndex].initialize!(config, infos);
-                    groups[gIndex].argIndex ~= argIndex;
-                }
-            }}
+                        groups[gIndex].initialize!(config, infos);
+                        groups[gIndex].argIndex ~= argIndex;
+                    }
+                }}
         }
     }
 

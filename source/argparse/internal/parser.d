@@ -99,16 +99,13 @@ private struct Parser(Config config)
         : Argument(NamedShort(config.convertCase(nameWithDash[1..$]), nameWithDash, value));
     }
 
-    auto parseArgument(bool completionMode, FOUNDARG)(const Command[] cmdStack, const ref Command cmd, FOUNDARG foundArg, string value, string nameWithDash)
+    auto parseArgument(FOUNDARG)(const Command[] cmdStack, const ref Command cmd, FOUNDARG foundArg, string value, string nameWithDash)
     {
         scope(exit) idxParsedArgs[foundArg.index] = true;
 
         auto rawValues = value !is null ? [value] : consumeValuesFromCLI(args, foundArg.arg.minValuesCount.get, foundArg.arg.maxValuesCount.get, config.namedArgPrefix);
 
-        static if(completionMode)
-            return cmd.completeArgument(cmdStack, foundArg.index, nameWithDash, rawValues);
-        else
-            return cmd.parseArgument(cmdStack, foundArg.index, nameWithDash, rawValues);
+        return cmd.parseArgument(cmdStack, foundArg.index, nameWithDash, rawValues);
     }
 
     auto parseSubCommand(const Command[] cmdStack1, const ref Command cmd)
@@ -163,7 +160,7 @@ private struct Parser(Config config)
         if(foundArg.arg is null)
             return parseSubCommand(cmdStack, cmd);
 
-        auto res = parseArgument!completionMode(cmdStack, cmd, foundArg, null, foundArg.arg.names[0]);
+        auto res = parseArgument(cmdStack, cmd, foundArg, null, foundArg.arg.names[0]);
         if(!res)
             return res;
 
@@ -195,7 +192,7 @@ private struct Parser(Config config)
             return Result.UnknownArgument;
 
         args.popFront();
-        return parseArgument!completionMode(cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);
+        return parseArgument(cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);
     }
 
     auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, NamedShort arg)
@@ -209,7 +206,7 @@ private struct Parser(Config config)
                 return Result.UnknownArgument;
 
             args.popFront();
-            return parseArgument!completionMode(cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);
+            return parseArgument(cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);
         }
 
         // Try to parse "-ABC..." where "A","B","C" are different single-letter arguments
@@ -239,7 +236,7 @@ private struct Parser(Config config)
                 arg.name = "";
             }
 
-            auto res = parseArgument!completionMode(cmdStack, cmd, foundArg, value, "-"~name);
+            auto res = parseArgument(cmdStack, cmd, foundArg, value, "-"~name);
             if(!res)
                 return res;
         }
