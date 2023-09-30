@@ -280,6 +280,7 @@ private struct SubCommand(TYPE)
 private template TypeTraits(Config config, TYPE)
 {
     import std.meta: AliasSeq, Filter, staticMap, staticSort;
+    import std.range: chain;
 
     /////////////////////////////////////////////////////////////////////
     /// Arguments
@@ -325,7 +326,7 @@ private template TypeTraits(Config config, TYPE)
     private enum positionalArgInfos = staticSort!(comparePosition, Filter!(positional, argumentInfos));
 
     static foreach(info; argumentInfos)
-        static foreach (name; info.names)
+        static foreach (name; chain(info.shortNames, info.longNames))
             static assert(name[0] != config.namedArgPrefix, TYPE.stringof~": Argument name should not begin with '"~config.namedArgPrefix~"': "~name);
 
     static foreach(int i, info; positionalArgInfos)

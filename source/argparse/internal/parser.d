@@ -160,7 +160,7 @@ private struct Parser(Config config)
         if(foundArg.arg is null)
             return parseSubCommand(cmdStack, cmd);
 
-        auto res = parseArgument(cmdStack, cmd, foundArg, null, foundArg.arg.names[0]);
+        auto res = parseArgument(cmdStack, cmd, foundArg, null, foundArg.arg.placeholder);
         if(!res)
             return res;
 

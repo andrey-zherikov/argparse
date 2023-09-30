@@ -12,7 +12,8 @@ import std.traits: getUDAs;
 
 package(argparse) struct ArgumentInfo
 {
-    string[] names;
+    string[] shortNames;
+    string[] longNames;
     string[] displayNames;    // names prefixed with Config.namedArgPrefix
 
     string displayName() const
@@ -170,7 +171,7 @@ package struct Arguments
 
     private void addArgumentImpl(Config config, TYPE, ArgumentInfo info)(ref Group group)
     {
-        static assert(info.names.length > 0);
+        static assert(info.shortNames.length + info.longNames.length > 0);
 
         immutable index = arguments.length;
 
@@ -182,11 +183,15 @@ package struct Arguments
             argsPositional[info.position.get] = index;
         }
         else
-            static foreach(name; info.names)
+        {
+            import std.range: chain;
+
+            static foreach(name; chain(info.shortNames, info.longNames))
             {
                 assert(!(name in argsNamed), "Duplicated argument name: "~name);
                 argsNamed[name] = index;
             }
+        }
 
         arguments ~= info;
         group.argIndex ~= index;

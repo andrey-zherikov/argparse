@@ -19,7 +19,8 @@ package(argparse) struct ArgumentUDA(ValueParser)
     {
         auto newInfo = info;
 
-        if(newInfo.names.length == 0) newInfo.names = uda.info.names;
+        if(newInfo.shortNames.length == 0) newInfo.shortNames = uda.info.shortNames;
+        if(newInfo.longNames.length == 0) newInfo.longNames = uda.info.longNames;
         if(newInfo.placeholder.length == 0) newInfo.placeholder = uda.info.placeholder;
         if(!newInfo.description.isSet()) newInfo.description = uda.info.description;
         if(newInfo.position.isNull()) newInfo.position = uda.info.position;
@@ -104,6 +105,7 @@ private template getArgumentUDAImpl(Config config, MEMBERTYPE, string symbol)
     {
         import std.array: array;
         import std.algorithm: map, each;
+        import std.range: chain;
         import std.conv: text;
 
         auto uda = initUDA;
@@ -111,8 +113,13 @@ private template getArgumentUDAImpl(Config config, MEMBERTYPE, string symbol)
         static if(!isBoolean!MEMBERTYPE)
             uda.info.allowBooleanNegation = false;
 
-        static if(initUDA.info.names.length == 0)
-            uda.info.names = [ symbol ];
+        static if(initUDA.info.shortNames.length == 0 && initUDA.info.longNames.length == 0)
+        {
+            static if(symbol.length == 1)
+                uda.info.shortNames = [ symbol ];
+            else
+                uda.info.longNames = [ symbol ];
+        }
 
         static if(initUDA.info.placeholder.length == 0)
         {
@@ -135,11 +142,14 @@ private template getArgumentUDAImpl(Config config, MEMBERTYPE, string symbol)
         {
             alias toDisplayName = _ => ( _.length == 1 ? text(config.namedArgPrefix, _) : text(config.namedArgPrefix, config.namedArgPrefix, _));
 
-            uda.info.displayNames = uda.info.names.map!toDisplayName.array;
+            uda.info.displayNames = chain(uda.info.shortNames, uda.info.longNames).map!toDisplayName.array;
         }
 
         static if(!config.caseSensitive)
-            uda.info.names.each!((ref _) => _ = config.convertCase(_));
+        {
+            uda.info.shortNames.each!((ref _) => _ = config.convertCase(_));
+            uda.info.longNames .each!((ref _) => _ = config.convertCase(_));
+        }
 
         static if(initUDA.info.minValuesCount.isNull) uda.info.minValuesCount = defaultValuesCount!MEMBERTYPE.min;
         static if(initUDA.info.maxValuesCount.isNull) uda.info.maxValuesCount = defaultValuesCount!MEMBERTYPE.max;
@@ -174,7 +184,7 @@ unittest
     auto res = getArgumentUDA!(Config.init, int, "default_name", createUDA()).info;
     assert(res == getArgumentUDAImpl!(Config.init, int, "default_name").finalize!(createUDA()).info);
     assert(!res.allowBooleanNegation);
-    assert(res.names == ["default_name"]);
+    assert(res.longNames == ["default_name"]);
     assert(res.displayNames == ["default_name"]);
     assert(res.minValuesCount == defaultValuesCount!int.min);
     assert(res.maxValuesCount == defaultValuesCount!int.max);
@@ -200,7 +210,7 @@ unittest
     auto res = getArgumentUDA!(Config.init, bool, "default_name", createUDA()).info;
     assert(res == getArgumentUDAImpl!(Config.init, bool, "default_name").finalize!(createUDA()).info);
     assert(res.allowBooleanNegation);
-    assert(res.names == ["default_name"]);
+    assert(res.longNames == ["default_name"]);
     assert(res.displayNames == ["--default_name"]);
     assert(res.minValuesCount == defaultValuesCount!bool.min);
     assert(res.maxValuesCount == defaultValuesCount!bool.max);
