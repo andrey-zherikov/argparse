@@ -351,6 +351,9 @@ private template TypeTraits(Config config, TYPE)
                 static assert(info.minValuesCount.get == info.maxValuesCount.get,
                     TYPE.stringof~": Positional argument with index "~pos.stringof~" has variable number of values.");
 
+            static if(i > 0 && info.required)
+                static assert(positionalArgInfos[i-1].required, TYPE.stringof~": Required positional argument with index "~pos.stringof~" comes after optional positional argument");
+
             return true;
         }());
 
