@@ -471,7 +471,7 @@ unittest
 
 private void createUsage(void delegate(string) sink, const ref Style style, string progName, const(Arguments)* arguments, bool hasSubCommands)
 {
-    import std.algorithm: filter, each, map;
+    import std.algorithm: filter, each;
 
     alias print = (r) => r
     .filter!((ref _) => !_.hideFromHelp)
@@ -484,9 +484,9 @@ private void createUsage(void delegate(string) sink, const ref Style style, stri
     sink(progName);
 
     // named args
-    print(arguments.arguments.filter!((ref _) => !_.positional));
+    print(arguments.namedArguments);
     // positional args
-    print(arguments.positionalArguments.map!(ref (_) => arguments.arguments[_]));
+    print(arguments.positionalArguments);
     // sub commands
     if(hasSubCommands)
         sink(style.subcommandName(" <command> [<args>]"));

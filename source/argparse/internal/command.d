@@ -174,7 +174,7 @@ package struct Command
         import std.array: array, join;
 
         // suggestions are names of all arguments and subcommands
-        auto suggestions_ = chain(arguments.arguments.map!(_ => _.displayNames).join, subCommands.byName.keys);
+        auto suggestions_ = chain(arguments.namedArguments.map!(_ => _.displayNames).join, subCommands.byName.keys);
 
         // empty prefix means that we need to provide all suggestions, otherwise they are filtered
         return prefix == "" ? suggestions_.array : suggestions_.filter!(_ => _.startsWith(prefix)).array;

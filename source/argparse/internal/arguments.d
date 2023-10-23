@@ -138,7 +138,19 @@ package struct Arguments
     Group requiredGroup = Group(requiredGroupName);
     Group optionalGroup = Group(optionalGroupName);
 
-    @property auto positionalArguments() const { return argsPositional; }
+    auto namedArguments() const
+    {
+        import std.algorithm: filter;
+
+        return arguments.filter!((ref _) => !_.positional);
+    }
+
+    auto positionalArguments() const
+    {
+        import std.algorithm: map;
+
+        return argsPositional.map!(ref (_) => arguments[_]);
+    }
 
 
     void add(Config config, TYPE, ArgumentInfo[] infos)()
