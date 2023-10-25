@@ -368,7 +368,7 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
 
     Command res;
 
-    res.arguments.add!(config, COMMAND_TYPE, [typeTraits.argumentInfos]);
+    res.arguments.add!(COMMAND_TYPE, [typeTraits.argumentInfos]);
     res.restrictions.add!(config, COMMAND_TYPE, [typeTraits.argumentInfos]);
 
     res.parseFunctions = getArgumentParsingFunctions!(config, Command[], COMMAND_TYPE, typeTraits.argumentUDAs).map!(_ =>

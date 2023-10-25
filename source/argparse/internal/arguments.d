@@ -153,46 +153,48 @@ package struct Arguments
     }
 
 
-    void add(Config config, TYPE, ArgumentInfo[] infos)()
+    void add(TYPE, ArgumentInfo[] infos)()
     {
-        static foreach(info; infos)
-            add!(config, TYPE, info);
+        info = infos;
+
+        static foreach(index, info; infos)
+            add!(TYPE, info, index);
     }
 
-    void add(Config config, TYPE, ArgumentInfo info)()
+    private void add(TYPE, ArgumentInfo info, size_t argIndex)()
     {
+        alias addArgument = addArgumentImpl!(TYPE, info, argIndex);
+
         static if(hasMemberGroupUDA!(TYPE, info.memberSymbol))
         {
             enum group = getMemberGroupUDA!(TYPE, info.memberSymbol);
 
             auto index = (group.name in groupsByName);
             if(index !is null)
-                addArgumentImpl!(config, TYPE, info)(userGroups[*index]);
+                addArgument(userGroups[*index]);
             else
             {
                 groupsByName[group.name] = userGroups.length;
                 userGroups ~= group;
-                addArgumentImpl!(config, TYPE, info)(userGroups[$-1]);
+                addArgument(userGroups[$-1]);
             }
         }
         else static if(info.required)
-            addArgumentImpl!(config, TYPE, info)(requiredGroup);
+            addArgument(requiredGroup);
         else
-            addArgumentImpl!(config, TYPE, info)(optionalGroup);
+            addArgument(optionalGroup);
     }
 
-    private void addArgumentImpl(Config config, TYPE, ArgumentInfo info)(ref Group group)
+    private void addArgumentImpl(TYPE, ArgumentInfo info, size_t argIndex)(ref Group group)
     {
         static assert(info.shortNames.length + info.longNames.length > 0);
-
-        immutable index = this.info.length;
 
         static if(info.positional)
         {
             if(argsPositional.length <= info.position.get)
                 argsPositional.length = info.position.get + 1;
 
-            argsPositional[info.position.get] = index;
+            argsPositional[info.position.get] = argIndex;
         }
         else
         {
@@ -201,12 +203,11 @@ package struct Arguments
             static foreach(name; chain(info.shortNames, info.longNames))
             {
                 assert(!(name in argsNamed), "Duplicated argument name: "~name);
-                argsNamed[name] = index;
+                argsNamed[name] = argIndex;
             }
         }
 
-        this.info ~= info;
-        group.argIndex ~= index;
+        group.argIndex ~= argIndex;
     }
 
 
