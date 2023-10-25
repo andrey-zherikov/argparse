@@ -122,7 +122,7 @@ private enum hasMemberGroupUDA(TYPE, alias symbol) = __traits(compiles, { enum g
 
 package struct Arguments
 {
-    ArgumentInfo[] arguments;
+    ArgumentInfo[] info;
 
     // named arguments
     size_t[string] argsNamed;
@@ -142,14 +142,14 @@ package struct Arguments
     {
         import std.algorithm: filter;
 
-        return arguments.filter!((ref _) => !_.positional);
+        return info.filter!((ref _) => !_.positional);
     }
 
     auto positionalArguments() const
     {
         import std.algorithm: map;
 
-        return argsPositional.map!(ref (_) => arguments[_]);
+        return argsPositional.map!(ref (_) => info[_]);
     }
 
 
@@ -185,7 +185,7 @@ package struct Arguments
     {
         static assert(info.shortNames.length + info.longNames.length > 0);
 
-        immutable index = arguments.length;
+        immutable index = this.info.length;
 
         static if(info.positional)
         {
@@ -205,7 +205,7 @@ package struct Arguments
             }
         }
 
-        arguments ~= info;
+        this.info ~= info;
         group.argIndex ~= index;
     }
 
@@ -219,7 +219,7 @@ package struct Arguments
 
     FindResult findArgumentImpl(const size_t* pIndex) const
     {
-        return pIndex ? FindResult(*pIndex, &arguments[*pIndex]) : FindResult.init;
+        return pIndex ? FindResult(*pIndex, &info[*pIndex]) : FindResult.init;
     }
 
     auto findPositionalArgument(size_t position) const
