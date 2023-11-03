@@ -188,8 +188,8 @@ private struct Parser(Config config)
         if(foundArg.arg is null)
             return Result.UnknownArgument;
 
-        if(cmd.isDefault && foundArg.arg.ignoreInDefaultCommand)
-            return Result.UnknownArgument;
+        //if(cmd.isDefault && foundArg.arg.ignoreInDefaultCommand)
+        //    return Result.UnknownArgument;
 
         args.popFront();
         return parseArgument(cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);
@@ -202,8 +202,8 @@ private struct Parser(Config config)
         auto foundArg = cmd.findNamedArgument(arg.name);
         if(foundArg.arg !is null)
         {
-            if(cmd.isDefault && foundArg.arg.ignoreInDefaultCommand)
-                return Result.UnknownArgument;
+            //if(cmd.isDefault && foundArg.arg.ignoreInDefaultCommand)
+            //    return Result.UnknownArgument;
 
             args.popFront();
             return parseArgument(cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);

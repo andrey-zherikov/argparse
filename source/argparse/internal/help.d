@@ -152,7 +152,6 @@ package struct HelpArgumentUDA
         info.minValuesCount = 0;
         info.maxValuesCount = 0;
         info.allowBooleanNegation = false;
-        info.ignoreInDefaultCommand = true;
         return info;
     }();
 
@@ -181,7 +180,6 @@ unittest
     assert(HelpArgumentUDA.init.info.minValuesCount == 0);
     assert(HelpArgumentUDA.init.info.maxValuesCount == 0);
     assert(!HelpArgumentUDA.init.info.allowBooleanNegation);
-    assert(HelpArgumentUDA.init.info.ignoreInDefaultCommand);
 }
 
 private bool isHelpArgument(string name)

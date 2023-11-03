@@ -59,7 +59,6 @@ package(argparse) struct ArgumentInfo
     }
 
     bool allowBooleanNegation = true;
-    bool ignoreInDefaultCommand;
 }
 
 unittest
