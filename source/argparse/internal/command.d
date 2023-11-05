@@ -41,11 +41,14 @@ package struct SubCommands
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private alias ParseFunction(COMMAND_STACK, RECEIVER) = Result delegate(const COMMAND_STACK cmdStack, ref RECEIVER receiver, string argName, string[] rawValues);
-
-private alias ParsingArgumentFunction(Config config, COMMAND_STACK, RECEIVER, alias symbol, alias uda) =
-    delegate(const COMMAND_STACK cmdStack, ref RECEIVER receiver, string argName, string[] rawValues)
-    {
+private Result ArgumentParsingFunction(Config config, alias uda, RECEIVER)(const Command[] cmdStack,
+                                                                           ref RECEIVER receiver,
+                                                                           string argName,
+                                                                           string[] rawValues)
+{
+    static if(is(typeof(uda.parse)))
+        return uda.parse!config(cmdStack, receiver, argName, rawValues);
+    else
         try
         {
             auto res = uda.info.checkValuesCount!config(argName, rawValues.length);
@@ -66,11 +69,15 @@ private alias ParsingArgumentFunction(Config config, COMMAND_STACK, RECEIVER, al
         {
             return Result.Error("Argument '", config.styling.argumentName(argName), ": ", e.msg);
         }
-    };
+}
 
-private alias CompletingArgumentFunction(Config config, COMMAND_STACK, RECEIVER, alias symbol, alias uda) =
-    delegate(const COMMAND_STACK cmdStack, ref RECEIVER receiver, string argName, string[] rawValues)
-        => Result.Success;
+private Result ArgumentCompleteFunction(Config config, alias uda, RECEIVER)(const Command[] cmdStack,
+                                                                              ref RECEIVER receiver,
+                                                                              string argName,
+                                                                              string[] rawValues)
+{
+    return Result.Success;
+}
 
 
 unittest
@@ -83,7 +90,7 @@ unittest
 
         enum uda = getMemberArgumentUDA!(Config.init, TYPE, "a", NamedArgument("arg-name").NumberOfValues(1));
 
-        return ParsingArgumentFunction!(Config.init, string[], TYPE, "a", uda)([], t, "arg-name", values);
+        return ArgumentParsingFunction!(Config.init, uda)([], t, "arg-name", values);
     }
 
     assert(test!T(["raw-value"]));
@@ -101,66 +108,54 @@ unittest
 
     enum uda = getMemberArgumentUDA!(Config.init, T, "func", NamedArgument("arg-name").NumberOfValues(0));
 
-    auto res = ParsingArgumentFunction!(Config.init, string[], T, "func", uda)([], t, "arg-name", []);
+    auto res = ArgumentParsingFunction!(Config.init, uda)([], t, "arg-name", []);
 
     assert(res.isError(Config.init.styling.argumentName("arg-name")~": My Message."));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto getArgumentParsingFunctions(Config config, COMMAND_STACK, TYPE, udas...)()
-{
-    ParseFunction!(COMMAND_STACK, TYPE)[] res;
-
-    static foreach(uda; udas)
-    {
-        static if(is(typeof(uda.parse)))
-            res ~= (const COMMAND_STACK cmdStack, ref TYPE receiver, string argName, string[] rawValues)
-                    => uda.parse!config(cmdStack, receiver, argName, rawValues);
-        else
-            res ~= ParsingArgumentFunction!(config, COMMAND_STACK, TYPE, uda.info.memberSymbol, uda);
-    }
-
-    return res;
-}
-
-private auto getArgumentCompletionFunctions(Config config, COMMAND_STACK, TYPE, udas...)()
-{
-    ParseFunction!(COMMAND_STACK, TYPE)[] res;
-
-    static foreach(uda; udas)
-        res ~= CompletingArgumentFunction!(config, COMMAND_STACK, TYPE, uda.info.memberSymbol, uda);
-
-    return res;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 package struct Command
 {
-    bool isDefault;
+    alias Parse = Result delegate(const Command[] cmdStack, string argName, string[] argValue);
 
-    Arguments.FindResult findNamedArgument(string name) const
+    struct Argument
     {
-        return arguments.findNamedArgument(name);
-    }
-    Arguments.FindResult findPositionalArgument(size_t position) const
-    {
-        return arguments.findPositionalArgument(position);
+        size_t index = size_t.max;
+
+        const(ArgumentInfo)* info;
+
+        Parse parse;
+        Parse complete;
+
+
+        bool opCast(T : bool)() const
+        {
+            return info !is null;
+        }
     }
 
-    alias ParseFunction = Result delegate(const Command[] cmdStack, string argName, string[] argValue);
-    ParseFunction[] parseFunctions;
-    ParseFunction[] completeFunctions;
+    private Parse[] parseFuncs;
+    private Parse[] completeFuncs;
 
-    Result parseArgument(const Command[] cmdStack, size_t argIndex, string argName, string[] argValue) const
+    auto findNamedArgument(string name) const
     {
-        return parseFunctions[argIndex](cmdStack, argName, argValue);
+        auto res = arguments.findNamedArgument(name);
+        if(!res.arg)
+            return Argument.init;
+
+        return Argument(res.index, res.arg, parseFuncs[res.index], completeFuncs[res.index]);
     }
-    Result completeArgument(const Command[] cmdStack, size_t argIndex, string argName, string[] argValue) const
+
+    auto findPositionalArgument(size_t position) const
     {
-        return completeFunctions[argIndex](cmdStack, argName, argValue);
+        auto res = arguments.findPositionalArgument(position);
+        if(!res.arg)
+            return Argument.init;
+
+        return Argument(res.index, res.arg, parseFuncs[res.index], completeFuncs[res.index]);
     }
+
 
     void delegate(ref string[] args) setTrailingArgs;
 
@@ -193,18 +188,13 @@ package struct Command
     Command delegate() [] subCommandCreate;
     Command delegate() defaultSubCommand;
 
-    auto getDefaultSubCommand(const Command[] cmdStack) const
-    {
-        return defaultSubCommand is null ? Nullable!Command.init : nullable(defaultSubCommand());
-    }
-
-    auto getSubCommand(const Command[] cmdStack, string name) const
+    auto getSubCommand(string name) const
     {
         auto pIndex = name in subCommands.byName;
         if(pIndex is null)
-            return Nullable!Command.init;
+            return null;
 
-        return nullable(subCommandCreate[*pIndex]());
+        return subCommandCreate[*pIndex];
     }
 
     Result checkRestrictions(in bool[size_t] cliArgs) const
@@ -359,8 +349,9 @@ private template TypeTraits(Config config, TYPE)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo info = getCommandInfo!(config, COMMAND_TYPE))(ref COMMAND_TYPE receiver)
+package(argparse) Command createCommand(Config config, CommandInfo info, COMMAND_TYPE)(ref COMMAND_TYPE receiver)
 {
+    import std.meta: staticMap;
     import std.algorithm: map;
     import std.array: array;
 
@@ -368,36 +359,37 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
 
     Command res;
 
+    res.info = info;
     res.arguments.add!(COMMAND_TYPE, [typeTraits.argumentInfos]);
     res.restrictions.add!(config, COMMAND_TYPE, [typeTraits.argumentInfos]);
 
-    res.parseFunctions = getArgumentParsingFunctions!(config, Command[], COMMAND_TYPE, typeTraits.argumentUDAs).map!(_ =>
-        (const Command[] cmdStack, string argName, string[] argValue)
-            => _(cmdStack, receiver, argName, argValue)
-        ).array;
+    enum getArgumentParsingFunction(alias uda) =
+         (const Command[] cmdStack, string argName, string[] argValue)
+         => ArgumentParsingFunction!(config, uda)(cmdStack, receiver, argName, argValue);
 
-    res.completeFunctions = getArgumentCompletionFunctions!(config, Command[], COMMAND_TYPE, typeTraits.argumentUDAs).map!(_ =>
+    res.parseFuncs = [staticMap!(getArgumentParsingFunction, typeTraits.argumentUDAs)];
+
+    enum getArgumentCompleteFunction(alias uda) =
         (const Command[] cmdStack, string argName, string[] argValue)
-            => _(cmdStack, receiver, argName, argValue)
-        ).array;
+        => ArgumentCompleteFunction!(config, uda)(cmdStack, receiver, argName, argValue);
+
+    res.completeFuncs = [staticMap!(getArgumentCompleteFunction, typeTraits.argumentUDAs)];
 
     res.setTrailingArgs = (ref string[] args)
     {
         .setTrailingArgs(receiver, args);
     };
 
-    res.info = info;
-
     res.subCommands.add([typeTraits.subCommandInfos]);
 
     static foreach(subcmd; typeTraits.subCommands)
     {{
-        auto dg = () => ParsingSubCommandCreate!(config, subcmd.Type, subcmd.info, COMMAND_TYPE, typeTraits.subCommandSymbol)(receiver);
+        auto createFunc = () => ParsingSubCommandCreate!(config, subcmd.Type, subcmd.info, COMMAND_TYPE, typeTraits.subCommandSymbol)(receiver);
 
         static if(isDefaultCommand!(subcmd.Type))
-            res.defaultSubCommand = dg;
+            res.defaultSubCommand = createFunc;
 
-        res.subCommandCreate ~= dg;
+        res.subCommandCreate ~= createFunc;
     }}
 
     return res;
@@ -409,12 +401,8 @@ private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo in
 {
     auto target = &__traits(getMember, receiver, symbol);
 
-    alias create = (ref COMMAND_TYPE actualTarget)
-    {
-        auto cmd = createCommand!(config, RemoveDefaultAttribute!COMMAND_TYPE, info)(actualTarget);
-        cmd.isDefault = isDefaultCommand!COMMAND_TYPE;
-        return cmd;
-    };
+        alias create = (ref COMMAND_TYPE actualTarget) =>
+            createCommand!(config, info, RemoveDefaultAttribute!COMMAND_TYPE)(actualTarget);
 
     static if(typeof(*target).Types.length == 1)
         return (*target).match!create;
