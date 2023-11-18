@@ -31,7 +31,7 @@ struct Advanced
     @NamedArgument
     Enum choice;
 
-    // Custom types can also be used with custon parsing function
+    // Custom types can also be used with custom parsing function
     struct CustomType {
         double d;
     }

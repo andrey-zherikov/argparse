@@ -10,7 +10,7 @@ struct Basic
         // --number argument
         int number;
 
-        // --boolean argument
+        // --boolean
         bool boolean;
 
     // Argument can have default value if it's not specified in command line
@@ -28,7 +28,7 @@ struct Basic
         int[] array;
 
     // Callback with no args (flag)
-        // --callback argument
+        // --callback
         void callback() {}
 
     // Callback with single value
