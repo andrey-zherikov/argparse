@@ -3,7 +3,7 @@
 
 # Parser for command-line arguments
 
-`argparse` is a self-contained flexible utility to parse command line arguments.
+`argparse` is a self-contained flexible utility to parse command-line arguments.
 
 ## Features
 
@@ -11,14 +11,14 @@
     - Automatic type conversion of the value.
     - Required by default, can be marked as optional.
 - [Named arguments](#named-arguments):
-    - Multiple names are supported including short (`-v`) and long (`--verbose`) ones.
+    - Multiple names are supported, including short (`-v`) and long (`--verbose`) ones.
     - [Case-sensitive/-insensitive parsing.](#case-sensitivity)
     - [Bundling of short names](#bundling-of-single-letter-arguments) (`-vvv` is same as `-v -v -v`).
     - [Equals sign is accepted](#assign-character) (`-v=debug`, `--verbose=debug`).
     - Automatic type conversion of the value.
     - Optional by default, can be marked as required.
 - [Support different types of destination data member](#supported-types):
-    - Scalar (e.g. `int`, `float`, `bool`).
+    - Scalar (e.g., `int`, `float`, `bool`).
     - String arguments.
     - Enum arguments.
     - Array arguments.
@@ -28,17 +28,17 @@
     - Mixin to inject standard `main` function.
     - Parsing of known arguments only (returning not recognized ones).
     - Enforcing that there are no unknown arguments provided.
-- [Shell completion](#shell-completion)
-- [Options terminator](#trailing-arguments) (e.g. parsing up to `--` leaving any argument specified after it).
+- [Shell completion](#shell-completion).
+- [Options terminator](#trailing-arguments) (e.g., parsing up to `--` leaving any argument specified after it).
 - [Arguments groups](#argument-dependencies).
 - [Subcommands](#commands).
 - [Fully customizable parsing](#argument-parsing-customization):
-    - Raw (`string`) data validation (i.e. before parsing).
+    - Raw (`string`) data validation (i.e., before parsing).
     - Custom conversion of argument value (`string` -> any `destination type`).
-    - Validation of parsed data (i.e. after conversion to `destination type`).
+    - Validation of parsed data (i.e., after conversion to `destination type`).
     - Custom action on parsed data (doing something different from storing the parsed value in a member of destination
       object).
-- [ANSI colors and styles](#ansi-colors-and-styles)
+- [ANSI colors and styles](#ansi-colors-and-styles).
 - [Built-in reporting of error happened during argument parsing](#error-handling).
 - [Built-in help generation](#help-generation).
 
@@ -56,11 +56,11 @@ struct Basic
     // Basic data types are supported:
         // --name argument
         string name;
-    
+
         // --number argument
         int number;
-    
-        // --boolean argument
+
+        // --boolean
         bool boolean;
 
     // Argument can have default value if it's not specified in command line
@@ -78,7 +78,7 @@ struct Basic
         int[] array;
 
     // Callback with no args (flag)
-        // --callback argument
+        // --callback
         void callback() {}
 
     // Callback with single value
@@ -95,7 +95,7 @@ mixin CLI!Basic.main!((args)
 {
     // 'args' has 'Basic' type
     static assert(is(typeof(args) == Basic));
-  
+
     // do whatever you need
     import std.stdio: writeln;
     args.writeln;
@@ -103,25 +103,22 @@ mixin CLI!Basic.main!((args)
 });
 ```
 
-If you run the program above with `-h` argument then you'll see the following output:
+If you run the program above with `-h` argument, then you’ll see the following output:
 
 ```
-usage: hello_world [--name NAME] [--number NUMBER] [--boolean [BOOLEAN]] [--unused UNUSED] [--choice {unset,foo,boo}] [--array ARRAY ...] [--callback] [--callback1 CALLBACK1] [--callback2 [CALLBACK2 ...]] [-h]
+Usage: hello_world [--name NAME] [--number NUMBER] [--boolean] [--unused UNUSED] [--choice {unset,foo,boo}] [--array ARRAY ...] [--callback] [--callback1 CALLBACK1] [--callback2 [CALLBACK2 ...]] [-h]
 
 Optional arguments:
   --name NAME
   --number NUMBER
-  --boolean [BOOLEAN]
+  --boolean
   --unused UNUSED
   --choice {unset,foo,boo}
-
   --array ARRAY ...
   --callback
   --callback1 CALLBACK1
-
   --callback2 [CALLBACK2 ...]
-
-  -h, --help              Show this help message and exit
+  -h, --help           Show this help message and exit
 ```
 
 For more sophisticated CLI usage, `argparse` provides few UDAs:
@@ -144,7 +141,7 @@ struct Advanced
     // Named argument can have custom or multiple names
         @NamedArgument("apple","appl")
         int apple;
-    
+
         @NamedArgument(["b","banana","ban"])
         int banana;
 }
@@ -166,10 +163,10 @@ mixin CLI!Advanced.main!((args, unparsed)
 });
 ```
 
-If you run it with `-h` argument then you'll see the following:
+If you run it with `-h` argument, then you’ll see the following:
 
 ```
-usage: hello_world name [--unused UNUSED] [--number NUMBER] [--boolean [BOOLEAN]] [--apple APPLE] [-b BANANA] [-h]
+Usage: hello_world [--unused UNUSED] [--number NUMBER] [--boolean] [--apple APPLE] [-b BANANA] [-h] name
 
 Required arguments:
   name
@@ -177,29 +174,28 @@ Required arguments:
 Optional arguments:
   --unused UNUSED
   --number NUMBER
-  --boolean [BOOLEAN]
-  --apple APPLE
+  --boolean
+  --apple APPLE, --appl APPLE
   -b BANANA, --banana BANANA, --ban BANANA
-
-  -h, --help              Show this help message and exit
+  -h, --help         Show this help message and exit
 ```
 
 
 ## Calling the parser
 
 `argparse` provides `CLI` template to call the parser covering different use cases. It has the following signatures:
-- `template CLI(Config config, COMMAND)` - this is main template that provides multiple API (see below) for all
+- `template CLI(Config config, COMMAND)`—this is main template that provides multiple API (see below) for all
   supported use cases.
-- `template CLI(Config config, COMMANDS...)` - convenience wrapper of the previous template that provides `main`
+- `template CLI(Config config, COMMANDS...)`—convenience wrapper of the previous template that provides `main`
   template mixin only for the simplest use case with subcommands. See corresponding [section](#commands) for details
   about subcommands.
-- `alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS)` - alias provided for convenience that allows using default
-  `Config`, i.e. `config = Config.init`.
+- `alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS)`—alias provided for convenience that allows using default
+  `Config`, i.e., `config = Config.init`.
 
 ### Wrapper for main function
 
 The recommended and most convenient way to use `argparse` is through `CLI!(...).main(alias newMain)` mixin template.
-It declares the standard `main` function that parses command line arguments and calls provided `newMain` function with
+It declares the standard `main` function that parses command-line arguments and calls provided `newMain` function with
 an object that contains parsed arguments.
 
 `newMain` function must satisfy these requirements:
@@ -210,7 +206,7 @@ an object that contains parsed arguments.
   compile-time checking of the type of the first parameter (see examples below for details).
 - Optionally `newMain` function can take a `string[]` parameter as a second argument. Providing such a function will
   mean that `argparse` will parse known arguments only and all unknown ones will be passed as a second parameter to
-  `newMain` function. If `newMain` function doesn't have such parameter then `argparse` will error out if there is an
+  `newMain` function. If `newMain` function doesn’t have such parameter, then `argparse` will error out if there is an
   unknown argument provided in command line.
 - Optionally `newMain` can return a result that can be cast to `int`. In this case, this result will be returned from
   standard `main` function.
@@ -254,9 +250,9 @@ mixin CLI!(cmd1, cmd2).main!((args, unparsed)
         writeln("cmd1: ", args);
     else static if(is(typeof(args) == cmd2))
         writeln("cmd2: ", args);
-    else 
+    else
         static assert(false); // this would never happen
-    
+
     // unparsed arguments has 'string[]' type
     static assert(is(typeof(unparsed) == string[]));
 
@@ -266,23 +262,23 @@ mixin CLI!(cmd1, cmd2).main!((args, unparsed)
 
 ### Providing a new `main` function without wrapping standard `main`
 
-If wrapping of standard `main` function doesn't fit your needs (e.g. you need to do some initialization before parsing
-the command line) then you can use `CLI!(...).parseArgs` function:
+If wrapping of standard `main` function doesn’t fit your needs (e.g., you need to do some initialization before parsing
+the command line), then you can use `CLI!(...).parseArgs` function:
 
 `int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)`
 
 **Parameters:**
 
-- `newMain` - function that's called with object of type `COMMAND` as a first parameter filled with the data parsed from
+- `newMain`—function that’s called with object of type `COMMAND` as a first parameter filled with the data parsed from
   command line; optionally it can take `string[]` as a second parameter which will contain unknown arguments
   (see [Wrapper for main function](#wrapper-for-main-function) section for details).
-- `args` - raw command line arguments (excluding `argv[0]` - first command line argument in `main` function).
-- `initialValue` - initial value for the object passed to `newMain` function.
+- `args`—raw command-line arguments (excluding `argv[0]`—first command-line argument in `main` function).
+- `initialValue`—initial value for the object passed to `newMain` function.
 
 **Return value:**
 
-If there is an error happened during the parsing then non-zero value is returned. In case of no error, if `newMain`
-function returns a value that can be cast to `int` then this value is returned or `0` otherwise.
+If there is an error happened during the parsing, then non-zero value is returned. In case of no error, if `newMain`
+function returns a value that can be cast to `int`, then this value is returned, or `0` otherwise.
 
 **Usage example:**
 
@@ -317,8 +313,8 @@ to an object that receives the values of command line arguments:
 
 **Parameters:**
 
-- `receiver` - object that is populated with parsed values.
-- `args` - raw command line arguments (excluding `argv[0]` - first command line argument in `main` function).
+- `receiver`—object that is populated with parsed values.
+- `args`—raw command-line arguments (excluding `argv[0]`—first command-line argument in `main` function).
 
 **Return value:**
 
@@ -340,9 +336,9 @@ int main(string[] argv)
 
     if(!CLI!COMMAND.parseArgs(cmd, argv[1..$]))
       return 1; // parsing failure
-      
+
     // Do whatever is needed
-    
+
     return 0;
 }
 ```
@@ -358,9 +354,9 @@ that it does not produce an error when unknown arguments are present. It has the
 
   **Parameters:**
 
-  - `receiver` - the object that's populated with parsed values.
-  - `args` - raw command line arguments (excluding `argv[0]` - first command line argument in `main` function).
-  - `unrecognizedArgs` - raw command line arguments that were not parsed.
+  - `receiver`—the object that’s populated with parsed values.
+  - `args`—raw command-line arguments (excluding `argv[0]`—first command-line argument in `main` function).
+  - `unrecognizedArgs`—raw command-line arguments that were not parsed.
 
   **Return value:**
 
@@ -370,9 +366,9 @@ that it does not produce an error when unknown arguments are present. It has the
 
   **Parameters:**
 
-  - `receiver` - the object that's populated with parsed values.
-  - `args` - raw command line arguments that are modified to have parsed arguments removed (excluding `argv[0]` - first
-    command line argument in `main` function).
+  - `receiver`—the object that’s populated with parsed values.
+  - `args`—raw command-line arguments that are modified to have parsed arguments removed (excluding `argv[0]`—first
+    command-line argument in `main` function).
 
   **Return value:**
 
@@ -389,7 +385,7 @@ struct T
 auto args = [ "-a", "A", "-c", "C" ];
 
 T result;
-assert(CLI!T.parseKnownArgs!(result, args));
+assert(CLI!T.parseKnownArgs(result, args));
 assert(result == T("A"));
 assert(args == ["-c", "C"]);
 ```
@@ -397,19 +393,19 @@ assert(args == ["-c", "C"]);
 
 ## Shell completion
 
-`argparse` supports tab completion of last argument for certain shells (see below). However this support is limited to the names of arguments and
-subcommands.
+`argparse` supports tab completion of last argument for certain shells (see below). However, this support is limited
+to the names of arguments and subcommands.
 
 ### Wrappers for main function
 
 If you are using `CLI!(...).main(alias newMain)` mixin template in your code then you can easily build a completer
 (program that provides completion) by defining `argparse_completion` version (`-version=argparse_completion` option of
-`dmd`). Don't forget to use different file name for completer than your main program (`-of` option in `dmd`). No other
-changes are necessary to generate completer but you should consider minimizing the set of imported modules when
+`dmd`). Don’t forget to use different file name for completer than your main program (`-of` option in `dmd`). No other
+changes are necessary to generate completer, but you should consider minimizing the set of imported modules when
 `argparse_completion` version is defined. For example, you can put all imports into your main function that is passed to
-`CLI!(...).main(alias newMain)` - `newMain` parameter is not used in completer.
+`CLI!(...).main(alias newMain)`—`newMain` parameter is not used in completer.
 
-If you prefer having separate main module for completer then you can use `CLI!(...).completeMain` mixin template:
+If you prefer having separate main module for completer, then you can use `CLI!(...).completeMain` mixin template:
 ```d
 mixin CLI!(...).completeMain;
 ```
@@ -417,20 +413,20 @@ mixin CLI!(...).completeMain;
 In case if you prefer to have your own `main` function and would like to call completer by yourself, you can use
 `int CLI!(...).complete(string[] args)` function. This function executes the completer by parsing provided `args` (note
 that you should remove the first argument from `argv` passed to `main` function). The returned value is meant to be
-returned from `main` function having zero value in case of success.
+returned from `main` function, having zero value in case of success.
 
 ### Low level completion
 
 In case if none of the above methods is suitable, `argparse` provides `string[] CLI!(...).completeArgs(string[] args)`
 function. It takes arguments that should be completed and returns all possible completions.
 
-`completeArgs` function expects to receive all command line arguments (excluding `argv[0]` - first command line argument in `main`
+`completeArgs` function expects to receive all command-line arguments (excluding `argv[0]`—first command-line argument in `main`
 function) in order to provide completions correctly (set of available arguments depends on subcommand). This function
 supports two workflows:
-- If the last argument in `args` is empty and it's not supposed to be a value for a command line argument, then all
+- If the last argument in `args` is empty and it’s not supposed to be a value for a command-line argument, then all
   available arguments and subcommands (if any) are returned.
-- If the last argument in `args` is not empty and it's not supposed to be a value for a command line argument, then only
-  those arguments and subcommands (if any) are returned that starts with the same text as the last argument in `args`.
+- If the last argument in `args` is not empty and it’s not supposed to be a value for a command-line argument, then only
+  those arguments and subcommands (if any) are returned that start with the same text as the last argument in `args`.
 
 For example, if there are `--foo`, `--bar` and `--baz` arguments available, then:
 - Completion for `args=[""]` will be `["--foo", "--bar", "--baz"]`.
@@ -462,7 +458,7 @@ Either `--bash`, `--zsh`, `--tcsh` or `--fish` is expected.
 
 As a result, completer prints the script to setup completion for requested shell into standard output (`stdout`)
 which should be executed. To make this more streamlined, you can execute the output inside the current shell or to do
-this during shell initialization (e.g. in `.bashrc` for bash). To help doing so, completer also prints sourcing
+this during shell initialization (e.g., in `.bashrc` for bash). To help doing so, completer also prints sourcing
 recommendation to standard output as a comment.
 
 Example of completer output for `<completer> init --bash --commandName mytool --completerPath /path/to/completer` arguments:
@@ -477,12 +473,12 @@ initialization/config file to source the output of `init` command.
 
 #### Completing of the command line
 
-Argument completion is done by `complete` subcommand (it's default one). It accepts the following arguments (you can get them by running `<completer> complete --help`):
+Argument completion is done by `complete` subcommand (it’s default one). It accepts the following arguments (you can get them by running `<completer> complete --help`):
 - `--bash`: provide completion for bash.
 - `--tcsh`: provide completion for tcsh.
 - `--fish`: provide completion for fish.
 
-As a result, completer prints all available completions, one per line assuming that it's called according to the output
+As a result, completer prints all available completions, one per line, assuming that it’s called according to the output
 of `init` command.
 
 ## Argument declaration
@@ -508,11 +504,11 @@ Parameters of `PositionalArgument` UDA:
 | #   | Name       | Type     | Optional/<br/>Required | Description                                                                                                 |
 |-----|------------|----------|------------------------|-------------------------------------------------------------------------------------------------------------|
 | 1   | `position` | `uint`   | required               | Zero-based unsigned position of the argument.                                                               |
-| 2   | `name`     | `string` | optional               | Name of this argument that is shown in help text.<br/>If not provided then the name of data member is used. |
+| 2   | `name`     | `string` | optional               | Name of this argument that is shown in help text.<br/>If not provided, then the name of data member is used. |
 
 ### Named arguments
 
-As an opposite to positional there can be named arguments (they are also called as flags or options). They can be
+As an opposite to positional, there can be named arguments (they are also called as flags or options). They can be
 declared using `NamedArgument` UDA:
 
 ```d
@@ -538,17 +534,17 @@ Parameters of `NamedArgument` UDA:
 Named arguments might have multiple names, so they should be specified either as an array of strings or as a list of
 parameters in `NamedArgument` UDA. Argument names can be either single-letter (called as short options)
 or multi-letter (called as long options). Both cases are fully supported with one caveat:
-if a single-letter argument is used with a double-dash (e.g. `--n`) in command line then it behaves the same as a
-multi-letter option. When an argument is used with a single dash then it is treated as a single-letter argument.
+if a single-letter argument is used with a double dash (e.g., `--n`) in command line, then it behaves the same as a
+multi-letter option. When an argument is used with a single dash, then it is treated as a single-letter argument.
 
 The following usages of the argument in the command line are equivalent:
-`--name John`, `--name=John`, `--n John`, `--n=John`, `-nJohn`, `-n John`. Note that any other character can be used
-instead of `=` - see [Parser customization](#parser-customization) for details.
+`--name John`, `--name=John`, `--n John`, `--n=John`, `-nJohn`, `-n John`, `-n=John`. Note that any other character can
+be used instead of `=`—see [Parser customization](#parser-customization) for details.
 
 ### Trailing arguments
 
-A lone double-dash terminates argument parsing by default. It is used to separate program arguments from other
-parameters (e.g., arguments to be passed to another program). To store trailing arguments simply add a data member of
+A lone double dash terminates argument parsing by default. It is used to separate program arguments from other
+parameters (e.g., arguments to be passed to another program). To store trailing arguments, simply add a data member of
 type `string[]` with `TrailingArguments` UDA:
 
 ```d
@@ -563,12 +559,12 @@ struct T
 assert(CLI!T.parseArgs!((T t) { assert(t == T("A","",["-b","B"])); })(["-a","A","--","-b","B"]) == 0);
 ```
 
-Note that any other character sequence can be used instead of `--` - see [Parser customization](#parser-customization) for details.
+Note that any other character sequence can be used instead of `--`—see [Parser customization](#parser-customization) for details.
 
 ### Optional and required arguments
 
-Arguments can be marked as required or optional by adding `Required()` or `.Optional()` to UDA. If required argument is
-not present parser will error out. Positional arguments are required by default.
+Arguments can be marked as required or optional by adding `.Required()` or `.Optional()` to UDA. If required argument is
+not present, parser will error out. Positional arguments are required by default.
 
 ```d
 struct T
@@ -605,7 +601,7 @@ Error: Invalid value 'kiwi' for argument '--fruit'.
 Valid argument values are: apple,pear,banana
 ```
 
-Note that if the type of destination variable is `enum` then the allowed values are automatically limited to those
+Note that if the type of destination variable is `enum`, then the allowed values are automatically limited to those
 listed in the `enum`.
 
 
@@ -613,7 +609,7 @@ listed in the `enum`.
 
 ### Mutually exclusive arguments
 
-Mutually exclusive arguments (i.e. those that can't be used together) can be declared using `MutuallyExclusive()` UDA:
+Mutually exclusive arguments (i.e., those that can’t be used together) can be declared using `MutuallyExclusive()` UDA:
 
 ```d
 struct T
@@ -634,7 +630,7 @@ assert(CLI!T.parseArgs!((T t) {})([]) == 0);
 assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a","-b","b"]) != 0);
 ```
 
-**Note that parenthesis are required in this UDA to work correctly.**
+**Note that parentheses are required in this UDA to work correctly.**
 
 Set of mutually exclusive arguments can be marked as required in order to require exactly one of the arguments:
 
@@ -659,7 +655,7 @@ assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a","-b","b"]) != 0);
 
 ### Mutually required arguments
 
-Mutually required arguments (i.e. those that require other arguments) can be declared using `RequiredTogether()` UDA:
+Mutually required arguments (i.e., those that require other arguments) can be declared using `RequiredTogether()` UDA:
 
 ```d
 struct T
@@ -680,7 +676,7 @@ assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a","a"]) != 0);
 assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","b"]) != 0);
 ```
 
-**Note that parenthesis are required in this UDA to work correctly.**
+**Note that parentheses are required in this UDA to work correctly.**
 
 Set of mutually required arguments can be marked as required in order to require all arguments:
 
@@ -705,8 +701,8 @@ assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
 
 ## Commands
 
-Sophisticated command-line tools, like `git`, have many subcommands (e.g., `commit`, `push` etc.), each with its own set
-of arguments. There are few ways to declare subcommands with `argparse`.
+Sophisticated command-line tools, like `git`, have many subcommands (e.g., `commit`, `push`, etc.), each with its own
+set of arguments. There are few ways to declare subcommands with `argparse`.
 
 ### Subcommands without UDA
 
@@ -812,8 +808,8 @@ mixin CLI!Program.main!((prog)
 
 ### Subcommand name and aliases
 
-To define a command name that is not the same as the type that represents this command, one should use `Command` UDA -
-it accepts a name and list of name aliases. All these names are recognized by the parser and are displayed in the help
+To define a command name that is not the same as the type that represents this command, one should use `Command` UDA—it
+accepts a name and list of name aliases. All these names are recognized by the parser and are displayed in the help
 text. For example:
 
 ```d
@@ -832,14 +828,14 @@ Would result in this help fragment:
   maximum,max    Print the maximum
 ```
 
-If `Command` has no names listed then the name of the type is used as a command name:
+If `Command` has no names listed, then the name of the type is used as a command name:
 ```
   MaxCmd         Print the maximum
 ```
 
 ### Default subcommand
 
-The default command is a command that is ran when user doesn't specify any command in the command line.
+The default command is a command that is ran when user doesn’t specify any command in the command line.
 To mark a command as default, one should use `Default` template:
 
 ```d
@@ -852,29 +848,30 @@ SumType!(sum, min, Default!max) cmd;
 
 `Command` UDA provides few customizations that affect help text. It can be used for **top-level command** and **subcommands**.
 
-- Program name (i.e. the name of top-level command) and subcommand name can be provided to `Command` UDA as a parameter. 
-  If program name is not provided then `Runtime.args[0]` (a.k.a. `argv[0]` from `main` function) is used. If subcommand name is not provided then the name of
+- Program name (i.e., the name of top-level command) and subcommand name can be provided to `Command` UDA as a parameter.
+  If program name is not provided, then `Runtime.args[0]` (a.k.a. `argv[0]` from `main` function) is used. If subcommand name is not provided, then the name of
   the type that represents the command is used.
-- `Usage` - allows custom usage text. By default, the parser calculates the usage message from the arguments it contains
+- `Usage`—allows custom usage text. By default, the parser calculates the usage message from the arguments it contains
   but this can be overridden with `Usage` call. If the custom text contains `%(PROG)` then it will be replaced by the
   command/program name.
-- `Description` - used to provide a description of what the command/program does and how it works. In help messages, the
+- `Description`—used to provide a description of what the command/program does and how it works. In help messages, the
   description is displayed between the usage string and the list of the command arguments.
-- `ShortDescription` - used to provide a brief description of what the subcommand does. It is applicable to subcommands only
-  and is displayed in "Available commands" section on help screen of the parent command.
-- `Epilog` - custom text that is printed after the list of the arguments.
+- `ShortDescription`—used to provide a brief description of what the subcommand does. It is applicable to subcommands only
+  and is displayed in *Available commands* section on help screen of the parent command.
+- `Epilog`—custom text that is printed after the list of the arguments.
 
-`Usage`, `Description`, `ShortDescription` and `Epilog` modifiers take either `string` or `string delegate()` value -
-the latter can be used to return a value that is not known at compile time.
+`Usage`, `Description`, `ShortDescription` and `Epilog` modifiers take either `string` or `string delegate()`
+value—the latter can be used to return a value that is not known at compile time.
 
 ### Argument
 
 There are some customizations supported on argument level for both `PositionalArgument` and `NamedArgument` UDAs:
 
-- `Description` - provides brief description of the argument. This text is printed next to the argument in the argument
-  list section of a help message. `Description` takes either `string` or `string delegate()` value - the latter can be used to return a value that is not known at compile time.
-- `HideFromHelp` - can be used to indicate that the argument shouldn't be printed in help message.
-- `Placeholder` - provides custom text that it used to indicate the value of the argument in help message.
+- `Description`—provides brief description of the argument. This text is printed next to the argument
+  in the argument-list section of a help message. `Description` takes either `string` or `string delegate()`
+  value—the latter can be used to return a value that is not known at compile time.
+- `HideFromHelp`—can be used to indicate that the argument shouldn’t be printed in help message.
+- `Placeholder`—provides custom text that is used to indicate the value of the argument in help message.
 
 ### Example
 
@@ -909,25 +906,25 @@ CLI!T.parseArgs!((T t) {})(["-h"]);
 This example will print the following help message:
 
 ```
-usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}
+Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}
 
 custom description
 
 Required arguments:
   -f {apple,pear}, --fruit {apple,pear}
-                          This is a help text for fruit. Very very very very
-                          very very very very very very very very very very
-                          very very very very very long text
-  param0                  This is a help text for param0. Very very very very
-                          very very very very very very very very very very
-                          very very very very very long text
+                   This is a help text for fruit. Very very very very very very
+                   very very very very very very very very very very very very
+                   very long text
+  param0           This is a help text for param0. Very very very very very very
+                   very very very very very very very very very very very very
+                   very long text
   {q,a}
 
 Optional arguments:
   -s S
   -p VALUE
   -i {1,4,16,8}
-  -h, --help              Show this help message and exit
+  -h, --help       Show this help message and exit
 
 custom epilog
 ```
@@ -940,8 +937,8 @@ created using `ArgumentGroup` UDA.
 
 This UDA has some customization for displaying text:
 
-- `Description` - provides brief description of the group. This text is printed right after group name.
-  It takes either `string` or `string delegate()` value - the latter can be used to return a value that is not known at compile time.
+- `Description`—provides brief description of the group. This text is printed right after group name.
+  It takes either `string` or `string delegate()` value—the latter can be used to return a value that is not known at compile time.
 
 Example:
 
@@ -972,23 +969,23 @@ When an argument is attributed with a group, the parser treats it just like a no
 in a separate group for help messages:
 
 ```
-usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q
+Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q
 
 group1:
   group1 description
 
-  -a A          
-  -b B          
-  p             
+  -a A
+  -b B
+  p
 
 group2:
   group2 description
 
-  -c C          
-  -d D          
+  -c C
+  -d D
 
 Required arguments:
-  q             
+  q
 
 Optional arguments:
   -h, --help    Show this help message and exit
@@ -997,7 +994,7 @@ Optional arguments:
 
 ## ANSI colors and styles
 
-Using colors in your command’s output does not just look good: **contrasting** important elements like argument names
+Using colors in your command’s output does not just look good: **contrasting** important elements like argument names,
 from the rest of the text **reduces the cognitive load** on the user. `argparse` uses [ANSI escape sequences](https://en.wikipedia.org/wiki/ANSI_escape_code)
 to add coloring and styling to help text. In addition, `argparse` offers public API to apply colors and styles
 to any text printed to the console (see below).
@@ -1049,7 +1046,7 @@ The `argparse.ansi` submodule provides supported styles and colors. You can use 
 - `onLightCyan`
 - `onWhite`
 
-There is also a "virtual" style `noStyle` that means no styling is applied. It's useful in ternary operations as a fallback
+There is also a “virtual” style `noStyle` that means no styling is applied. It’s useful in ternary operations as a fallback
 for the case when styling is disabled. See below example for details.
 
 All styles above can be combined using `.` and even be used in regular output:
@@ -1060,7 +1057,7 @@ void printText(bool enableStyle)
 {
   // style is enabled at runtime when `enableStyle` is true
   auto myStyle = enableStyle ? bold.italic.cyan.onRed : noStyle;
-  
+
   // "Hello" is always printed in green;
   // "world!" is printed in bold, italic, cyan and on red when `enableStyle` is true, "as is" otherwise
   writeln(green("Hello "), myStyle("world!"));
@@ -1076,16 +1073,16 @@ This example shows how styling can be used in custom help text (`Usage`, `Descri
 
 ### Styling mode
 
-By default `argparse` will try to detect whether ANSI styling is supported and if so it will apply styling to the help text.
-In some cases this behavior should be adjusted or overridden. To do so you can use `Config.stylingMode`:
+By default `argparse` will try to detect whether ANSI styling is supported, and if so, it will apply styling to the help text.
+In some cases this behavior should be adjusted or overridden. To do so, you can use `Config.stylingMode`.
 Argparse provides the following setting to control the styling:
-- If it's set to `Config.StylingMode.on` then styling is **always enabled**.
-- If it's set to `Config.StylingMode.off` then styling is **always disabled**.
-- If it's set to `Config.StylingMode.autodetect` then [heuristics](#heuristics-for-enabling-styling) are used to determine
+- If it’s set to `Config.StylingMode.on`, then styling is **always enabled**.
+- If it’s set to `Config.StylingMode.off`, then styling is **always disabled**.
+- If it’s set to `Config.StylingMode.autodetect`, then [heuristics](#heuristics-for-enabling-styling) are used to determine
   whether styling will be applied.
 
-In some cases styling control should be exposed to a user as a command line argument (similar to `--color` argument in `ls` and `grep` commands).
-Argparse supports this use case - just add an argument to your command (you can customize it with `@NamedArgument` UDA):
+In some cases styling control should be exposed to a user as a command-line argument (similar to `--color` argument in `ls` and `grep` commands).
+Argparse supports this use case—just add an argument to your command (you can customize it with `@NamedArgument` UDA):
 
 ```d
 static auto color = ansiStylingArgument;
@@ -1109,7 +1106,7 @@ struct Arguments
 
 mixin CLI!Arguments.main!((args)
 {
-    // 'autodetect' is converted to either 'on' or 'off' 
+    // 'autodetect' is converted to either 'on' or 'off'
     if(args.color == Config.StylingMode.on)
       writeln("Colors are enabled");
     else
@@ -1134,26 +1131,26 @@ This parameter has the following members that can be tuned:
 Below is the exact sequence of steps argparse uses to determine whether or not to emit ANSI escape codes
 (see detectSupport() function [here](https://github.com/andrey-zherikov/argparse/blob/master/source/argparse/ansi.d) for details):
 
-1. If environment variable `NO_COLOR != ""` then styling is **disabled**. See [here](https://no-color.org/) for details.
-2. If environment variable `CLICOLOR_FORCE != "0"` then styling is **enabled**. See [here](https://bixense.com/clicolors/) for details.
-3. If environment variable `CLICOLOR == "0"` then styling is **disabled**. See [here](https://bixense.com/clicolors/) for details.
-4. If environment variable `ConEmuANSI == "OFF"` then styling is **disabled**. See [here](https://conemu.github.io/en/AnsiEscapeCodes.html#Environment_variable) for details.
-5. If environment variable `ConEmuANSI == "ON"` then styling is **enabled**. See [here](https://conemu.github.io/en/AnsiEscapeCodes.html#Environment_variable) for details.
-6. If environment variable `ANSICON` is defined (regardless of its value) then styling is **enabled**. See [here](https://github.com/adoxa/ansicon/blob/master/readme.txt) for details.
+1. If environment variable `NO_COLOR != ""`, then styling is **disabled**. See [here](https://no-color.org/) for details.
+2. If environment variable `CLICOLOR_FORCE != "0"`, then styling is **enabled**. See [here](https://bixense.com/clicolors/) for details.
+3. If environment variable `CLICOLOR == "0"`, then styling is **disabled**. See [here](https://bixense.com/clicolors/) for details.
+4. If environment variable `ConEmuANSI == "OFF"`, then styling is **disabled**. See [here](https://conemu.github.io/en/AnsiEscapeCodes.html#Environment_variable) for details.
+5. If environment variable `ConEmuANSI == "ON"`, then styling is **enabled**. See [here](https://conemu.github.io/en/AnsiEscapeCodes.html#Environment_variable) for details.
+6. If environment variable `ANSICON` is defined (regardless of its value), then styling is **enabled**. See [here](https://github.com/adoxa/ansicon/blob/master/readme.txt) for details.
 7. **Windows only** (`version(Windows)`):
-   1. If environment variable `TERM` contains `"cygwin"` or starts with `"xterm"` then styling is **enabled**.
-   2. If `GetConsoleMode` call for `STD_OUTPUT_HANDLE` returns a mode that has `ENABLE_VIRTUAL_TERMINAL_PROCESSING` set then styling is **enabled**.
-   3. If `SetConsoleMode` call for `STD_OUTPUT_HANDLE` with `ENABLE_VIRTUAL_TERMINAL_PROCESSING` mode was successful then styling is **enabled**.
+   1. If environment variable `TERM` contains `"cygwin"` or starts with `"xterm"`, then styling is **enabled**.
+   2. If `GetConsoleMode` call for `STD_OUTPUT_HANDLE` returns a mode that has `ENABLE_VIRTUAL_TERMINAL_PROCESSING` set, then styling is **enabled**.
+   3. If `SetConsoleMode` call for `STD_OUTPUT_HANDLE` with `ENABLE_VIRTUAL_TERMINAL_PROCESSING` mode was successful, then styling is **enabled**.
 8. **Posix only** (`version(Posix)`):
-   1. If `STDOUT` is **not** redirected then styling is **enabled**.
-9. If none of the above applies then styling is **disabled**.
+   1. If `STDOUT` is **not** redirected, then styling is **enabled**.
+9. If none of the above applies, then styling is **disabled**.
 
 
 ## Supported types
 
 ### Boolean
 
-Boolean types usually represent command line flags. `argparse` supports multiple ways of providing flag value:
+Boolean types usually represent command-line flags. `argparse` supports multiple ways of providing flag value:
 
 ```d
 struct T
@@ -1162,10 +1159,10 @@ struct T
 }
 
 assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b"]) == 0);
-assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b","true"]) == 0);
 assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b=true"]) == 0);
-assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["-b","false"]) == 0);
 assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["-b=false"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","true"]) == 1);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","false"]) == 1);
 ```
 
 ### Numeric
@@ -1185,7 +1182,7 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T(-5,8,12.345)); })(["-i","-5","-u",
 
 ### String
 
-`argparse` supports string arguments as pass trough:
+`argparse` supports string arguments as pass through:
 
 ```d
 struct T
@@ -1199,7 +1196,7 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T("foo")); })(["-a","foo"]) == 0);
 ### Enum
 
 If an argument is bound to an enum, an enum symbol as a string is expected as a value, or right within the argument
-separated with an "=" sign:
+separated with an “=” sign:
 
 ```d
 struct T
@@ -1213,7 +1210,7 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.apple)); })(["-a","apple"]
 assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.pear)); })(["-a=pear"]) == 0);
 ```
 
-In some cases the value for command line argument might have characters that are not allowed in enum identifiers.
+In some cases the value for command-line argument might have characters that are not allowed in enum identifiers.
 There is `ArgumentValue` UDA that can be used to adjust allowed values:
 
 ```d
@@ -1286,10 +1283,10 @@ In case the argument is bound to static array then the maximum number of values 
 dynamic array, the number of values is not limited. The minimum number of values is `1` in all cases. This behavior can
 be customized by calling the following functions:
 
-- `NumberOfValues(ulong min, ulong max)` - sets both minimum and maximum number of values.
-- `NumberOfValues(ulong num)` - sets both minimum and maximum number of values to the same value.
-- `MinNumberOfValues(ulong min)` - sets minimum number of values.
-- `MaxNumberOfValues(ulong max)` - sets maximum number of values.
+- `NumberOfValues(ulong min, ulong max)`—sets both minimum and maximum number of values.
+- `NumberOfValues(ulong num)`—sets both minimum and maximum number of values to the same value.
+- `MinNumberOfValues(ulong min)`—sets minimum number of values.
+- `MaxNumberOfValues(ulong max)`—sets maximum number of values.
 
 ```d
 struct T
@@ -1306,8 +1303,8 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T([1],[4,5])); })(["-a","1","-b","4"
 
 ### Associative array
 
-If an argument is bound to an associative array, a string of the form "name=value" is expected as the next entry in
-command line, or right within the option separated with an "=" sign:
+If an argument is bound to an associative array, a string of the form “name=value” is expected as the next entry in
+command line, or right within the option separated with an “=” sign:
 
 ```d
 struct T
@@ -1376,7 +1373,7 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T(4)); })(["-a","-a","-a","-a"]) == 
 
 ### Custom types
 
-Any arbitrary type can be used to receive command line argument values. `argparse` supports this use case - you just need
+Any arbitrary type can be used to receive command-line-argument values. `argparse` supports this use case—you just need
 to provide parsing function:
 
 ```d
@@ -1397,27 +1394,27 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T(Value("foo"))); return 12345; })([
 
 Some time the functionality provided out of the box is not enough and it needs to be tuned.
 
-Parsing of a command line string values into some typed `receiver` member consists of multiple steps:
+Parsing of command-line string values into some typed `receiver` member consists of multiple steps:
 
-- **Pre-validation** - argument values are validated as raw strings.
-- **Parsing** - raw argument values are converted to a different type (usually the type of the receiver).
-- **Validation** - converted value is validated.
-- **Action** - depending on a type of the `receiver`, it might be either assignment of converted value to a `receiver`,
+- **Pre-validation**—argument values are validated as raw strings.
+- **Parsing**—raw argument values are converted to a different type (usually the type of the receiver).
+- **Validation**—converted value is validated.
+- **Action**—depending on a type of the `receiver`, it might be either assignment of converted value to a `receiver`,
   appending value if `receiver` is an array or other operation.
 
-In case if argument does not expect any value then the only one step is involved:
+In case if argument does not expect any value, then the only one step is involved:
 
-- **Action if no value** - similar to **Action** step above but without converted value.
+- **Action if no value**—similar to **Action** step above but without converted value.
 
-If any of the steps fails then the command line parsing fails as well.
+If any of the steps fails, then the command-line parsing fails as well.
 
-Each of the step above can be customized with UDA modifiers below. These modifiers take a function that might accept
+Each of the steps above can be customized with UDA modifiers below. These modifiers take a function that might accept
 either argument value(s) or `Param` struct that has these fields (there is also an alias, `RawParam`, where the type of
 the `value` field is `string[]`):
 
 - `config`- Config object that is passed to parsing function.
-- `name` - Argument name that is specified in command line.
-- `value` - Array of argument values that are provided in command line.
+- `name`—Argument name that is specified in command line.
+- `value`—Array of argument values that are provided in command line.
 
 ### Pre-validation
 
@@ -1531,14 +1528,14 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T(4)); })(["-a","!4"]) == 0);
 
 ### Assign character
 
-`Config.assignChar` - the assignment character used in arguments with value: `-a=5`, `-b=foo`.
+`Config.assignChar`—the assignment character used in arguments with value: `-a=5`, `-b=foo`.
 
 Default is equal sign `=`.
 
 ### Array separator
 
-`Config.arraySep` - when set to `char.init`, value to array and associative array receivers are treated as an individual
-value. That is, only one argument is appended inserted per appearance of the argument. If `arraySep` is set to something
+`Config.arraySep`—when set to `char.init`, values to array and associative-array receivers are treated as an individual
+value. That is, only one argument is appended/inserted per appearance of the argument. If `arraySep` is set to something
 else, then each value is first split by the separator, and the individual pieces are treated as values to the same
 argument.
 
@@ -1563,42 +1560,42 @@ assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T(["1","2","3","4","5"])); })
 
 ### Named argument character
 
-`Config.namedArgChar` - the character that named arguments begin with.
+`Config.namedArgChar`—the character that named arguments begin with.
 
 Default is dash `-`.
 
 ### End of arguments
 
-`Config.endOfArgs` - the string that conventionally marks the end of all arguments.
+`Config.endOfArgs`—the string that conventionally marks the end of all arguments.
 
-Default is double-dash `--`.
+Default is double dash `--`.
 
 ### Case sensitivity
 
-`Config.caseSensitive` - by default argument names are case-sensitive. You can change that behavior by setting thia
+`Config.caseSensitive`—by default argument names are case-sensitive. You can change that behavior by setting this
 member to `false`.
 
 Default is `true`.
 
 ### Bundling of single-letter arguments
 
-`Config.bundling` - when it is set to `true`, single-letter arguments can be bundled together, i.e. `-abc` is the same
+`Config.bundling`—when it is set to `true`, single-letter arguments can be bundled together, i.e., `-abc` is the same
 as `-a -b -c`.
 
 Default is `false`.
 
 ### Adding help generation
 
-`Config.addHelp` - when it is set to `true` then `-h` and `--help` arguments are added to the parser. In case if the
-command line has one of these arguments then the corresponding help text is printed and the parsing will be stopped.
-If `CLI!(...).parseArgs(alias newMain)` or `CLI!(...).main(alias newMain)` is used then provided `newMain` function will
+`Config.addHelp`—when it is set to `true`, then `-h` and `--help` arguments are added to the parser. In case if the
+command line has one of these arguments, then the corresponding help text is printed and the parsing will be stopped.
+If `CLI!(...).parseArgs(alias newMain)` or `CLI!(...).main(alias newMain)` is used, then provided `newMain` function will
 not be called.
 
 Default is `true`.
 
 ### Help styling mode
 
-`Config.stylingMode` - styling mode that is used to print help text. It has the following type: `enum StylingMode { autodetect, on, off }`.
+`Config.stylingMode`—styling mode that is used to print help text. It has the following type: `enum StylingMode { autodetect, on, off }`.
 
 Default value is `Config.StylingMode.autodetect`.
 
@@ -1606,7 +1603,7 @@ See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 
 ### Help styling scheme
 
-`Config.helpStyle` - contains help text style. It has the following members:
+`Config.helpStyle`—contains help text style. It has the following members:
 
 - `programName`: style for the program name.
 - `subcommandName`: style for the subcommand name.
@@ -1619,7 +1616,7 @@ See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 
 ### Error handling
 
-`Config.errorHandler` - this is a handler function for all errors occurred during parsing the command line. It might be
+`Config.errorHandler`—this is a handler function for all errors occurred during parsing the command line. It might be
 either a function or a delegate that takes `string` parameter which would be an error message.
 
 The default behavior is to print error message to `stderr`.
