@@ -220,6 +220,7 @@ package struct Restrictions
     package void add(Config config, TYPE, ArgumentInfo[] infos)()
     {
         static foreach(argIndex, info; infos)
+        static if(info.memberSymbol !is null)   // to skip HelpArgumentUDA
         {
             static if(info.required)
                 checks ~= RequiredArg!(config, info, argIndex);

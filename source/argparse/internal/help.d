@@ -141,43 +141,40 @@ private void print(void delegate(string) sink, const ref Section section, string
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package auto HelpArgumentUDA()
+package struct HelpArgumentUDA
 {
-    struct HelpArgumentParsingFunction
+    ArgumentInfo info = {
+        ArgumentInfo info;
+        info.names = ["h","help"];
+        info.description = "Show this help message and exit";
+        info.required = false;
+        info.minValuesCount = 0;
+        info.maxValuesCount = 0;
+        info.allowBooleanNegation = false;
+        info.ignoreInDefaultCommand = true;
+        return info;
+    }();
+
+    auto parse(Config config, COMMAND_STACK, RECEIVER)(const COMMAND_STACK cmdStack, ref RECEIVER receiver, string argName, string[] rawValues)
     {
-        static auto parse(Config config, T, Command)(const Command[] cmdStack, ref T receiver, string argName, string[] rawValues)
-        {
-            import std.stdio: stdout;
+        import std.stdio: stdout;
+        import std.algorithm: map;
+        import std.array: join, array;
 
-            import std.algorithm: map;
-            import std.array: join, array;
+        string progName = cmdStack.map!((ref _) => _.displayName.length > 0 ? _.displayName : getProgramName()).join(" ");
 
-            string progName = cmdStack.map!((ref _) => _.displayName.length > 0 ? _.displayName : getProgramName()).join(" ");
+        auto args = cmdStack.map!((ref _) => &_.arguments).array;
 
-            auto args = cmdStack.map!((ref _) => &_.arguments).array;
+        auto output = stdout.lockingTextWriter();
+        printHelp!config(_ => output.put(_), cmdStack[$-1], args, progName);
 
-            auto output = stdout.lockingTextWriter();
-            printHelp!config(_ => output.put(_), cmdStack[$-1], args, progName);
-
-            return Result(0);
-        }
+        return Result(0);
     }
-
-    ArgumentUDA!(HelpArgumentParsingFunction) desc;
-    desc.info.names = ["h","help"];
-    desc.info.description = "Show this help message and exit";
-    desc.info.required = false;
-    desc.info.minValuesCount = 0;
-    desc.info.maxValuesCount = 0;
-    desc.info.allowBooleanNegation = false;
-    desc.info.ignoreInDefaultCommand = true;
-    return desc;
 }
 
 unittest
 {
-    auto h = HelpArgumentUDA();
+    HelpArgumentUDA h;
     assert(h.info.names == ["h","help"]);
     assert(!h.info.required);
     assert(h.info.minValuesCount == 0);
@@ -188,7 +185,7 @@ unittest
 
 private bool isHelpArgument(string name)
 {
-    static foreach(n; HelpArgumentUDA().info.names)
+    static foreach(n; HelpArgumentUDA.init.info.names)
         if(n == name)
             return true;
 
