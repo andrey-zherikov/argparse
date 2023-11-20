@@ -358,7 +358,12 @@ private template TypeTraits(Config config, TYPE)
         }());
 
     static if(is(subCommandSymbol))
+    {
         static assert(defaultSubCommands.length <= 1, TYPE.stringof~": Multiple default subcommands in "~TYPE.stringof~"."~subCommandSymbol);
+
+        static if(positionalArgInfos.length > 0 && defaultSubCommands.length > 0)
+            static assert(positionalArgInfos[$-1].required, TYPE.stringof~": Optional positional arguments and default subcommand are used together in one command");
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
