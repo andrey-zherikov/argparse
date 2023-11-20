@@ -26,17 +26,16 @@ package struct SubCommands
     CommandInfo[] info;
 
 
-    void add(CommandInfo cmdInfo)()
+    void add(CommandInfo[] cmdInfo)
     {
-        immutable index = info.length;
+        info = cmdInfo;
 
-        static foreach(name; cmdInfo.names)
-        {{
-            assert(!(name in byName), "Duplicated name of subcommand: "~name);
-            byName[name] = index;
-        }}
-
-        info ~= cmdInfo;
+        foreach(index, info; cmdInfo)
+            foreach(name; info.names)
+            {
+                assert(!(name in byName), "Duplicated name of subcommand: "~name);
+                byName[name] = index;
+            }
     }
 }
 
@@ -45,36 +44,34 @@ package struct SubCommands
 
 private alias ParseFunction(COMMAND_STACK, RECEIVER) = Result delegate(const COMMAND_STACK cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues);
 
-private alias ParsingArgument(COMMAND_STACK, RECEIVER, alias symbol, alias uda, bool completionMode) =
+private alias ParsingArgumentFunction(COMMAND_STACK, RECEIVER, alias symbol, alias uda) =
     delegate(const COMMAND_STACK cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues)
     {
-        static if(completionMode)
+        try
         {
-            return Result.Success;
-        }
-        else
-        {
-            try
-            {
-                auto res = uda.info.checkValuesCount(argName, rawValues.length);
-                if(!res)
-                    return res;
+            auto res = uda.info.checkValuesCount(argName, rawValues.length);
+            if(!res)
+                return res;
 
                 auto param = RawParam(config, argName, rawValues);
 
-                auto target = &__traits(getMember, receiver, symbol);
+            auto target = &__traits(getMember, receiver, uda.info.memberSymbol);
 
-                static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                    return uda.parsingFunc.parse(target, param);
-                else
-                    return uda.parsingFunc.parse(*target, param);
-            }
-            catch(Exception e)
-            {
-                return Result.Error(argName, ": ", e.msg);
-            }
+            static if(is(typeof(target) == function) || is(typeof(target) == delegate))
+                return uda.parsingFunc.parse(target, param);
+            else
+                return uda.parsingFunc.parse(*target, param);
+        }
+        catch(Exception e)
+        {
+            return Result.Error(argName, ": ", e.msg);
         }
     };
+
+private alias CompletingArgumentFunction(Config config, COMMAND_STACK, RECEIVER, alias symbol, alias uda) =
+    delegate(const COMMAND_STACK cmdStack, Config* config, ref RECEIVER receiver, string argName, string[] rawValues)
+        => Result.Success;
+
 
 unittest
 {
@@ -85,7 +82,9 @@ unittest
         Config config;
         TYPE t;
 
-        return ParsingArgument!(string[], TYPE, "a", NamedArgument("arg-name").NumberOfValues(1), false)([], &config, t, "arg-name", values);
+        enum uda = getMemberArgumentUDA!(Config.init, TYPE, "a", NamedArgument("arg-name").NumberOfValues(1));
+
+        return ParsingArgumentFunction!(string[], TYPE, "a", uda)([], &config, t, "arg-name", values);
     }
 
     assert(test!T(["raw-value"]));
@@ -102,29 +101,37 @@ unittest
     Config config;
     T t;
 
-    auto res = ParsingArgument!(string[], T, "func", NamedArgument("arg-name").NumberOfValues(0), false)([], &config, t, "arg-name", []);
+    enum uda = getMemberArgumentUDA!(Config.init, T, "func", NamedArgument("arg-name").NumberOfValues(0));
+
+    auto res = ParsingArgumentFunction!(string[], T, "func", uda)([], &config, t, "arg-name", []);
 
     assert(res.isError("arg-name: My Message."));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package auto getArgumentParsingFunctions(Config config, COMMAND_STACK, TYPE, symbols...)()
+private auto getArgumentParsingFunctions(Config config, COMMAND_STACK, TYPE, udas...)()
 {
     ParseFunction!(COMMAND_STACK, TYPE)[] res;
 
-    static foreach(symbol; symbols)
-        res ~= ParsingArgument!(COMMAND_STACK, TYPE, symbol, getMemberArgumentUDA!(config, TYPE, symbol, NamedArgument), false);
+    static foreach(uda; udas)
+    {
+        static if(is(typeof(uda.parse)))
+            res ~= (const COMMAND_STACK cmdStack, Config* config, ref TYPE receiver, string argName, string[] rawValues)
+                    => uda.parse(cmdStack, config, receiver, argName, rawValues);
+        else
+            res ~= ParsingArgumentFunction!(COMMAND_STACK, TYPE, uda.info.memberSymbol, uda);
+    }
 
     return res;
 }
 
-package auto getArgumentCompletionFunctions(Config config, COMMAND_STACK, TYPE, symbols...)()
+private auto getArgumentCompletionFunctions(Config config, COMMAND_STACK, TYPE, udas...)()
 {
     ParseFunction!(COMMAND_STACK, TYPE)[] res;
 
-    static foreach(symbol; symbols)
-        res ~= ParsingArgument!(COMMAND_STACK, TYPE, symbol, getMemberArgumentUDA!(config, TYPE, symbol, NamedArgument), true);
+    static foreach(uda; udas)
+        res ~= CompletingArgumentFunction!(config, COMMAND_STACK, TYPE, uda.info.memberSymbol, uda);
 
     return res;
 }
@@ -185,8 +192,8 @@ package struct Command
     string displayName() const { return info.displayNames[0]; }
 
     SubCommands subCommands;
-    Command delegate() pure nothrow [] subCommandCreate;
-    Command delegate() pure nothrow defaultSubCommand;
+    Command delegate() [] subCommandCreate;
+    Command delegate() defaultSubCommand;
 
     auto getDefaultSubCommand(const Command[] cmdStack) const
     {
@@ -273,72 +280,107 @@ private template subCommandSymbol(TYPE)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private struct SubCommand(TYPE)
+{
+    alias Type = TYPE;
+
+    CommandInfo info;
+}
+
+private template TypeTraits(Config config, TYPE)
+{
+    import std.meta: AliasSeq, Filter, staticMap, staticSort;
+
+    /////////////////////////////////////////////////////////////////////
+    /// Arguments
+
+    private enum getArgumentUDA(alias sym) = getMemberArgumentUDA!(config, TYPE, sym, NamedArgument);
+    private enum getArgumentInfo(alias uda) = uda.info;
+    private enum positional(ArgumentInfo info) = info.positional;
+    private enum comparePosition(ArgumentInfo info1, ArgumentInfo info2) = info1.position.get - info2.position.get;
+
+    static if(config.addHelp)
+    {
+        private enum helpUDA = .getArgumentUDA!(config, bool, null, HelpArgumentUDA.init);
+        enum argumentUDAs = AliasSeq!(staticMap!(getArgumentUDA, iterateArguments!TYPE), helpUDA);
+    }
+    else
+        enum argumentUDAs = staticMap!(getArgumentUDA, iterateArguments!TYPE);
+
+    enum argumentInfos = staticMap!(getArgumentInfo, argumentUDAs);
+
+
+    /////////////////////////////////////////////////////////////////////
+    /// Subcommands
+
+    private enum getCommandInfo(CMD) = .getCommandInfo!(config, RemoveDefaultAttribute!CMD, RemoveDefaultAttribute!CMD.stringof);
+    private enum getSubcommand(CMD) = SubCommand!CMD(getCommandInfo!CMD);
+
+    static if(.subCommandSymbol!TYPE.length == 0)
+        private alias subCommandTypes = AliasSeq!();
+    else
+    {
+        enum subCommandSymbol = .subCommandSymbol!TYPE;
+        private alias subCommandTypes = AliasSeq!(typeof(__traits(getMember, TYPE, subCommandSymbol)).Types);
+    }
+
+    enum subCommands = staticMap!(getSubcommand, subCommandTypes);
+    enum subCommandInfos = staticMap!(getCommandInfo, subCommandTypes);
+
+    private alias defaultSubCommands = Filter!(isDefaultCommand, subCommandTypes);
+
+    /////////////////////////////////////////////////////////////////////
+    /// Static checks whether TYPE does not violate argparse requirements
+
+    private enum positionalArgInfos = staticSort!(comparePosition, Filter!(positional, argumentInfos));
+
+    static foreach(info; argumentInfos)
+        static foreach (name; info.names)
+            static assert(name[0] != config.namedArgChar, TYPE.stringof~": Argument name should not begin with '"~config.namedArgChar~"': "~name);
+
+    static foreach(int i, info; positionalArgInfos)
+        static assert({
+            enum int pos = info.position.get;
+
+            static if(i < pos)
+                static assert(false, TYPE.stringof~": Positional argument with index "~i.stringof~" is missed");
+            else static if(i > pos)
+                static assert(false, TYPE.stringof~": Positional argument with index "~pos.stringof~" is duplicated");
+
+            static if(pos < positionalArgInfos.length - 1)
+                static assert(info.minValuesCount.get == info.maxValuesCount.get,
+                    TYPE.stringof~": Positional argument with index "~pos.stringof~" has variable number of values.");
+
+            return true;
+        }());
+
+    static if(is(subCommandSymbol))
+        static assert(defaultSubCommands.length <= 1, TYPE.stringof~": Multiple default subcommands in "~TYPE.stringof~"."~subCommandSymbol);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo info = getCommandInfo!(config, COMMAND_TYPE))(ref COMMAND_TYPE receiver)
 {
     import std.algorithm: map;
     import std.array: array;
-    import std.meta: Filter, staticMap, staticSort;
 
-
-    enum getArgumentInfo(alias sym) = getMemberArgumentUDA!(config, COMMAND_TYPE, sym, NamedArgument).info;
-
-    enum argumentInfos = staticMap!(getArgumentInfo, iterateArguments!COMMAND_TYPE);
-
-    enum positional(ArgumentInfo info) = info.positional;
-
-    enum cmp(ArgumentInfo info1, ArgumentInfo info2) = info1.position.get - info2.position.get;
-
-    enum positionalArgs = staticSort!(cmp, Filter!(positional, argumentInfos));
-
-    static foreach(int i, info; positionalArgs)
-    {{
-        enum int pos = info.position.get;
-
-        static if(i < pos)
-            static assert(false, "Positional argument with index "~i.stringof~" is missed in "~COMMAND_TYPE.stringof);
-        else static if(i > pos)
-            static assert(false, "Positional argument with index "~pos.stringof~" is duplicated in "~COMMAND_TYPE.stringof);
-
-        static if(pos < positionalArgs.length - 1)
-            static assert(info.minValuesCount.get == info.maxValuesCount.get, "Positional argument with index "~pos.stringof~" in "~COMMAND_TYPE.stringof~" has variable number of values.");
-    }}
-
-    static foreach(info; argumentInfos)
-        static foreach (name; info.names)
-            static assert(name[0] != config.namedArgChar, "Argument name should not begin with '"~config.namedArgChar~"': "~name);
-
+    alias typeTraits = TypeTraits!(config, COMMAND_TYPE);
 
     Command res;
 
-    res.arguments.add!(config, COMMAND_TYPE, [argumentInfos]);
-    res.restrictions.add!(config, COMMAND_TYPE, [argumentInfos]);
+    res.arguments.add!(config, COMMAND_TYPE, [typeTraits.argumentInfos]);
+    res.restrictions.add!(config, COMMAND_TYPE, [typeTraits.argumentInfos]);
 
-    res.parseFunctions = getArgumentParsingFunctions!(config, Command[], COMMAND_TYPE, iterateArguments!COMMAND_TYPE).map!(_ =>
+    res.parseFunctions = getArgumentParsingFunctions!(config, Command[], COMMAND_TYPE, typeTraits.argumentUDAs).map!(_ =>
         (const Command[] cmdStack, Config* config, string argName, string[] argValue)
             => _(cmdStack, config, receiver, argName, argValue)
         ).array;
 
-    res.completeFunctions = getArgumentCompletionFunctions!(config, Command[], COMMAND_TYPE, iterateArguments!COMMAND_TYPE).map!(_ =>
+    res.completeFunctions = getArgumentCompletionFunctions!(config, Command[], COMMAND_TYPE, typeTraits.argumentUDAs).map!(_ =>
         (const Command[] cmdStack, Config* config, string argName, string[] argValue)
             => _(cmdStack, config, receiver, argName, argValue)
         ).array;
-
-    static if(config.addHelp)
-    {{
-        enum uda = getArgumentUDA!(Config.init, bool, null, HelpArgumentUDA());
-
-        res.arguments.add!(Config.init, COMMAND_TYPE, uda.info);
-
-        res.parseFunctions ~=
-            (const Command[] cmdStack, Config* config, string argName, string[] argValue)
-                => uda.parsingFunc.parse!COMMAND_TYPE(cmdStack, config, receiver, argName, argValue);
-
-        res.completeFunctions ~=
-            (const Command[] cmdStack, Config* config, string argName, string[] argValue)
-                => Result.Success;
-    }}
-
-    res.hooks.bind!(COMMAND_TYPE, iterateArguments!COMMAND_TYPE)(receiver);
 
     res.setTrailingArgs = (ref string[] args)
     {
@@ -347,61 +389,50 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, CommandInfo
 
     res.info = info;
 
-    enum symbol = subCommandSymbol!COMMAND_TYPE;
+    res.subCommands.add([typeTraits.subCommandInfos]);
 
-    static if(symbol.length > 0)
-    {
-        static foreach(TYPE; typeof(__traits(getMember, COMMAND_TYPE, symbol)).Types)
-        {{
-            enum cmdInfo = getCommandInfo!(config, RemoveDefaultAttribute!TYPE, RemoveDefaultAttribute!TYPE.stringof);
+    static foreach(subcmd; typeTraits.subCommands)
+    {{
+        auto dg = () => ParsingSubCommandCreate!(config, subcmd.Type, subcmd.info, COMMAND_TYPE, typeTraits.subCommandSymbol)(receiver);
 
-            static if(isDefaultCommand!TYPE)
-            {
-                assert(res.defaultSubCommand is null, "Multiple default subcommands: "~COMMAND_TYPE.stringof~"."~symbol);
-                res.defaultSubCommand = () => ParsingSubCommandCreate!(config, TYPE, cmdInfo, COMMAND_TYPE, symbol)()(receiver);
-            }
+        static if(isDefaultCommand!(subcmd.Type))
+            res.defaultSubCommand = dg;
 
-            res.subCommands.add!cmdInfo;
-
-            res.subCommandCreate ~= () => ParsingSubCommandCreate!(config, TYPE, cmdInfo, COMMAND_TYPE, symbol)()(receiver);
-        }}
-    }
+        res.subCommandCreate ~= dg;
+    }}
 
     return res;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol)()
+private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol)(ref RECEIVER receiver)
 {
-    return function (ref RECEIVER receiver)
+    auto target = &__traits(getMember, receiver, symbol);
+
+    alias create = (ref COMMAND_TYPE actualTarget)
     {
-        auto target = &__traits(getMember, receiver, symbol);
-
-        alias create = (ref COMMAND_TYPE actualTarget)
-        {
-            auto cmd = createCommand!(config, RemoveDefaultAttribute!COMMAND_TYPE, info)(actualTarget);
-            cmd.isDefault = isDefaultCommand!COMMAND_TYPE;
-            return cmd;
-        };
-
-        static if(typeof(*target).Types.length == 1)
-            return (*target).match!create;
-        else
-        {
-            // Initialize if needed
-            if((*target).match!((ref COMMAND_TYPE t) => false, _ => true))
-                *target = COMMAND_TYPE.init;
-
-            return (*target).match!(create,
-                (_)
-                {
-                    assert(false, "This should never happen");
-                    return Command.init;
-                }
-            );
-        }
+        auto cmd = createCommand!(config, RemoveDefaultAttribute!COMMAND_TYPE, info)(actualTarget);
+        cmd.isDefault = isDefaultCommand!COMMAND_TYPE;
+        return cmd;
     };
+
+    static if(typeof(*target).Types.length == 1)
+        return (*target).match!create;
+    else
+    {
+        // Initialize if needed
+        if((*target).match!((ref COMMAND_TYPE t) => false, _ => true))
+            *target = COMMAND_TYPE.init;
+
+        return (*target).match!(create,
+            (_)
+            {
+                assert(false, "This should never happen");
+                return Command.init;
+            }
+        );
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
