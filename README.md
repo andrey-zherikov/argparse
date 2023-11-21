@@ -54,39 +54,39 @@ import argparse;
 struct Basic
 {
     // Basic data types are supported:
-        // --name argument
+        // '--name' argument
         string name;
 
-        // --number argument
+        // '--number' argument
         int number;
 
-        // --boolean
+        // '--boolean' argument
         bool boolean;
 
     // Argument can have default value if it's not specified in command line
-        // --unused argument
+        // '--unused' argument
         string unused = "some default value";
 
 
     // Enums are also supported
         enum Enum { unset, foo, boo }
-        // --choice argument
+        // '--choice' argument
         Enum choice;
 
     // Use array to store multiple values
-        // --array argument
+        // '--array' argument
         int[] array;
 
     // Callback with no args (flag)
-        // --callback
+        // '--callback' argument
         void callback() {}
 
     // Callback with single value
-        // --callback1 argument
+        // '--callback1' argument
         void callback1(string value) { assert(value == "cb-value"); }
 
     // Callback with zero or more values
-        // --callback2 argument
+        // '--callback2' argument
         void callback2(string[] value) { assert(value == ["cb-v1","cb-v2"]); }
 }
 
@@ -184,12 +184,12 @@ Optional arguments:
 ## Calling the parser
 
 `argparse` provides `CLI` template to call the parser covering different use cases. It has the following signatures:
-- `template CLI(Config config, COMMAND)`—this is main template that provides multiple API (see below) for all
+- `template CLI(Config config, COMMAND)` – this is main template that provides multiple API (see below) for all
   supported use cases.
-- `template CLI(Config config, COMMANDS...)`—convenience wrapper of the previous template that provides `main`
+- `template CLI(Config config, COMMANDS...)` – convenience wrapper of the previous template that provides `main`
   template mixin only for the simplest use case with subcommands. See corresponding [section](#commands) for details
   about subcommands.
-- `alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS)`—alias provided for convenience that allows using default
+- `alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS)` – alias provided for convenience that allows using default
   `Config`, i.e., `config = Config.init`.
 
 ### Wrapper for main function
@@ -269,11 +269,11 @@ the command line), then you can use `CLI!(...).parseArgs` function:
 
 **Parameters:**
 
-- `newMain`—function that’s called with object of type `COMMAND` as a first parameter filled with the data parsed from
+- `newMain` – function that’s called with object of type `COMMAND` as a first parameter filled with the data parsed from
   command line; optionally it can take `string[]` as a second parameter which will contain unknown arguments
   (see [Wrapper for main function](#wrapper-for-main-function) section for details).
-- `args`—raw command-line arguments (excluding `argv[0]`—first command-line argument in `main` function).
-- `initialValue`—initial value for the object passed to `newMain` function.
+- `args` – raw command-line arguments (excluding `argv[0]` – first command-line argument in `main` function).
+- `initialValue` – initial value for the object passed to `newMain` function.
 
 **Return value:**
 
@@ -309,12 +309,12 @@ int main(string[] args)
 For the cases when providing `newMain` function is not possible or feasible, `parseArgs` function can accept a reference
 to an object that receives the values of command line arguments:
 
-`Result parseArgs(ref COMMAND receiver, string[] args))`
+`Result parseArgs(ref COMMAND receiver, string[] args)`
 
 **Parameters:**
 
-- `receiver`—object that is populated with parsed values.
-- `args`—raw command-line arguments (excluding `argv[0]`—first command-line argument in `main` function).
+- `receiver` – object that is populated with parsed values.
+- `args` – raw command-line arguments (excluding `argv[0]` – first command-line argument in `main` function).
 
 **Return value:**
 
@@ -354,9 +354,9 @@ that it does not produce an error when unknown arguments are present. It has the
 
   **Parameters:**
 
-  - `receiver`—the object that’s populated with parsed values.
-  - `args`—raw command-line arguments (excluding `argv[0]`—first command-line argument in `main` function).
-  - `unrecognizedArgs`—raw command-line arguments that were not parsed.
+  - `receiver` – the object that’s populated with parsed values.
+  - `args` – raw command-line arguments (excluding `argv[0]` – first command-line argument in `main` function).
+  - `unrecognizedArgs` – raw command-line arguments that were not parsed.
 
   **Return value:**
 
@@ -366,8 +366,8 @@ that it does not produce an error when unknown arguments are present. It has the
 
   **Parameters:**
 
-  - `receiver`—the object that’s populated with parsed values.
-  - `args`—raw command-line arguments that are modified to have parsed arguments removed (excluding `argv[0]`—first
+  - `receiver` – the object that’s populated with parsed values.
+  - `args` – raw command-line arguments that are modified to have parsed arguments removed (excluding `argv[0]` – first
     command-line argument in `main` function).
 
   **Return value:**
@@ -403,7 +403,7 @@ If you are using `CLI!(...).main(alias newMain)` mixin template in your code the
 `dmd`). Don’t forget to use different file name for completer than your main program (`-of` option in `dmd`). No other
 changes are necessary to generate completer, but you should consider minimizing the set of imported modules when
 `argparse_completion` version is defined. For example, you can put all imports into your main function that is passed to
-`CLI!(...).main(alias newMain)`—`newMain` parameter is not used in completer.
+`CLI!(...).main(alias newMain)` – `newMain` parameter is not used in completer.
 
 If you prefer having separate main module for completer, then you can use `CLI!(...).completeMain` mixin template:
 ```d
@@ -420,9 +420,9 @@ returned from `main` function, having zero value in case of success.
 In case if none of the above methods is suitable, `argparse` provides `string[] CLI!(...).completeArgs(string[] args)`
 function. It takes arguments that should be completed and returns all possible completions.
 
-`completeArgs` function expects to receive all command-line arguments (excluding `argv[0]`—first command-line argument in `main`
-function) in order to provide completions correctly (set of available arguments depends on subcommand). This function
-supports two workflows:
+`completeArgs` function expects to receive all command-line arguments (excluding `argv[0]` – first command-line argument
+in `main` function) in order to provide completions correctly (set of available arguments depends on subcommand). This
+function supports two workflows:
 - If the last argument in `args` is empty and it’s not supposed to be a value for a command-line argument, then all
   available arguments and subcommands (if any) are returned.
 - If the last argument in `args` is not empty and it’s not supposed to be a value for a command-line argument, then only
@@ -539,7 +539,7 @@ multi-letter option. When an argument is used with a single dash, then it is tre
 
 The following usages of the argument in the command line are equivalent:
 `--name John`, `--name=John`, `--n John`, `--n=John`, `-nJohn`, `-n John`, `-n=John`. Note that any other character can
-be used instead of `=`—see [Parser customization](#parser-customization) for details.
+be used instead of `=` – see [Parser customization](#parser-customization) for details.
 
 ### Trailing arguments
 
@@ -559,7 +559,8 @@ struct T
 assert(CLI!T.parseArgs!((T t) { assert(t == T("A","",["-b","B"])); })(["-a","A","--","-b","B"]) == 0);
 ```
 
-Note that any other character sequence can be used instead of `--`—see [Parser customization](#parser-customization) for details.
+Note that any other character sequence can be used instead of `--` – see [Parser customization](#parser-customization)
+for details.
 
 ### Optional and required arguments
 
@@ -808,8 +809,8 @@ mixin CLI!Program.main!((prog)
 
 ### Subcommand name and aliases
 
-To define a command name that is not the same as the type that represents this command, one should use `Command` UDA—it
-accepts a name and list of name aliases. All these names are recognized by the parser and are displayed in the help
+To define a command name that is not the same as the type that represents this command, one should use `Command` UDA –
+it accepts a name and list of name aliases. All these names are recognized by the parser and are displayed in the help
 text. For example:
 
 ```d
@@ -851,27 +852,27 @@ SumType!(sum, min, Default!max) cmd;
 - Program name (i.e., the name of top-level command) and subcommand name can be provided to `Command` UDA as a parameter.
   If program name is not provided, then `Runtime.args[0]` (a.k.a. `argv[0]` from `main` function) is used. If subcommand name is not provided, then the name of
   the type that represents the command is used.
-- `Usage`—allows custom usage text. By default, the parser calculates the usage message from the arguments it contains
+- `Usage` – allows custom usage text. By default, the parser calculates the usage message from the arguments it contains
   but this can be overridden with `Usage` call. If the custom text contains `%(PROG)` then it will be replaced by the
   command/program name.
-- `Description`—used to provide a description of what the command/program does and how it works. In help messages, the
+- `Description` – used to provide a description of what the command/program does and how it works. In help messages, the
   description is displayed between the usage string and the list of the command arguments.
-- `ShortDescription`—used to provide a brief description of what the subcommand does. It is applicable to subcommands only
-  and is displayed in *Available commands* section on help screen of the parent command.
-- `Epilog`—custom text that is printed after the list of the arguments.
+- `ShortDescription` – used to provide a brief description of what the subcommand does. It is applicable to subcommands
+  only and is displayed in *Available commands* section on help screen of the parent command.
+- `Epilog` – custom text that is printed after the list of the arguments.
 
 `Usage`, `Description`, `ShortDescription` and `Epilog` modifiers take either `string` or `string delegate()`
-value—the latter can be used to return a value that is not known at compile time.
+value – the latter can be used to return a value that is not known at compile time.
 
 ### Argument
 
 There are some customizations supported on argument level for both `PositionalArgument` and `NamedArgument` UDAs:
 
-- `Description`—provides brief description of the argument. This text is printed next to the argument
+- `Description` – provides brief description of the argument. This text is printed next to the argument
   in the argument-list section of a help message. `Description` takes either `string` or `string delegate()`
-  value—the latter can be used to return a value that is not known at compile time.
-- `HideFromHelp`—can be used to indicate that the argument shouldn’t be printed in help message.
-- `Placeholder`—provides custom text that is used to indicate the value of the argument in help message.
+  value – the latter can be used to return a value that is not known at compile time.
+- `HideFromHelp` – can be used to indicate that the argument shouldn’t be printed in help message.
+- `Placeholder` – provides custom text that is used to indicate the value of the argument in help message.
 
 ### Help text styling
 
@@ -942,8 +943,9 @@ created using `ArgumentGroup` UDA.
 
 This UDA has some customization for displaying text:
 
-- `Description`—provides brief description of the group. This text is printed right after group name.
-  It takes either `string` or `string delegate()` value—the latter can be used to return a value that is not known at compile time.
+- `Description` – provides brief description of the group. This text is printed right after group name.
+  It takes either `string` or `string delegate()` value – the latter can be used to return a value that is not known
+  at compile time.
 
 Example:
 
@@ -999,7 +1001,7 @@ Optional arguments:
 
 ## ANSI colors and styles
 
-Using colors in your command’s output does not just look good: **contrasting** important elements like argument names,
+Using colors in your command’s output does not just look good: **contrasting** important elements like argument names
 from the rest of the text **reduces the cognitive load** on the user. `argparse` uses [ANSI escape sequences](https://en.wikipedia.org/wiki/ANSI_escape_code)
 to add coloring and styling to help text. In addition, `argparse` offers public API to apply colors and styles
 to any text printed to the console (see below).
@@ -1087,7 +1089,7 @@ Argparse provides the following setting to control the styling:
   whether styling will be applied.
 
 In some cases styling control should be exposed to a user as a command-line argument (similar to `--color` argument in `ls` and `grep` commands).
-Argparse supports this use case—just add an argument to your command (you can customize it with `@NamedArgument` UDA):
+Argparse supports this use case – just add an argument to your command (you can customize it with `@NamedArgument` UDA):
 
 ```d
 static auto color = ansiStylingArgument;
@@ -1276,10 +1278,10 @@ In case the argument is bound to static array then the maximum number of values 
 dynamic array, the number of values is not limited. The minimum number of values is `1` in all cases. This behavior can
 be customized by calling the following functions:
 
-- `NumberOfValues(ulong min, ulong max)`—sets both minimum and maximum number of values.
-- `NumberOfValues(ulong num)`—sets both minimum and maximum number of values to the same value.
-- `MinNumberOfValues(ulong min)`—sets minimum number of values.
-- `MaxNumberOfValues(ulong max)`—sets maximum number of values.
+- `NumberOfValues(ulong min, ulong max)` – sets both minimum and maximum number of values.
+- `NumberOfValues(ulong num)` – sets both minimum and maximum number of values to the same value.
+- `MinNumberOfValues(ulong min)` – sets minimum number of values.
+- `MaxNumberOfValues(ulong max)` – sets maximum number of values.
 
 ```d
 struct T
@@ -1366,7 +1368,7 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T(4)); })(["-a","-a","-a","-a"]) == 
 
 ### Custom types
 
-Any arbitrary type can be used to receive command-line-argument values. `argparse` supports this use case—you just need
+Any arbitrary type can be used to receive command-line-argument values. `argparse` supports this use case – you just need
 to provide parsing function:
 
 ```d
@@ -1389,15 +1391,15 @@ Some time the functionality provided out of the box is not enough and it needs t
 
 Parsing of command-line string values into some typed `receiver` member consists of multiple steps:
 
-- **Pre-validation**—argument values are validated as raw strings.
-- **Parsing**—raw argument values are converted to a different type (usually the type of the receiver).
-- **Validation**—converted value is validated.
-- **Action**—depending on a type of the `receiver`, it might be either assignment of converted value to a `receiver`,
+- **Pre-validation** – argument values are validated as raw strings.
+- **Parsing** – raw argument values are converted to a different type (usually the type of the receiver).
+- **Validation** – converted value is validated.
+- **Action** – depending on a type of the `receiver`, it might be either assignment of converted value to a `receiver`,
   appending value if `receiver` is an array or other operation.
 
 In case if argument does not expect any value, then the only one step is involved:
 
-- **Action if no value**—similar to **Action** step above but without converted value.
+- **Action if no value** – similar to **Action** step above but without converted value.
 
 If any of the steps fails, then the command-line parsing fails as well.
 
@@ -1406,8 +1408,8 @@ either argument value(s) or `Param` struct that has these fields (there is also 
 the `value` field is `string[]`):
 
 - `config`- Config object that is passed to parsing function.
-- `name`—Argument name that is specified in command line.
-- `value`—Array of argument values that are provided in command line.
+- `name` – Argument name that is specified in command line.
+- `value` – Array of argument values that are provided in command line.
 
 ### Pre-validation
 
@@ -1521,13 +1523,13 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T(4)); })(["-a","!4"]) == 0);
 
 ### Assign character
 
-`Config.assignChar`—the assignment character used in arguments with value: `-a=5`, `-b=foo`.
+`Config.assignChar` – the assignment character used in arguments with value: `-a=5`, `-b=foo`.
 
 Default is equal sign `=`.
 
 ### Array separator
 
-`Config.arraySep`—when set to `char.init`, values to array and associative-array receivers are treated as an individual
+`Config.arraySep` – when set to `char.init`, values to array and associative-array receivers are treated as an individual
 value. That is, only one argument is appended/inserted per appearance of the argument. If `arraySep` is set to something
 else, then each value is first split by the separator, and the individual pieces are treated as values to the same
 argument.
@@ -1553,33 +1555,33 @@ assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T(["1","2","3","4","5"])); })
 
 ### Named argument prefix character
 
-`Config.namedArgPrefix`—the character that named arguments begin with.
+`Config.namedArgPrefix` – the character that named arguments begin with.
 
 Default is dash (`-`).
 
 ### End of arguments
 
-`Config.endOfArgs`—the string that conventionally marks the end of all arguments.
+`Config.endOfArgs` – the string that conventionally marks the end of all arguments.
 
 Default is double dash (`--`).
 
 ### Case sensitivity
 
-`Config.caseSensitive`—by default argument names are case-sensitive. You can change that behavior by setting this
+`Config.caseSensitive` – by default argument names are case-sensitive. You can change that behavior by setting this
 member to `false`.
 
 Default is `true`.
 
 ### Bundling of single-letter arguments
 
-`Config.bundling`—when it is set to `true`, single-letter arguments can be bundled together, i.e., `-abc` is the same
+`Config.bundling` – when it is set to `true`, single-letter arguments can be bundled together, i.e., `-abc` is the same
 as `-a -b -c`.
 
 Default is `false`.
 
 ### Adding help generation
 
-`Config.addHelp`—when it is set to `true`, then `-h` and `--help` arguments are added to the parser. In case if the
+`Config.addHelp` – when it is set to `true`, then `-h` and `--help` arguments are added to the parser. In case if the
 command line has one of these arguments, then the corresponding help text is printed and the parsing will be stopped.
 If `CLI!(...).parseArgs(alias newMain)` or `CLI!(...).main(alias newMain)` is used, then provided `newMain` function will
 not be called.
@@ -1588,7 +1590,7 @@ Default is `true`.
 
 ### Styling mode
 
-`Config.stylingMode`—styling mode for the text output (error messages and help screen). It has the following type: `enum StylingMode { autodetect, on, off }`.
+`Config.stylingMode` – styling mode for the text output (error messages and help screen). It has the following type: `enum StylingMode { autodetect, on, off }`.
 If it's set to `Config.StylingMode.on` then styling is **always enabled**.
 If it's set to `Config.StylingMode.off` then styling is **always disabled**.
 
@@ -1598,7 +1600,7 @@ See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 
 ### Styling scheme
 
-`Config.styling`—contains style for the text output (error messages and help screen). It has the following members:
+`Config.styling` – contains style for the text output (error messages and help screen). It has the following members:
 
 - `programName`: style for the program name. Default is `bold`.
 - `subcommandName`: style for the subcommand name. Default is `bold`.
@@ -1612,7 +1614,7 @@ See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 
 ### Error handling
 
-`Config.errorHandler`—this is a handler function for all errors occurred during parsing the command line. It might be
+`Config.errorHandler` – this is a handler function for all errors occurred during parsing the command line. It might be
 either a function or a delegate that takes `string` parameter which would be an error message.
 
 The default behavior is to print error message to `stderr`.
