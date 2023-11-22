@@ -62,6 +62,64 @@ package(argparse) string[] completeArgs(Config config, COMMAND)(string[] args)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+@(Command("complete")
+.Description("Print completion.")
+)
+private struct CompleteCmd
+{
+    @MutuallyExclusive
+    {
+        @(NamedArgument.Description("Provide completion for bash."))
+        bool bash;
+        @(NamedArgument.Description("Provide completion for tcsh."))
+        bool tcsh;
+        @(NamedArgument.Description("Provide completion for fish."))
+        bool fish;
+    }
+
+    @TrailingArguments
+    string[] args;
+
+    void execute(Config config, COMMAND)()
+    {
+        import std.process: environment;
+        import std.stdio: writeln;
+        import std.algorithm: each;
+
+        if(bash)
+        {
+            // According to bash documentation:
+            //   When the function or command is invoked, the first argument ($1) is the name of the command whose
+            //   arguments are being completed, the second` argument ($2) is the word being completed, and the third
+            //   argument ($3) is the word preceding the word being completed on the current command line.
+            //
+            // We don't use these arguments so we just remove those after "---" including itself
+            while(args.length > 0 && args[$-1] != "---")
+                args = args[0..$-1];
+
+            // Remove "---"
+            if(args.length > 0 && args[$-1] == "---")
+                args = args[0..$-1];
+
+            // COMP_LINE environment variable contains current command line so if it ends with space ' ' then we
+            // should provide all available arguments. To do so, we add an empty argument
+            auto cmdLine = environment.get("COMP_LINE", "");
+            if(cmdLine.length > 0 && cmdLine[$-1] == ' ')
+                args ~= "";
+        }
+        else if(tcsh || fish)
+        {
+            // COMMAND_LINE environment variable contains current command line so if it ends with space ' ' then we
+            // should provide all available arguments. To do so, we add an empty argument
+            auto cmdLine = environment.get("COMMAND_LINE", "");
+            if(cmdLine.length > 0 && cmdLine[$-1] == ' ')
+                args ~= "";
+        }
+
+        completeArgs!(config, COMMAND)(args).each!writeln;
+    }
+}
+
 // DMD 2.100.2 fails with 'Illegal instruction' if delegate is put directly into NamedArgument.Description
 private alias Complete_Init_CommandName_Description(COMMAND) = delegate ()
 {
@@ -95,7 +153,7 @@ package(argparse) struct Complete(COMMAND)
         @(NamedArgument.Description(Complete_Init_CommandName_Description!COMMAND))
         string commandName;   // command to complete
 
-        void execute(Config config)()
+        void execute(Config config, COMMAND)()
         {
             import std.stdio: writeln;
 
@@ -149,64 +207,6 @@ package(argparse) struct Complete(COMMAND)
                         writeln("#       ", completerPath, " init --fish", commandNameArg, " | source");
                         writeln("complete -c ", commandName, " -a '(COMMAND_LINE=(commandline -p) ", completerPath, " --fish -- (commandline -op))' --no-files");
                     }
-        }
-    }
-
-    @(Command("complete")
-    .Description("Print completion.")
-    )
-    private struct CompleteCmd
-    {
-        @MutuallyExclusive
-        {
-            @(NamedArgument.Description("Provide completion for bash."))
-            bool bash;
-            @(NamedArgument.Description("Provide completion for tcsh."))
-            bool tcsh;
-            @(NamedArgument.Description("Provide completion for fish."))
-            bool fish;
-        }
-
-        @TrailingArguments
-        string[] args;
-
-        void execute(Config config)()
-        {
-            import std.process: environment;
-            import std.stdio: writeln;
-            import std.algorithm: each;
-
-            if(bash)
-            {
-                // According to bash documentation:
-                //   When the function or command is invoked, the first argument ($1) is the name of the command whose
-                //   arguments are being completed, the second` argument ($2) is the word being completed, and the third
-                //   argument ($3) is the word preceding the word being completed on the current command line.
-                //
-                // We don't use these arguments so we just remove those after "---" including itself
-                while(args.length > 0 && args[$-1] != "---")
-                    args = args[0..$-1];
-
-                // Remove "---"
-                if(args.length > 0 && args[$-1] == "---")
-                    args = args[0..$-1];
-
-                // COMP_LINE environment variable contains current command line so if it ends with space ' ' then we
-                // should provide all available arguments. To do so, we add an empty argument
-                auto cmdLine = environment.get("COMP_LINE", "");
-                if(cmdLine.length > 0 && cmdLine[$-1] == ' ')
-                    args ~= "";
-            }
-            else if(tcsh || fish)
-            {
-                // COMMAND_LINE environment variable contains current command line so if it ends with space ' ' then we
-                // should provide all available arguments. To do so, we add an empty argument
-                auto cmdLine = environment.get("COMMAND_LINE", "");
-                if(cmdLine.length > 0 && cmdLine[$-1] == ' ')
-                    args ~= "";
-            }
-
-            completeArgs!(config, COMMAND)(args).each!writeln;
         }
     }
 

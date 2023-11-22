@@ -179,7 +179,7 @@ template CLI(Config config, COMMAND)
             return 1;
         }
 
-        receiver.cmd.match!(_ => _.execute!config());
+        receiver.cmd.match!(_ => _.execute!(config, COMMAND));
 
         return 0;
     }
