@@ -12,7 +12,8 @@ import std.traits: getUDAs;
 
 package(argparse) struct ArgumentInfo
 {
-    string[] names;
+    string[] shortNames;
+    string[] longNames;
     string[] displayNames;    // names prefixed with Config.namedArgPrefix
 
     string displayName() const
@@ -58,7 +59,6 @@ package(argparse) struct ArgumentInfo
     }
 
     bool allowBooleanNegation = true;
-    bool ignoreInDefaultCommand;
 }
 
 unittest
@@ -121,7 +121,7 @@ private enum hasMemberGroupUDA(TYPE, alias symbol) = __traits(compiles, { enum g
 
 package struct Arguments
 {
-    ArgumentInfo[] arguments;
+    ArgumentInfo[] info;
 
     // named arguments
     size_t[string] argsNamed;
@@ -137,59 +137,76 @@ package struct Arguments
     Group requiredGroup = Group(requiredGroupName);
     Group optionalGroup = Group(optionalGroupName);
 
-    @property auto positionalArguments() const { return argsPositional; }
-
-
-    void add(Config config, TYPE, ArgumentInfo[] infos)()
+    auto namedArguments() const
     {
-        static foreach(info; infos)
-            add!(config, TYPE, info);
+        import std.algorithm: filter;
+
+        return info.filter!((ref _) => !_.positional);
     }
 
-    void add(Config config, TYPE, ArgumentInfo info)()
+    auto positionalArguments() const
     {
+        import std.algorithm: map;
+
+        return argsPositional.map!(ref (_) => info[_]);
+    }
+
+
+    void add(TYPE, ArgumentInfo[] infos)()
+    {
+        info = infos;
+
+        static foreach(index, info; infos)
+            add!(TYPE, info, index);
+    }
+
+    private void add(TYPE, ArgumentInfo info, size_t argIndex)()
+    {
+        alias addArgument = addArgumentImpl!(TYPE, info, argIndex);
+
         static if(hasMemberGroupUDA!(TYPE, info.memberSymbol))
         {
             enum group = getMemberGroupUDA!(TYPE, info.memberSymbol);
 
             auto index = (group.name in groupsByName);
             if(index !is null)
-                addArgumentImpl!(config, TYPE, info)(userGroups[*index]);
+                addArgument(userGroups[*index]);
             else
             {
                 groupsByName[group.name] = userGroups.length;
                 userGroups ~= group;
-                addArgumentImpl!(config, TYPE, info)(userGroups[$-1]);
+                addArgument(userGroups[$-1]);
             }
         }
         else static if(info.required)
-            addArgumentImpl!(config, TYPE, info)(requiredGroup);
+            addArgument(requiredGroup);
         else
-            addArgumentImpl!(config, TYPE, info)(optionalGroup);
+            addArgument(optionalGroup);
     }
 
-    private void addArgumentImpl(Config config, TYPE, ArgumentInfo info)(ref Group group)
+    private void addArgumentImpl(TYPE, ArgumentInfo info, size_t argIndex)(ref Group group)
     {
-        static assert(info.names.length > 0);
-
-        immutable index = arguments.length;
+        static assert(info.shortNames.length + info.longNames.length > 0);
 
         static if(info.positional)
         {
             if(argsPositional.length <= info.position.get)
                 argsPositional.length = info.position.get + 1;
 
-            argsPositional[info.position.get] = index;
+            argsPositional[info.position.get] = argIndex;
         }
         else
-            static foreach(name; info.names)
+        {
+            import std.range: chain;
+
+            static foreach(name; chain(info.shortNames, info.longNames))
             {
                 assert(!(name in argsNamed), "Duplicated argument name: "~name);
-                argsNamed[name] = index;
+                argsNamed[name] = argIndex;
             }
+        }
 
-        arguments ~= info;
-        group.argIndex ~= index;
+        group.argIndex ~= argIndex;
     }
 
 
@@ -202,7 +219,7 @@ package struct Arguments
 
     FindResult findArgumentImpl(const size_t* pIndex) const
     {
-        return pIndex ? FindResult(*pIndex, &arguments[*pIndex]) : FindResult.init;
+        return pIndex ? FindResult(*pIndex, &info[*pIndex]) : FindResult.init;
     }
 
     auto findPositionalArgument(size_t position) const

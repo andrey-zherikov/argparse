@@ -19,6 +19,7 @@ public import argparse.result;
 version(unittest)
 {
     import argparse.internal.command : createCommand;
+    import argparse.internal.commandinfo : getCommandInfo;
     import argparse.internal.help : printHelp;
     import argparse.ansi : cleanStyleEnv, restoreStyleEnv;
 }
@@ -50,7 +51,7 @@ unittest
     }();
 
     T receiver;
-    auto a = createCommand!config(receiver);
+    auto a = createCommand!(config, getCommandInfo!(config, T))(receiver);
     assert(a.arguments.requiredGroup.argIndex == [2,4]);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -70,7 +71,7 @@ unittest
     }();
 
     T receiver;
-    auto a = createCommand!config(receiver);
+    auto a = createCommand!(config, getCommandInfo!(config, T))(receiver);
     assert(a.arguments.requiredGroup.argIndex == []);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -84,7 +85,7 @@ unittest
         @(NamedArgument("2"))
         int a;
     }
-    static assert(!__traits(compiles, { T1 t; enum c = createCommand!(Config.init)(t); }));
+    static assert(!__traits(compiles, { T1 t; enum c = createCommand!(Config.init, getCommandInfo!(Config.init, T1))(t); }));
 
     struct T2
     {
@@ -93,28 +94,28 @@ unittest
         @(NamedArgument("1"))
         int b;
     }
-    static assert(!__traits(compiles, { T2 t; enum c = createCommand!(Config.init)(t); }));
+    static assert(!__traits(compiles, { T2 t; enum c = createCommand!(Config.init, getCommandInfo!(Config.init, T2))(t); }));
 
     struct T3
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(0)) int b;
     }
-    static assert(!__traits(compiles, { T3 t; enum c = createCommand!(Config.init)(t); }));
+    static assert(!__traits(compiles, { T3 t; enum c = createCommand!(Config.init, getCommandInfo!(Config.init, T3))(t); }));
 
     struct T4
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(2)) int b;
     }
-    static assert(!__traits(compiles, { T4 t; enum c = createCommand!(Config.init)(t); }));
+    static assert(!__traits(compiles, { T4 t; enum c = createCommand!(Config.init, getCommandInfo!(Config.init, T4))(t); }));
 
     struct T5
     {
         @(PositionalArgument(0)) int[] a;
         @(PositionalArgument(1)) int b;
     }
-    static assert(!__traits(compiles, { T5 t; enum c = createCommand!(Config.init)(t); }));
+    static assert(!__traits(compiles, { T5 t; enum c = createCommand!(Config.init, getCommandInfo!(Config.init, T5))(t); }));
 }
 
 unittest
@@ -156,7 +157,7 @@ unittest
     }
 
     params receiver;
-    auto a = createCommand!(Config.init)(receiver);
+    auto a = createCommand!(Config.init, getCommandInfo!(Config.init, params))(receiver);
 }
 
 unittest
@@ -317,6 +318,7 @@ unittest
     {
         bool a;
         bool b;
+        string c;
     }
     enum config = {
         Config config;
@@ -326,6 +328,7 @@ unittest
 
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-a","-b"]) == 12345);
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-ab"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-abc=foo"]) == 12345);
 }
 
 unittest
@@ -882,7 +885,7 @@ unittest
     auto a = appender!string;
 
     T receiver;
-    auto cmd = createCommand!(Config.init)(receiver);
+    auto cmd = createCommand!(Config.init, getCommandInfo!(Config.init, T))(receiver);
 
     auto isEnabled = ansiStylingArgument.isEnabled;
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;
@@ -938,7 +941,7 @@ unittest
     auto a = appender!string;
 
     T receiver;
-    auto cmd = createCommand!(Config.init)(receiver);
+    auto cmd = createCommand!(Config.init, getCommandInfo!(Config.init, T))(receiver);
 
     auto isEnabled = ansiStylingArgument.isEnabled;
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;
@@ -992,7 +995,7 @@ unittest
     auto a = appender!string;
 
     T receiver;
-    auto cmd = createCommand!(Config.init)(receiver);
+    auto cmd = createCommand!(Config.init, getCommandInfo!(Config.init, T))(receiver);
 
     auto isEnabled = ansiStylingArgument.isEnabled;
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;

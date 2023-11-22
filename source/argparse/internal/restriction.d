@@ -20,7 +20,7 @@ private enum RequiredArg(Config config, ArgumentInfo info, size_t index) =
 
 unittest
 {
-    auto f = RequiredArg!(Config.init, ArgumentInfo([""], [""]), 0);
+    auto f = RequiredArg!(Config.init, ArgumentInfo([],[],[""]), 0);
 
     assert(f(bool[size_t].init).isError("argument is required"));
 
@@ -58,7 +58,7 @@ private enum RequiredTogether(Config config, ArgumentInfo[] allArgs) =
 
 unittest
 {
-    auto f = RequiredTogether!(Config.init, [ArgumentInfo([], ["--a"]), ArgumentInfo([], ["--b"]), ArgumentInfo([], ["--c"])]);
+    auto f = RequiredTogether!(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
     assert(f(bool[size_t].init, [0,1]));
 
@@ -87,7 +87,7 @@ private enum RequiredAnyOf(Config config, ArgumentInfo[] allArgs) =
 
 unittest
 {
-    auto f = RequiredAnyOf!(Config.init, [ArgumentInfo([], ["--a"]), ArgumentInfo([], ["--b"]), ArgumentInfo([], ["--c"])]);
+    auto f = RequiredAnyOf!(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
     assert(f(bool[size_t].init, [0,1]).isError("One of the following arguments is required","--a","--b"));
     assert(f([2:true], [0,1]).isError("One of the following arguments is required","--a","--b"));
@@ -121,7 +121,7 @@ private enum MutuallyExclusive(Config config, ArgumentInfo[] allArgs) =
 
 unittest
 {
-    auto f = MutuallyExclusive!(Config.init, [ArgumentInfo([], ["--a"]), ArgumentInfo([], ["--b"]), ArgumentInfo([], ["--c"])]);
+    auto f = MutuallyExclusive!(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
     assert(f(bool[size_t].init, [0,1]));
 
@@ -225,20 +225,21 @@ package struct Restrictions
             static if(info.required)
                 checks ~= RequiredArg!(config, info, argIndex);
 
-            static foreach(group; getRestrictionGroups!(TYPE, info.memberSymbol))
-            {{
-                auto groupIndex = (group.location in groupsByLocation);
-                if(groupIndex !is null)
-                    groups[*groupIndex].argIndex ~= argIndex;
-                else
-                {
-                    auto gIndex = groupsByLocation[group.location] = groups.length;
-                    groups ~= group;
+            static if(info.memberSymbol)
+                static foreach(group; getRestrictionGroups!(TYPE, info.memberSymbol))
+                {{
+                    auto groupIndex = (group.location in groupsByLocation);
+                    if(groupIndex !is null)
+                        groups[*groupIndex].argIndex ~= argIndex;
+                    else
+                    {
+                        auto gIndex = groupsByLocation[group.location] = groups.length;
+                        groups ~= group;
 
-                    groups[gIndex].initialize!(config, infos);
-                    groups[gIndex].argIndex ~= argIndex;
-                }
-            }}
+                        groups[gIndex].initialize!(config, infos);
+                        groups[gIndex].argIndex ~= argIndex;
+                    }
+                }}
         }
     }
 

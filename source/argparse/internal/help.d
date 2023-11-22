@@ -145,13 +145,13 @@ package struct HelpArgumentUDA
 {
     ArgumentInfo info = {
         ArgumentInfo info;
-        info.names = ["h","help"];
+        info.shortNames = ["h"];
+        info.longNames = ["help"];
         info.description = "Show this help message and exit";
         info.required = false;
         info.minValuesCount = 0;
         info.maxValuesCount = 0;
         info.allowBooleanNegation = false;
-        info.ignoreInDefaultCommand = true;
         return info;
     }();
 
@@ -174,18 +174,19 @@ package struct HelpArgumentUDA
 
 unittest
 {
-    HelpArgumentUDA h;
-    assert(h.info.names == ["h","help"]);
-    assert(!h.info.required);
-    assert(h.info.minValuesCount == 0);
-    assert(h.info.maxValuesCount == 0);
-    assert(!h.info.allowBooleanNegation);
-    assert(h.info.ignoreInDefaultCommand);
+    assert(HelpArgumentUDA.init.info.shortNames == ["h"]);
+    assert(HelpArgumentUDA.init.info.longNames == ["help"]);
+    assert(!HelpArgumentUDA.init.info.required);
+    assert(HelpArgumentUDA.init.info.minValuesCount == 0);
+    assert(HelpArgumentUDA.init.info.maxValuesCount == 0);
+    assert(!HelpArgumentUDA.init.info.allowBooleanNegation);
 }
 
 private bool isHelpArgument(string name)
 {
-    static foreach(n; HelpArgumentUDA.init.info.names)
+    import std.range: chain;
+
+    static foreach(n; chain(HelpArgumentUDA.init.info.shortNames, HelpArgumentUDA.init.info.longNames))
         if(n == name)
             return true;
 
@@ -440,7 +441,7 @@ unittest
     {
         enum info = {
             ArgumentInfo info;
-            info.names ~= "foo";
+            info.longNames ~= "foo";
             info.displayNames ~= "--foo";
             info.placeholder = "v";
             info.required = required;
@@ -468,7 +469,7 @@ unittest
 
 private void createUsage(void delegate(string) sink, const ref Style style, string progName, const(Arguments)* arguments, bool hasSubCommands)
 {
-    import std.algorithm: filter, each, map;
+    import std.algorithm: filter, each;
 
     alias print = (r) => r
     .filter!((ref _) => !_.hideFromHelp)
@@ -481,9 +482,9 @@ private void createUsage(void delegate(string) sink, const ref Style style, stri
     sink(progName);
 
     // named args
-    print(arguments.arguments.filter!((ref _) => !_.positional));
+    print(arguments.namedArguments);
     // positional args
-    print(arguments.positionalArguments.map!(ref (_) => arguments.arguments[_]));
+    print(arguments.positionalArguments);
     // sub commands
     if(hasSubCommands)
         sink(style.subcommandName(" <command> [<args>]"));
@@ -523,7 +524,8 @@ private auto getSections(ARGUMENTS)(const ref Style style, ARGUMENTS arguments)
         if(_.hideFromHelp)
             return false;
 
-        if(isHelpArgument(_.names[0]))
+        if(_.shortNames.length > 0 && isHelpArgument(_.shortNames[0]) ||
+            _.longNames.length > 0 && isHelpArgument(_.longNames[0]))
         {
             if(hideHelpArg)
                 return false;
@@ -563,7 +565,7 @@ private auto getSections(ARGUMENTS)(const ref Style style, ARGUMENTS arguments)
             sections[index].entries.match!(
                 (ref Item[] items) {
                     items ~= group.argIndex
-                        .map!(_ => &args.arguments[_])
+                        .map!(_ => &args.info[_])
                         .filter!((const _) => showArg(*_))
                         .map!((const _) => getItem(*_))
                         .array;
