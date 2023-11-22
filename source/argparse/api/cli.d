@@ -147,12 +147,14 @@ template CLI(Config config, COMMAND)
         }
     }
 
-    string[] completeArgs(string[] args)
+    // This is a template to avoid compiling it unless it is actually used.
+    string[] completeArgs()(string[] args)
     {
         return .completeArgs!(config, COMMAND)(args);
     }
 
-    int complete(string[] args)
+    // This is a template to avoid compiling it unless it is actually used.
+    int complete()(string[] args)
     {
         import std.sumtype: match;
 
