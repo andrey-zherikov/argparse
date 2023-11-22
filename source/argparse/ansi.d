@@ -1,7 +1,5 @@
 module argparse.ansi;
 
-import std.regex: ctRegex;
-
 // The string that starts an ANSI command sequence.
 private enum prefix = "\033[";
 
@@ -13,9 +11,6 @@ private enum suffix = "m";
 
 // The sequence used to reset all styling.
 private enum reset = prefix ~ suffix;
-
-// Regex to match ANSI sequence
-private enum sequenceRegex = ctRegex!(`\x1b\[(\d*(;\d*)*)?m`);
 
 // Code offset between foreground and background
 private enum colorBgOffset = 10;
@@ -197,11 +192,39 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-public auto getUnstyledText(string text)
+public string[] getUnstyledText(string text) nothrow pure @safe
 {
-    import std.regex: splitter;
+    import std.algorithm.searching: find, skipOver;
+    import std.array: appender;
+    import std.utf: byCodeUnit;
 
-    return text.splitter(sequenceRegex);
+    auto result = appender!(string[]);
+    auto s = text.byCodeUnit();
+    size_t unprocessed = text.length;
+    while(s.length >= 3) // \x1b[m
+    {
+        auto escape = s.find("\x1b[".byCodeUnit());
+        if(escape.empty)
+            break;
+        s = escape[2 .. $].find!(c => c - '0' >= 10u && c != ';'); // Skip over `\x1b \[ [\d;]*`.
+        if(s.skipOver('m'))
+        {
+            if(unprocessed != escape.length) // Do not produce empty chunks.
+                result ~= text[$ - unprocessed .. $ - escape.length];
+            unprocessed = s.length;
+        }
+    }
+    if(unprocessed != 0)
+        result ~= text[$ - unprocessed .. $];
+    return result[];
+}
+
+nothrow pure @safe unittest
+{
+    assert(getUnstyledText("\x1b[m") == []);
+    assert(getUnstyledText("a\x1b[m") == ["a"]);
+    assert(getUnstyledText("a\x1b[0;1m\x1b[9mm\x1b[m\x1b[") == ["a", "m", "\x1b["]);
+    assert(getUnstyledText("a\x1b[0:abc\x1b[m") == ["a\x1b[0:abc"]);
 }
 
 package size_t getUnstyledTextLength(string text)
