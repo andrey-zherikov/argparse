@@ -318,6 +318,7 @@ unittest
     {
         bool a;
         bool b;
+        string c;
     }
     enum config = {
         Config config;
@@ -327,6 +328,7 @@ unittest
 
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-a","-b"]) == 12345);
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-ab"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-abc=foo"]) == 12345);
 }
 
 unittest

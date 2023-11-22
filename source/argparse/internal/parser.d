@@ -331,6 +331,22 @@ private Entry getNextEntry(Config config)(ref string[] args,
     return Entry(Unknown(arg0));
 }
 
+unittest
+{
+    auto test(string[] args) => getNextEntry!(Config.init)(args, null, null, null);
+
+    assert(test([""]) == Entry(Unknown("")));
+    assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
+}
+
+unittest
+{
+    auto test(string[] args) => getNextEntry!(Config.init)(args, null, null, null);
+
+    assert(test([""]) == Entry(Unknown("")));
+    assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private auto findCommand(ref Command[] cmdStack, string name)
