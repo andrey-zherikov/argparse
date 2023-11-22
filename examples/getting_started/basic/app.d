@@ -4,39 +4,39 @@ import argparse;
 struct Basic
 {
     // Basic data types are supported:
-        // --name argument
+        // '--name' argument
         string name;
 
-        // --number argument
+        // '--number' argument
         int number;
 
-        // --boolean argument
+        // '--boolean' argument
         bool boolean;
 
     // Argument can have default value if it's not specified in command line
-        // --unused argument
+        // '--unused' argument
         string unused = "some default value";
 
 
     // Enums are also supported
         enum Enum { unset, foo, boo }
-        // --choice argument
+        // '--choice' argument
         Enum choice;
 
     // Use array to store multiple values
-        // --array argument
+        // '--array' argument
         int[] array;
 
     // Callback with no args (flag)
-        // --callback argument
+        // '--callback' argument
         void callback() {}
 
     // Callback with single value
-        // --callback1 argument
+        // '--callback1' argument
         void callback1(string value) { assert(value == "cb-value"); }
 
     // Callback with zero or more values
-        // --callback2 argument
+        // '--callback2' argument
         void callback2(string[] value) { assert(value == ["cb-v1","cb-v2"]); }
 }
 
