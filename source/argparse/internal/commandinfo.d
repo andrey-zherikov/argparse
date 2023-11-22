@@ -52,7 +52,7 @@ unittest
     assert(uda.names == ["CMD-NAME"]);
 }
 
-package template getCommandInfo(Config config, COMMAND, string name = "")
+package(argparse) template getCommandInfo(Config config, COMMAND, string name = "")
 {
     import std.traits: getUDAs;
 

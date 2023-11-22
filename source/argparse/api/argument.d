@@ -124,7 +124,7 @@ unittest
 
 auto PositionalArgument(uint pos)
 {
-    auto arg = ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo()).Required();
+    auto arg = ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo.init).Required();
     arg.info.position = pos;
     return arg;
 }
@@ -158,7 +158,7 @@ unittest
     auto arg = NamedArgument("foo");
     assert(!arg.info.required);
     assert(!arg.info.positional);
-    assert(arg.info.names == ["foo"]);
+    assert(arg.info.shortNames == ["foo"]);
 }
 
 unittest
@@ -166,7 +166,7 @@ unittest
     auto arg = NamedArgument(["foo","bar"]);
     assert(!arg.info.required);
     assert(!arg.info.positional);
-    assert(arg.info.names == ["foo","bar"]);
+    assert(arg.info.shortNames == ["foo","bar"]);
 }
 
 unittest
@@ -174,7 +174,7 @@ unittest
     auto arg = NamedArgument("foo","bar");
     assert(!arg.info.required);
     assert(!arg.info.positional);
-    assert(arg.info.names == ["foo","bar"]);
+    assert(arg.info.shortNames == ["foo","bar"]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
