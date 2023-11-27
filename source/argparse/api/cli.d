@@ -158,32 +158,11 @@ template CLI(Config config, COMMAND)
     {
         import std.sumtype: match;
 
-        // dmd fails with core.exception.OutOfMemoryError@core\lifetime.d(137): Memory allocation failed
-        // if we call anything from CLI!(config, Complete!COMMAND) so we have to directly call parser here
-
-        Complete!COMMAND receiver;
-        string[] unrecognizedArgs;
-
-        auto res = callParser!(config, false)(receiver, args, unrecognizedArgs);
-        if(!res)
-        {
-            // This never happens
-            if(res.errorMsg.length > 0)
-                onError!config(res.errorMsg);
-
-            return 1;
-        }
-
-        if(res && unrecognizedArgs.length > 0)
-        {
-            import std.conv: to;
-            onError!config("Unrecognized arguments: "~unrecognizedArgs.to!string);
-            return 1;
-        }
-
-        receiver.cmd.match!(_ => _.execute!(config, COMMAND));
-
-        return 0;
+        // We are able to instantiate `CLI` with different arguments solely because we reside in a templated function.
+        // If we weren't, that would lead to infinite template recursion.
+        return CLI!(config, Complete!COMMAND).parseArgs!(comp =>
+            comp.cmd.match!(_ => _.execute!(config, COMMAND))
+        )(args);
     }
 
     mixin template mainComplete()
