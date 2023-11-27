@@ -57,7 +57,7 @@ unittest
 
 template CLI(Config config, COMMANDS...)
 {
-    mixin template main(alias newMain)
+    template main(alias newMain)
     {
         import std.sumtype: SumType, match;
 
@@ -184,7 +184,7 @@ template CLI(Config config, COMMAND)
         return 0;
     }
 
-    mixin template mainComplete()
+    template mainComplete()
     {
         int main(string[] argv)
         {
@@ -192,7 +192,7 @@ template CLI(Config config, COMMAND)
         }
     }
 
-    mixin template main(alias newMain)
+    template main(alias newMain)
     {
         version(argparse_completion)
         {
