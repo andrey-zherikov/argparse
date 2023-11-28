@@ -139,11 +139,6 @@ auto NamedArgument(string[] name...)
     return ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo(name.dup)).Optional();
 }
 
-auto NamedArgument(string name)
-{
-    return ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo([name])).Optional();
-}
-
 unittest
 {
     auto arg = PositionalArgument(3, "foo");
@@ -179,12 +174,12 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-auto AllowNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
+auto AllowNoValue(alias valueToUse, T)(ArgumentUDA!T uda)
 {
     return uda.ActionNoValue!(() => valueToUse);
 }
 
-auto RequireNoValue(alias valueToUse, T)(auto ref ArgumentUDA!T uda)
+auto RequireNoValue(alias valueToUse, T)(ArgumentUDA!T uda)
 {
     auto desc = uda.AllowNoValue!valueToUse;
     desc.info.minValuesCount = 0;
@@ -212,12 +207,12 @@ unittest
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Parsing customization
 
-auto PreValidation(alias func, T)(auto ref ArgumentUDA!T uda)
+auto PreValidation(alias func, T)(ArgumentUDA!T uda)
 {
     return ArgumentUDA!(uda.parsingFunc.changePreValidation!func)(uda.tupleof);
 }
 
-auto Parse(alias func, T)(auto ref ArgumentUDA!T uda)
+auto Parse(alias func, T)(ArgumentUDA!T uda)
 {
     auto desc = ArgumentUDA!(uda.parsingFunc.changeParse!func)(uda.tupleof);
 
@@ -232,17 +227,17 @@ auto Parse(alias func, T)(auto ref ArgumentUDA!T uda)
     return desc;
 }
 
-auto Validation(alias func, T)(auto ref ArgumentUDA!T uda)
+auto Validation(alias func, T)(ArgumentUDA!T uda)
 {
     return ArgumentUDA!(uda.parsingFunc.changeValidation!func)(uda.tupleof);
 }
 
-auto Action(alias func, T)(auto ref ArgumentUDA!T uda)
+auto Action(alias func, T)(ArgumentUDA!T uda)
 {
     return ArgumentUDA!(uda.parsingFunc.changeAction!func)(uda.tupleof);
 }
 
-auto ActionNoValue(alias func, T)(auto ref ArgumentUDA!T uda)
+auto ActionNoValue(alias func, T)(ArgumentUDA!T uda)
 {
     auto desc = ArgumentUDA!(uda.parsingFunc.changeNoValueAction!func)(uda.tupleof);
     desc.info.minValuesCount = 0;
@@ -333,9 +328,9 @@ private struct CounterParsingFunction
     }
 }
 
-auto Counter(T)(auto ref ArgumentUDA!T uda)
+auto Counter(T)(ArgumentUDA!T uda)
 {
-    auto desc = ArgumentUDA!(CounterParsingFunction)(uda.tupleof);
+    auto desc = ArgumentUDA!CounterParsingFunction(uda.tupleof);
     desc.info.minValuesCount = 0;
     desc.info.maxValuesCount = 0;
     return desc;

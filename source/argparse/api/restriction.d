@@ -11,7 +11,7 @@ import std.conv: to;
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Required group
 
-auto ref Required(T : RestrictionGroup)(auto ref T group)
+auto ref Required()(auto ref RestrictionGroup group)
 {
     group.required = true;
     return group;

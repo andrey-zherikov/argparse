@@ -14,13 +14,13 @@ auto ArgumentGroup(string name)
     return Group(name);
 }
 
-auto ref Description(T : Group)(auto ref T group, string text)
+auto ref Description()(auto ref Group group, string text)
 {
     group.description = text;
     return group;
 }
 
-auto ref Description(T : Group)(auto ref T group, string delegate() text)
+auto ref Description()(auto ref Group group, string delegate() text)
 {
     group.description = text;
     return group;
