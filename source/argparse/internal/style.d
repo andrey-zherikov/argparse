@@ -19,15 +19,15 @@ package(argparse) struct Style
 
     enum None = Style.init;
 
-    enum Default = Style(
-        bold,           // programName
-        bold,           // subcommandName
-        bold.underline, // argumentGroupTitle
-        lightYellow,    // argumentName
-        italic,         // namedArgumentValue
-        lightYellow,    // positionalArgumentValue
-        red,            // errorMessagePrefix
-    );
+    enum Style Default = {
+        programName:             bold,
+        subcommandName:          bold,
+        argumentGroupTitle:      bold.underline,
+        argumentName:            lightYellow,
+        namedArgumentValue:      italic,
+        positionalArgumentValue: lightYellow,
+        errorMessagePrefix:      red,
+    };
 }
 
 unittest
