@@ -54,35 +54,35 @@ package struct TextStyle
 {
     private ubyte[] style;
 
-    private this(ubyte[] st)
+    private this(return scope inout(ubyte)[] st) scope inout nothrow pure @safe @nogc
     {
         style = st;
     }
-    private this(ubyte st)
+    private this(ubyte st) scope inout nothrow pure @safe
     {
         if(st != 0)
             style = [st];
     }
 
-    private auto opBinary(string op)(ubyte other) if(op == "~")
+    private auto opBinary(string op : "~")(ubyte other) inout
     {
-        return other != 0 ? TextStyle(style ~ other) : this;
+        return other != 0 ? inout TextStyle(style ~ other) : this;
     }
 
     public auto opCall(string str) const
     {
         import std.conv: text, to;
         import std.algorithm: joiner, map;
-        import std.range: chain;
+        import std.utf: byCodeUnit;
 
         if(style.length == 0 || str.length == 0)
             return str;
 
-        return text(prefix, style.map!(to!string).joiner(separator), suffix, str, reset);
+        return text(prefix, style.map!(_ => _.to!string.byCodeUnit).joiner(separator.byCodeUnit), suffix, str, reset);
     }
 }
 
-unittest
+nothrow pure @safe unittest
 {
     assert(TextStyle([])("foo") == "foo");
     assert(TextStyle([Font.bold])("foo") == "\033[1mfoo\033[m");
@@ -97,7 +97,7 @@ package struct StyledText
 
     string text;
 
-    string toString() const
+    string toString() return scope const nothrow pure @safe
     {
         return style(text);
     }
@@ -114,10 +114,14 @@ package struct StyledText
     }
 }
 
-unittest
+nothrow pure @safe unittest
 {
     auto s = TextStyle([Font.bold]);
     assert(StyledText(s, "foo").toString() == s("foo"));
+
+    const ubyte[1] data = [Font.bold];
+    scope c = const TextStyle(data);
+    assert((const StyledText(c, "foo")).toString() == c("foo"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -183,7 +187,7 @@ alias onLightCyan    = StyleImpl!(colorBgOffset + Color.lightCyan);
 alias onWhite        = StyleImpl!(colorBgOffset + Color.white);
 
 
-unittest
+nothrow pure @safe unittest
 {
     assert(bold == TextStyle([Font.bold]));
     assert(bold.italic == TextStyle([Font.bold, Font.italic]));
