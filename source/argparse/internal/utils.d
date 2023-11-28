@@ -2,15 +2,13 @@ module argparse.internal.utils;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) string formatAllowedValues(alias names)()
+package(argparse) string formatAllowedValues(T)(const(T)[] names)
 {
-    import std.conv: to;
-    import std.array: join;
     import std.format: format;
-    return "{%s}".format(names.to!(string[]).join(','));
+    return "{%-(%s,%)}".format(names);
 }
 
 unittest
 {
-    assert(formatAllowedValues!(["abc", "def", "ghi"]) == "{abc,def,ghi}");
+    assert(formatAllowedValues(["abc", "def", "ghi"]) == "{abc,def,ghi}");
 }

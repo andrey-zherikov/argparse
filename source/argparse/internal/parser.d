@@ -13,9 +13,9 @@ import argparse.internal.commandinfo: getCommandInfo;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private string[] consumeValuesFromCLI(Config config)(ref string[] args,
-                                                     ulong minValuesCount, ulong maxValuesCount,
-                                                     bool delegate(string) isCommand)
+private string[] consumeValuesFromCLI(Config config, ref string[] args,
+                                      ulong minValuesCount, ulong maxValuesCount,
+                                      bool delegate(string) isCommand)
 {
     import std.range: empty, front, popFront;
 
@@ -63,7 +63,7 @@ private string[] splitSingleLetterNames(string arg)
 
     return arg[1..$].map!(_ => [prefix, _].to!string).array;
 }
-private string[] splitSingleLetterNames(char assignChar)(string arg, string value)
+private string[] splitSingleLetterNames(string arg, char assignChar, string value)
 {
     // Split "-ABC=<value>" into ["-A","-B","-C=<value>"]
 
@@ -79,10 +79,10 @@ unittest
 {
     assert(splitSingleLetterNames("-a") == ["-a"]);
     assert(splitSingleLetterNames("-abc") == ["-a","-b","-c"]);
-    assert(splitSingleLetterNames!'='("-a","") == ["-a="]);
-    assert(splitSingleLetterNames!'='("-a","value") == ["-a=value"]);
-    assert(splitSingleLetterNames!'='("-abc","") == ["-a","-b","-c="]);
-    assert(splitSingleLetterNames!'='("-abc","value") == ["-a","-b","-c=value"]);
+    assert(splitSingleLetterNames("-a",'=',"") == ["-a="]);
+    assert(splitSingleLetterNames("-a",'=',"value") == ["-a=value"]);
+    assert(splitSingleLetterNames("-abc",'=',"") == ["-a","-b","-c="]);
+    assert(splitSingleLetterNames("-abc",'=',"value") == ["-a","-b","-c=value"]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -113,10 +113,10 @@ struct SubCommand {
 
 alias Entry = SumType!(Unknown, EndOfArgs, Argument, SubCommand);
 
-private Entry getNextEntry(Config config)(ref string[] args,
-                                          FindResult delegate(bool) findPositionalArg,
-                                          FindResult delegate(string) findNamedArg,
-                                          Command delegate() delegate(string) findCommand)
+private Entry getNextEntry(Config config, ref string[] args,
+                           FindResult delegate(bool) findPositionalArg,
+                           FindResult delegate(string) findNamedArg,
+                           Command delegate() delegate(string) findCommand)
 {
     import std.range: popFront;
 
@@ -177,7 +177,7 @@ private Entry getNextEntry(Config config)(ref string[] args,
                     if (res.arg)
                     {
                         args.popFront;
-                        auto values = consumeValuesFromCLI!config(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+                        auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
                         return Entry(Argument(arg0, res, values));
                     }
                 }
@@ -223,7 +223,7 @@ private Entry getNextEntry(Config config)(ref string[] args,
                     }
                 }
 
-                static if(config.bundling)
+                if(config.bundling)
                     if(argName.length > 1)     // Ensure that there is something to split
                     {
                         // Try to process "-ABC=<value>" case where "A","B","C" are single-letter arguments
@@ -234,7 +234,7 @@ private Entry getNextEntry(Config config)(ref string[] args,
                         if(res.arg)
                         {
                             // We don't need first argument because we've already got it
-                            auto restArgs = splitSingleLetterNames!(config.assignChar)(usedName, value)[1..$];
+                            auto restArgs = splitSingleLetterNames(usedName, config.assignChar, value)[1..$];
 
                             // Replace first element with set of single-letter arguments
                             args = restArgs ~ args[1..$];
@@ -254,7 +254,7 @@ private Entry getNextEntry(Config config)(ref string[] args,
                     if (res.arg)
                     {
                         args.popFront;
-                        auto values = consumeValuesFromCLI!config(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+                        auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
                         return Entry(Argument(arg0, res, values));
                     }
                 }
@@ -275,7 +275,7 @@ private Entry getNextEntry(Config config)(ref string[] args,
                             return Entry(Argument(arg0[0..2], res, [value]));
                         }
 
-                        static if(config.bundling)
+                        if(config.bundling)
                         {
                             // Process "ABC" as "-A","-B","-C"
 
@@ -299,7 +299,7 @@ private Entry getNextEntry(Config config)(ref string[] args,
         auto res = findPositionalArg(true);
         if(res.arg && res.arg.info.required)
         {
-            auto values = consumeValuesFromCLI!config(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+            auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
             return Entry(Argument(res.arg.info.placeholder, res, values));
         }
 
@@ -314,7 +314,7 @@ private Entry getNextEntry(Config config)(ref string[] args,
         // Check for optional positional argument in the current command
         if(res.arg)
         {
-            auto values = consumeValuesFromCLI!config(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+            auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
             return Entry(Argument(res.arg.info.placeholder, res, values));
         }
 
@@ -322,7 +322,7 @@ private Entry getNextEntry(Config config)(ref string[] args,
         res = findPositionalArg(false);
         if(res.arg)
         {
-            auto values = consumeValuesFromCLI!config(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+            auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
             return Entry(Argument(res.arg.info.placeholder, res, values));
         }
     }
@@ -333,7 +333,7 @@ private Entry getNextEntry(Config config)(ref string[] args,
 
 unittest
 {
-    auto test(string[] args) => getNextEntry!(Config.init)(args, null, null, null);
+    auto test(string[] args) => getNextEntry(Config.init, args, null, null, null);
 
     assert(test([""]) == Entry(Unknown("")));
     assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
@@ -341,7 +341,7 @@ unittest
 
 unittest
 {
-    auto test(string[] args) => getNextEntry!(Config.init)(args, null, null, null);
+    auto test(string[] args) => getNextEntry(Config.init, args, null, null, null);
 
     assert(test([""]) == Entry(Unknown("")));
     assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
@@ -458,8 +458,9 @@ private FindResult findArgument(ref Command[] cmdStack, ref size_t[] idxPosition
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private struct Parser(Config config)
+private struct Parser
 {
+    Config config;
     string[] unrecognizedArgs;
 
     bool[size_t] idxParsedArgs;
@@ -518,10 +519,10 @@ private struct Parser(Config config)
             {
                 if(args.length > 1)
                 {
-                    auto res = getNextEntry!config(args,
-                                                   _ => findArgument(cmdStack, idxPositionalStack, idxNextPositional, _),
-                                                   _ => findArgument(cmdStack, _),
-                                                   _ => findCommand(cmdStack, _)
+                    auto res = getNextEntry(config, args,
+                                            _ => findArgument(cmdStack, idxPositionalStack, idxNextPositional, _),
+                                            _ => findArgument(cmdStack, _),
+                                            _ => findCommand(cmdStack, _)
                         )
                         .match!(
                             (Argument a) => parse(a, a.complete),
@@ -538,10 +539,10 @@ private struct Parser(Config config)
             }
             else
             {
-                auto res = getNextEntry!config(args,
-                                               _ => findArgument(cmdStack, idxPositionalStack, idxNextPositional, _),
-                                               _ => findArgument(cmdStack, _),
-                                               _ => findCommand(cmdStack, _)
+                auto res = getNextEntry(config, args,
+                                        _ => findArgument(cmdStack, idxPositionalStack, idxNextPositional, _),
+                                        _ => findArgument(cmdStack, _),
+                                        _ => findCommand(cmdStack, _)
                     )
                     .match!(
                         (Argument a) => parse(a, a.parse),
@@ -573,14 +574,11 @@ private struct Parser(Config config)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
-if(config.stylingMode != Config.StylingMode.autodetect)
+package(argparse) Result callParser(bool completionMode)(Config config, Command cmd, string[] args, out string[] unrecognizedArgs)
 {
     ansiStylingArgument.isEnabled = config.stylingMode == Config.StylingMode.on;
 
-    auto cmd = createCommand!(config, getCommandInfo!(config, COMMAND), COMMAND)(receiver);
-
-    Parser!config parser;
+    Parser parser = { config };
     parser.addCommand(cmd);
 
     auto res = parser.parseAll!completionMode(args);
@@ -594,7 +592,13 @@ if(config.stylingMode != Config.StylingMode.autodetect)
     return res;
 }
 
-private auto enableStyling(Config config)(bool enable)
+package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
+if(config.stylingMode != Config.StylingMode.autodetect)
+{
+    return callParser!completionMode(config, createCommand!config(receiver, getCommandInfo!COMMAND(config)), args, unrecognizedArgs);
+}
+
+private auto enableStyling(Config config, bool enable)
 {
     Config c = config;
     c.stylingMode = enable ? Config.StylingMode.on : Config.StylingMode.off;
@@ -603,8 +607,8 @@ private auto enableStyling(Config config)(bool enable)
 
 unittest
 {
-    assert(enableStyling!(Config.init)(true).stylingMode == Config.StylingMode.on);
-    assert(enableStyling!(Config.init)(false).stylingMode == Config.StylingMode.off);
+    assert(enableStyling(Config.init, true).stylingMode == Config.StylingMode.on);
+    assert(enableStyling(Config.init, false).stylingMode == Config.StylingMode.off);
 }
 
 package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
@@ -614,9 +618,9 @@ if(config.stylingMode == Config.StylingMode.autodetect)
 
 
     if(detectSupport())
-        return callParser!(enableStyling!config(true), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
+        return callParser!(enableStyling(config, true), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
     else
-        return callParser!(enableStyling!config(false), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
+        return callParser!(enableStyling(config, false), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -635,42 +639,42 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--boo","BOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["--boo","BOO"]);
         assert(c == cmd.init);
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["--boo","BOO"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["--boo","BOO"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(c1("FOO","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
@@ -690,42 +694,42 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--boo","BOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(Default!c1(c1("","BOO")))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("","BOO")))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(Default!c1(c1("FOO","BOO")))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(Default!c1(c1("FOO","BOO")))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA","BOO")))));
     }
@@ -752,42 +756,42 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO","FAA"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FAA"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FAA","BOO"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["c1","FOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FOO"]);
         assert(c == cmd("c1"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO","c1","FAA"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
@@ -814,42 +818,42 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO","FAA"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA")))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA","BOO")))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["c1","FOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("c1", typeof(c.c)(Default!c1(c1("FOO")))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO","c1","FAA"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA")))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA","BOO")))));
     }
@@ -886,14 +890,14 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA","BOO", typeof(c1.c)(Default!c2(c2("FEE","BEE"))))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--bar","BAR","FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--bar","BAR","FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA","BOO", typeof(c1.c)(Default!c2(c2("FEE","BEE","BAR"))))))));
     }
@@ -926,21 +930,21 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1(typeof(c1.c)(Default!c2(c2("FAA","BOO"))))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["--bar","BAR","FOO","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--bar","BAR","FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1(typeof(c1.c)(Default!c2(c2("FAA","BOO","BAR"))))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling!(Config.init)(false), false)(c, ["FOO","c2","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c2","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1(typeof(c1.c)(Default!c2(c2("FAA","BOO"))))))));
     }

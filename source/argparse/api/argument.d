@@ -309,7 +309,7 @@ auto AllowedValues(alias values, ARG)(ARG arg)
 
     auto desc = arg.Validation!(ValueInList!(values, KeyType!(typeof(valuesAA))));
     if(desc.info.placeholder.length == 0)
-        desc.info.placeholder = formatAllowedValues!values;
+        desc.info.placeholder = formatAllowedValues(values);
 
     return desc;
 }

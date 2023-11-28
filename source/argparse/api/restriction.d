@@ -25,7 +25,7 @@ unittest
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Arguments required together
 
-auto RequiredTogether(string file=__FILE__, uint line = __LINE__)()
+auto RequiredTogether(string file=__FILE__, uint line = __LINE__)
 {
     return RestrictionGroup(file~":"~line.to!string, RestrictionGroup.Type.together);
 }
@@ -40,7 +40,7 @@ unittest
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Mutually exclusive arguments
 
-auto MutuallyExclusive(string file=__FILE__, uint line = __LINE__)()
+auto MutuallyExclusive(string file=__FILE__, uint line = __LINE__)
 {
     return RestrictionGroup(file~":"~line.to!string, RestrictionGroup.Type.exclusive);
 }

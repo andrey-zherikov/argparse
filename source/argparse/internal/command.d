@@ -51,11 +51,11 @@ private Result ArgumentParsingFunction(Config config, alias uda, RECEIVER)(const
     else
         try
         {
-            auto res = uda.info.checkValuesCount!config(argName, rawValues.length);
+            auto res = uda.info.checkValuesCount(config, argName, rawValues.length);
             if(!res)
                 return res;
 
-            immutable cfg = config;
+            const cfg = config;
             auto param = RawParam(&cfg, argName, rawValues);
 
             auto target = &__traits(getMember, receiver, uda.info.memberSymbol);
@@ -84,17 +84,17 @@ unittest
 {
     struct T { string a; }
 
-    auto test(TYPE)(string[] values)
+    auto test(string[] values)
     {
-        TYPE t;
+        T t;
 
-        enum uda = getMemberArgumentUDA!(Config.init, TYPE, "a", NamedArgument("arg-name").NumberOfValues(1));
+        enum uda = getMemberArgumentUDA!(T, "a")(Config.init, NamedArgument("arg-name").NumberOfValues(1));
 
         return ArgumentParsingFunction!(Config.init, uda)([], t, "arg-name", values);
     }
 
-    assert(test!T(["raw-value"]));
-    assert(!test!T(["value1","value2"]));
+    assert(test(["raw-value"]));
+    assert(!test(["value1","value2"]));
 }
 
 unittest
@@ -106,7 +106,7 @@ unittest
 
     T t;
 
-    enum uda = getMemberArgumentUDA!(Config.init, T, "func", NamedArgument("arg-name").NumberOfValues(0));
+    enum uda = getMemberArgumentUDA!(T, "func")(Config.init, NamedArgument("arg-name").NumberOfValues(0));
 
     auto res = ArgumentParsingFunction!(Config.init, uda)([], t, "arg-name", []);
 
@@ -218,7 +218,7 @@ private template iterateArguments(TYPE)
     import std.meta: Filter;
     import std.sumtype: isSumType;
 
-    template filter(alias sym)
+    template filter(string sym)
     {
         alias mem = __traits(getMember, TYPE, sym);
 
@@ -238,7 +238,7 @@ private template subCommandSymbol(TYPE)
     import std.meta: Filter, AliasSeq;
     import std.sumtype: isSumType;
 
-    template filter(alias sym)
+    template filter(string sym)
     {
         alias mem = __traits(getMember, TYPE, sym);
 
@@ -275,14 +275,14 @@ private template TypeTraits(Config config, TYPE)
     /////////////////////////////////////////////////////////////////////
     /// Arguments
 
-    private enum getArgumentUDA(alias sym) = getMemberArgumentUDA!(config, TYPE, sym, NamedArgument);
+    private enum getArgumentUDA(string sym) = getMemberArgumentUDA!(TYPE, sym)(config, NamedArgument);
     private enum getArgumentInfo(alias uda) = uda.info;
     private enum positional(ArgumentInfo info) = info.positional;
     private enum comparePosition(ArgumentInfo info1, ArgumentInfo info2) = info1.position.get - info2.position.get;
 
     static if(config.addHelp)
     {
-        private enum helpUDA = .getArgumentUDA!(config, bool, null, HelpArgumentUDA.init);
+        private enum helpUDA = .getArgumentUDA!(bool, false)(config, null, HelpArgumentUDA.init);
         enum argumentUDAs = AliasSeq!(staticMap!(getArgumentUDA, iterateArguments!TYPE), helpUDA);
     }
     else
@@ -294,7 +294,7 @@ private template TypeTraits(Config config, TYPE)
     /////////////////////////////////////////////////////////////////////
     /// Subcommands
 
-    private enum getCommandInfo(CMD) = .getCommandInfo!(config, RemoveDefaultAttribute!CMD, RemoveDefaultAttribute!CMD.stringof);
+    private enum getCommandInfo(CMD) = .getCommandInfo!(RemoveDefaultAttribute!CMD)(config, RemoveDefaultAttribute!CMD.stringof);
     private enum getSubcommand(CMD) = SubCommand!CMD(getCommandInfo!CMD);
 
     static if(.subCommandSymbol!TYPE.length == 0)
@@ -349,7 +349,7 @@ private template TypeTraits(Config config, TYPE)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) Command createCommand(Config config, CommandInfo info, COMMAND_TYPE)(ref COMMAND_TYPE receiver)
+package(argparse) Command createCommand(Config config, COMMAND_TYPE)(ref COMMAND_TYPE receiver, CommandInfo info)
 {
     import std.meta: staticMap;
     import std.algorithm: map;
@@ -361,7 +361,7 @@ package(argparse) Command createCommand(Config config, CommandInfo info, COMMAND
 
     res.info = info;
     res.arguments.add!(COMMAND_TYPE, [typeTraits.argumentInfos]);
-    res.restrictions.add!(config, COMMAND_TYPE, [typeTraits.argumentInfos]);
+    res.restrictions.add!(COMMAND_TYPE, [typeTraits.argumentInfos])(config);
 
     enum getArgumentParsingFunction(alias uda) =
          (const Command[] cmdStack, string argName, string[] argValue)
@@ -384,7 +384,10 @@ package(argparse) Command createCommand(Config config, CommandInfo info, COMMAND
 
     static foreach(subcmd; typeTraits.subCommands)
     {{
-        auto createFunc = () => ParsingSubCommandCreate!(config, subcmd.Type, subcmd.info, COMMAND_TYPE, typeTraits.subCommandSymbol)(receiver);
+        auto createFunc = () => ParsingSubCommandCreate!(config, subcmd.Type)(
+            __traits(getMember, receiver, typeTraits.subCommandSymbol),
+            subcmd.info,
+        );
 
         static if(isDefaultCommand!(subcmd.Type))
             res.defaultSubCommand = createFunc;
@@ -397,26 +400,23 @@ package(argparse) Command createCommand(Config config, CommandInfo info, COMMAND
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, CommandInfo info, RECEIVER, alias symbol)(ref RECEIVER receiver)
+private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, TARGET)(ref TARGET target, CommandInfo info)
 {
-    auto target = &__traits(getMember, receiver, symbol);
+    alias create = (ref COMMAND_TYPE actualTarget) =>
+        createCommand!(config, RemoveDefaultAttribute!COMMAND_TYPE)(actualTarget, info);
 
-        alias create = (ref COMMAND_TYPE actualTarget) =>
-            createCommand!(config, info, RemoveDefaultAttribute!COMMAND_TYPE)(actualTarget);
-
-    static if(typeof(*target).Types.length == 1)
-        return (*target).match!create;
+    static if(TARGET.Types.length == 1)
+        return target.match!create;
     else
     {
         // Initialize if needed
-        if((*target).match!((ref COMMAND_TYPE t) => false, _ => true))
-            *target = COMMAND_TYPE.init;
+        if(target.match!((ref COMMAND_TYPE t) => false, _ => true))
+            target = COMMAND_TYPE.init;
 
-        return (*target).match!(create,
-            (_)
+        return target.match!(create,
+            function Command(_)
             {
                 assert(false, "This should never happen");
-                return Command.init;
             }
         );
     }

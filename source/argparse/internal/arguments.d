@@ -37,7 +37,7 @@ package(argparse) struct ArgumentInfo
     Nullable!ulong minValuesCount;
     Nullable!ulong maxValuesCount;
 
-    auto checkValuesCount(Config config)(string argName, ulong count) const
+    auto checkValuesCount(const Config config, string argName, ulong count) const
     {
         immutable min = minValuesCount.get;
         immutable max = maxValuesCount.get;
@@ -72,28 +72,28 @@ unittest
         return info;
     }
 
-    assert(info(2,4).checkValuesCount!(Config.init)("", 1).isError("expected at least 2 values"));
-    assert(info(2,4).checkValuesCount!(Config.init)("", 2));
-    assert(info(2,4).checkValuesCount!(Config.init)("", 3));
-    assert(info(2,4).checkValuesCount!(Config.init)("", 4));
-    assert(info(2,4).checkValuesCount!(Config.init)("", 5).isError("expected at most 4 values"));
+    assert(info(2,4).checkValuesCount(Config.init, "", 1).isError("expected at least 2 values"));
+    assert(info(2,4).checkValuesCount(Config.init, "", 2));
+    assert(info(2,4).checkValuesCount(Config.init, "", 3));
+    assert(info(2,4).checkValuesCount(Config.init, "", 4));
+    assert(info(2,4).checkValuesCount(Config.init, "", 5).isError("expected at most 4 values"));
 
-    assert(info(2,2).checkValuesCount!(Config.init)("", 1).isError("expected 2 values"));
-    assert(info(2,2).checkValuesCount!(Config.init)("", 2));
-    assert(info(2,2).checkValuesCount!(Config.init)("", 3).isError("expected 2 values"));
+    assert(info(2,2).checkValuesCount(Config.init, "", 1).isError("expected 2 values"));
+    assert(info(2,2).checkValuesCount(Config.init, "", 2));
+    assert(info(2,2).checkValuesCount(Config.init, "", 3).isError("expected 2 values"));
 
-    assert(info(1,1).checkValuesCount!(Config.init)("", 0).isError("expected 1 value"));
-    assert(info(1,1).checkValuesCount!(Config.init)("", 1));
-    assert(info(1,1).checkValuesCount!(Config.init)("", 2).isError("expected 1 value"));
+    assert(info(1,1).checkValuesCount(Config.init, "", 0).isError("expected 1 value"));
+    assert(info(1,1).checkValuesCount(Config.init, "", 1));
+    assert(info(1,1).checkValuesCount(Config.init, "", 2).isError("expected 1 value"));
 
-    assert(info(0,1).checkValuesCount!(Config.init)("", 0));
-    assert(info(0,1).checkValuesCount!(Config.init)("", 1));
-    assert(info(0,1).checkValuesCount!(Config.init)("", 2).isError("expected at most 1 value"));
+    assert(info(0,1).checkValuesCount(Config.init, "", 0));
+    assert(info(0,1).checkValuesCount(Config.init, "", 1));
+    assert(info(0,1).checkValuesCount(Config.init, "", 2).isError("expected at most 1 value"));
 
-    assert(info(1,2).checkValuesCount!(Config.init)("", 0).isError("expected at least 1 value"));
-    assert(info(1,2).checkValuesCount!(Config.init)("", 1));
-    assert(info(1,2).checkValuesCount!(Config.init)("", 2));
-    assert(info(1,2).checkValuesCount!(Config.init)("", 3).isError("expected at most 2 values"));
+    assert(info(1,2).checkValuesCount(Config.init, "", 0).isError("expected at least 1 value"));
+    assert(info(1,2).checkValuesCount(Config.init, "", 1));
+    assert(info(1,2).checkValuesCount(Config.init, "", 2));
+    assert(info(1,2).checkValuesCount(Config.init, "", 3).isError("expected at most 2 values"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -157,38 +157,36 @@ package struct Arguments
         info = infos;
 
         static foreach(index, info; infos)
-            add!(TYPE, info, index);
+            add!(TYPE, info)(index);
     }
 
-    private void add(TYPE, ArgumentInfo info, size_t argIndex)()
+    private void add(TYPE, ArgumentInfo info)(size_t argIndex)
     {
-        alias addArgument = addArgumentImpl!(TYPE, info, argIndex);
-
-        static if(hasMemberGroupUDA!(TYPE, info.memberSymbol))
+        static if(info.memberSymbol.length > 0 && hasMemberGroupUDA!(TYPE, info.memberSymbol))
         {
             enum group = getMemberGroupUDA!(TYPE, info.memberSymbol);
 
             auto index = (group.name in groupsByName);
             if(index !is null)
-                addArgument(userGroups[*index]);
+                addArgumentImpl(userGroups[*index], info, argIndex);
             else
             {
                 groupsByName[group.name] = userGroups.length;
                 userGroups ~= group;
-                addArgument(userGroups[$-1]);
+                addArgumentImpl(userGroups[$-1], info, argIndex);
             }
         }
         else static if(info.required)
-            addArgument(requiredGroup);
+            addArgumentImpl(requiredGroup, info, argIndex);
         else
-            addArgument(optionalGroup);
+            addArgumentImpl(optionalGroup, info, argIndex);
     }
 
-    private void addArgumentImpl(TYPE, ArgumentInfo info, size_t argIndex)(ref Group group)
+    private void addArgumentImpl(ref Group group, ArgumentInfo info, size_t argIndex)
     {
-        static assert(info.shortNames.length + info.longNames.length > 0);
+        assert(info.shortNames.length + info.longNames.length > 0);
 
-        static if(info.positional)
+        if(info.positional)
         {
             if(argsPositional.length <= info.position.get)
                 argsPositional.length = info.position.get + 1;
@@ -199,7 +197,7 @@ package struct Arguments
         {
             import std.range: chain;
 
-            static foreach(name; chain(info.shortNames, info.longNames))
+            foreach(name; chain(info.shortNames, info.longNames))
             {
                 assert(!(name in argsNamed), "Duplicated argument name: "~name);
                 argsNamed[name] = argIndex;

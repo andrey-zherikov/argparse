@@ -10,17 +10,19 @@ import std.traits: getUDAs;
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-private enum RequiredArg(Config config, ArgumentInfo info, size_t index) =
-    (in bool[size_t] cliArgs)
+private auto RequiredArg(const Config config, const ArgumentInfo info, size_t index)
+{
+    return (in bool[size_t] cliArgs)
     {
         return (index in cliArgs) ?
             Result.Success :
             Result.Error("The following argument is required: '", config.styling.argumentName(info.displayName), "'");
     };
+}
 
 unittest
 {
-    auto f = RequiredArg!(Config.init, ArgumentInfo([],[],[""]), 0);
+    auto f = RequiredArg(Config.init, ArgumentInfo([],[],[""]), 0);
 
     assert(f(bool[size_t].init).isError("argument is required"));
 
@@ -31,8 +33,9 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private enum RequiredTogether(Config config, ArgumentInfo[] allArgs) =
-    (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
+private auto RequiredTogether(const Config config, const(ArgumentInfo)[] allArgs)
+{
+    return (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
     {
         size_t foundIndex = size_t.max;
         size_t missedIndex = size_t.max;
@@ -54,11 +57,12 @@ private enum RequiredTogether(Config config, ArgumentInfo[] allArgs) =
 
         return Result.Success;
     };
+}
 
 
 unittest
 {
-    auto f = RequiredTogether!(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
+    auto f = RequiredTogether(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
     assert(f(bool[size_t].init, [0,1]));
 
@@ -70,8 +74,9 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private enum RequiredAnyOf(Config config, ArgumentInfo[] allArgs) =
-    (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
+private auto RequiredAnyOf(const Config config, const(ArgumentInfo)[] allArgs)
+{
+    return (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
     {
         import std.algorithm: map;
         import std.array: join;
@@ -83,11 +88,12 @@ private enum RequiredAnyOf(Config config, ArgumentInfo[] allArgs) =
         return Result.Error("One of the following arguments is required: '",
             restrictionArgs.map!(_ => config.styling.argumentName(allArgs[_].displayName)).join("', '"), "'");
     };
+}
 
 
 unittest
 {
-    auto f = RequiredAnyOf!(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
+    auto f = RequiredAnyOf(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
     assert(f(bool[size_t].init, [0,1]).isError("One of the following arguments is required","--a","--b"));
     assert(f([2:true], [0,1]).isError("One of the following arguments is required","--a","--b"));
@@ -100,8 +106,9 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private enum MutuallyExclusive(Config config, ArgumentInfo[] allArgs) =
-    (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
+private auto MutuallyExclusive(const Config config, const(ArgumentInfo)[] allArgs)
+{
+    return (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
     {
         size_t foundIndex = size_t.max;
 
@@ -117,11 +124,12 @@ private enum MutuallyExclusive(Config config, ArgumentInfo[] allArgs) =
 
         return Result.Success;
     };
+}
 
 
 unittest
 {
-    auto f = MutuallyExclusive!(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
+    auto f = MutuallyExclusive(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
     assert(f(bool[size_t].init, [0,1]));
 
@@ -149,17 +157,17 @@ package(argparse) struct RestrictionGroup
     private size_t[] argIndex;
 
 
-    private Result function(in bool[size_t] cliArgs, in size_t[] argIndex)[] checks;
+    private Result delegate(in bool[size_t] cliArgs, in size_t[] argIndex)[] checks;
 
-    private void initialize(Config config, ArgumentInfo[] infos)()
+    private void initialize(ref const Config config, const(ArgumentInfo)[] infos)
     {
         if(required)
-            checks ~= RequiredAnyOf!(config, infos);
+            checks ~= RequiredAnyOf(config, infos);
 
         final switch(type)
         {
-            case Type.together:     checks ~= RequiredTogether !(config, infos);    break;
-            case Type.exclusive:    checks ~= MutuallyExclusive!(config, infos);    break;
+            case Type.together:     checks ~= RequiredTogether (config, infos);    break;
+            case Type.exclusive:    checks ~= MutuallyExclusive(config, infos);    break;
         }
     }
 
@@ -187,13 +195,12 @@ private auto getRestrictionGroups(TYPE, string symbol)()
 {
     RestrictionGroup[] restrictions;
 
-    static foreach(gr; getUDAs!(__traits(getMember, TYPE, symbol), RestrictionGroup))
-        restrictions ~= gr;
+    static if(symbol.length > 0)
+        static foreach(gr; getUDAs!(__traits(getMember, TYPE, symbol), RestrictionGroup))
+            restrictions ~= gr;
 
     return restrictions;
 }
-
-private enum getRestrictionGroups(TYPE, typeof(null) symbol) = RestrictionGroup[].init;
 
 unittest
 {
@@ -212,18 +219,18 @@ unittest
 
 package struct Restrictions
 {
-    private Result function(in bool[size_t] cliArgs)[] checks;
+    private Result delegate(in bool[size_t] cliArgs)[] checks;
     private RestrictionGroup[] groups;
     private size_t[string] groupsByLocation;
 
 
-    package void add(Config config, TYPE, ArgumentInfo[] infos)()
+    package void add(TYPE, ArgumentInfo[] infos)(Config config)
     {
         static foreach(argIndex, info; infos)
         static if(info.memberSymbol !is null)   // to skip HelpArgumentUDA
         {
             static if(info.required)
-                checks ~= RequiredArg!(config, info, argIndex);
+                checks ~= RequiredArg(config, info, argIndex);
 
             static if(info.memberSymbol)
                 static foreach(group; getRestrictionGroups!(TYPE, info.memberSymbol))
@@ -236,7 +243,7 @@ package struct Restrictions
                         auto gIndex = groupsByLocation[group.location] = groups.length;
                         groups ~= group;
 
-                        groups[gIndex].initialize!(config, infos);
+                        groups[gIndex].initialize(config, infos);
                         groups[gIndex].argIndex ~= argIndex;
                     }
                 }}

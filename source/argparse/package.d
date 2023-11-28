@@ -51,7 +51,7 @@ unittest
     }();
 
     T receiver;
-    auto a = createCommand!(config, getCommandInfo!(config, T))(receiver);
+    auto a = createCommand!config(receiver, getCommandInfo!T(config));
     assert(a.arguments.requiredGroup.argIndex == [2,4]);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -71,7 +71,7 @@ unittest
     }();
 
     T receiver;
-    auto a = createCommand!(config, getCommandInfo!(config, T))(receiver);
+    auto a = createCommand!config(receiver, getCommandInfo!T(config));
     assert(a.arguments.requiredGroup.argIndex == []);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -85,7 +85,7 @@ unittest
         @(NamedArgument("2"))
         int a;
     }
-    static assert(!__traits(compiles, { T1 t; enum c = createCommand!(Config.init, getCommandInfo!(Config.init, T1))(t); }));
+    static assert(!__traits(compiles, { T1 t; enum c = createCommand!(Config.init)(t, getCommandInfo!T1(Config.init)); }));
 
     struct T2
     {
@@ -94,28 +94,28 @@ unittest
         @(NamedArgument("1"))
         int b;
     }
-    static assert(!__traits(compiles, { T2 t; enum c = createCommand!(Config.init, getCommandInfo!(Config.init, T2))(t); }));
+    static assert(!__traits(compiles, { T2 t; enum c = createCommand!(Config.init)(t, getCommandInfo!T2(Config.init)); }));
 
     struct T3
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(0)) int b;
     }
-    static assert(!__traits(compiles, { T3 t; enum c = createCommand!(Config.init, getCommandInfo!(Config.init, T3))(t); }));
+    static assert(!__traits(compiles, { T3 t; enum c = createCommand!(Config.init)(t, getCommandInfo!T3(Config.init)); }));
 
     struct T4
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(2)) int b;
     }
-    static assert(!__traits(compiles, { T4 t; enum c = createCommand!(Config.init, getCommandInfo!(Config.init, T4))(t); }));
+    static assert(!__traits(compiles, { T4 t; enum c = createCommand!(Config.init)(t, getCommandInfo!T4(Config.init)); }));
 
     struct T5
     {
         @(PositionalArgument(0)) int[] a;
         @(PositionalArgument(1)) int b;
     }
-    static assert(!__traits(compiles, { T5 t; enum c = createCommand!(Config.init, getCommandInfo!(Config.init, T5))(t); }));
+    static assert(!__traits(compiles, { T5 t; enum c = createCommand!(Config.init)(t, getCommandInfo!T5(Config.init)); }));
 }
 
 unittest
@@ -157,7 +157,7 @@ unittest
     }
 
     params receiver;
-    auto a = createCommand!(Config.init, getCommandInfo!(Config.init, params))(receiver);
+    auto a = createCommand!(Config.init)(receiver, getCommandInfo!params(Config.init));
 }
 
 unittest
@@ -885,13 +885,13 @@ unittest
     auto a = appender!string;
 
     T receiver;
-    auto cmd = createCommand!(Config.init, getCommandInfo!(Config.init, T))(receiver);
+    auto cmd = createCommand!(Config.init)(receiver, getCommandInfo!T(Config.init));
 
     auto isEnabled = ansiStylingArgument.isEnabled;
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;
     ansiStylingArgument.isEnabled = false;
 
-    printHelp!(Config.init)(_ => a.put(_), cmd, [&cmd.arguments], "MYPROG");
+    printHelp(_ => a.put(_), Config.init, cmd, [&cmd.arguments], "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
         "custom description\n\n"~
@@ -941,13 +941,13 @@ unittest
     auto a = appender!string;
 
     T receiver;
-    auto cmd = createCommand!(Config.init, getCommandInfo!(Config.init, T))(receiver);
+    auto cmd = createCommand!(Config.init)(receiver, getCommandInfo!T(Config.init));
 
     auto isEnabled = ansiStylingArgument.isEnabled;
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;
     ansiStylingArgument.isEnabled = false;
 
-    printHelp!(Config.init)(_ => a.put(_), cmd, [&cmd.arguments], "MYPROG");
+    printHelp(_ => a.put(_), Config.init, cmd, [&cmd.arguments], "MYPROG");
 
 
     assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
@@ -995,13 +995,13 @@ unittest
     auto a = appender!string;
 
     T receiver;
-    auto cmd = createCommand!(Config.init, getCommandInfo!(Config.init, T))(receiver);
+    auto cmd = createCommand!(Config.init)(receiver, getCommandInfo!T(Config.init));
 
     auto isEnabled = ansiStylingArgument.isEnabled;
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;
     ansiStylingArgument.isEnabled = false;
 
-    printHelp!(Config.init)(_ => a.put(_), cmd, [&cmd.arguments], "MYPROG");
+    printHelp(_ => a.put(_), Config.init, cmd, [&cmd.arguments], "MYPROG");
 
     assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~
