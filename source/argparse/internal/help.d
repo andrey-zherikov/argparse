@@ -155,7 +155,7 @@ package struct HelpArgumentUDA
         return info;
     }();
 
-    auto parse(Config config, COMMAND_STACK, RECEIVER)(const COMMAND_STACK cmdStack, ref RECEIVER receiver, string argName, string[] rawValues)
+    auto parse(COMMAND_STACK)(const Config config, const COMMAND_STACK cmdStack, string argName, string[] rawValues)
     {
         import std.stdio: stdout;
         import std.algorithm: map;
@@ -169,6 +169,11 @@ package struct HelpArgumentUDA
         printHelp(_ => output.put(_), config, cmdStack[$-1], args, progName);
 
         return Result(0);
+    }
+
+    auto parse(Config config, COMMAND_STACK, RECEIVER)(const COMMAND_STACK cmdStack, ref RECEIVER, string argName, string[] rawValues)
+    {
+        return parse(config, cmdStack, argName, rawValues);
     }
 }
 
