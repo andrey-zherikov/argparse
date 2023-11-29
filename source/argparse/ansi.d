@@ -197,16 +197,19 @@ private size_t[3] findNextCommandSequence(scope const(char)[] text) nothrow pure
     import std.algorithm.searching: find, skipOver;
     import std.utf: byCodeUnit;
 
+    static assert(separator.length == 1);
+    static assert(suffix.length == 1);
+
     auto s = text.byCodeUnit;
     size_t chunkStart = text.length;
     while(true)
     {
-        s = s.find("\x1b[".byCodeUnit);
+        s = s.find(prefix.byCodeUnit);
         if(s.empty)
             return [chunkStart, 0, 0];
         immutable commandStart = s.length;
-        s = s[2 .. $].find!(c => c - '0' >= 10u && c != ';'); // Skip over `\x1b \[ [\d;]*`.
-        if(s.skipOver('m'))
+        s = s[prefix.length .. $].find!(c => c - '0' >= 10u && c != separator[0]); // Skip over `\x1b \[ [\d;]*`.
+        if(s.skipOver(suffix[0]))
         {
             if(chunkStart != commandStart) // If the chunk is not empty.
                 return [chunkStart, commandStart, s.length];
