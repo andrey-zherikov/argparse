@@ -405,9 +405,9 @@ changes are necessary to generate completer, but you should consider minimizing 
 `argparse_completion` version is defined. For example, you can put all imports into your main function that is passed to
 `CLI!(...).main(alias newMain)` – `newMain` parameter is not used in completer.
 
-If you prefer having separate main module for completer, then you can use `CLI!(...).completeMain` mixin template:
+If you prefer having separate main module for completer, then you can use `CLI!(...).mainComplete` mixin template:
 ```d
-mixin CLI!(...).completeMain;
+mixin CLI!(...).mainComplete;
 ```
 
 In case if you prefer to have your own `main` function and would like to call completer by yourself, you can use
