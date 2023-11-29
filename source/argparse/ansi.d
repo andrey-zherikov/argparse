@@ -52,38 +52,65 @@ private enum Color
 
 package struct TextStyle
 {
-    private ubyte[] style;
+    private string style = prefix;
 
-    private this(return scope inout(ubyte)[] st) scope inout nothrow pure @safe @nogc
+    private this(const(ubyte)[] st...) scope inout nothrow pure @safe
     {
-        style = st;
-    }
-    private this(ubyte st) scope inout nothrow pure @safe
-    {
-        if(st != 0)
-            style = [st];
+        import std.algorithm.iteration: joiner, map;
+        import std.array: appender;
+        import std.conv: toChars;
+        import std.utf: byCodeUnit;
+
+        auto a = appender(prefix);
+        a ~= st.map!(_ => uint(_).toChars).joiner(separator.byCodeUnit);
+        style = a[];
     }
 
-    private auto opBinary(string op : "~")(ubyte other) inout
+    private ref opOpAssign(string op : "~")(ubyte other)
     {
-        return other != 0 ? inout TextStyle(style ~ other) : this;
+        import std.array: appender;
+        import std.conv: toChars;
+
+        if(other != 0)
+        {
+            auto a = appender(style);
+            if(style.length != prefix.length)
+                a ~= separator;
+            a ~= uint(other).toChars;
+            style = a[];
+        }
+        return this;
     }
 
     public auto opCall(string str) const
     {
-        import std.conv: text, to;
-        import std.algorithm: joiner, map;
-        import std.utf: byCodeUnit;
-
-        if(style.length == 0 || str.length == 0)
+        if(str.length == 0 || style.length == prefix.length)
             return str;
+        return style ~ suffix ~ str ~ reset;
+    }
 
-        return text(prefix, style.map!(_ => _.to!string.byCodeUnit).joiner(separator.byCodeUnit), suffix, str, reset);
+    public void opCall(W)(ref W writer, const(char)[] str) const
+    {
+        import std.range.primitives: put;
+
+        if(str.length == 0)
+            return;
+
+        immutable enabled = style.length != prefix.length;
+        if(enabled)
+        {
+            put(writer, style);
+            put(writer, suffix);
+        }
+        put(writer, str);
+        if(enabled)
+            put(writer, reset);
     }
 }
 
 nothrow pure @safe unittest
 {
+    assert(TextStyle.init("foo") == "foo");
     assert(TextStyle([])("foo") == "foo");
     assert(TextStyle([Font.bold])("foo") == "\033[1mfoo\033[m");
     assert(TextStyle([Font.bold, Font.italic])("foo") == "\033[1;3mfoo\033[m");
@@ -103,14 +130,25 @@ package struct StyledText
     }
 
     // this ~ rhs
-    string opBinary(string op : "~")(string rhs) const
+    string opBinary(string op : "~")(const(char)[] rhs) const
     {
-        return toString() ~ rhs;
+        import std.array: appender;
+
+        auto a = appender!string;
+        style(a, text);
+        a ~= rhs;
+        return a[];
     }
+
     // lhs ~ this
-    string opBinaryRight(string op : "~")(string lhs) const
+    string opBinaryRight(string op : "~")(const(char)[] lhs) const
     {
-        return lhs ~ toString();
+        import std.array: appender;
+
+        auto a = appender!string;
+        a ~= lhs;
+        style(a, text);
+        return a[];
     }
 }
 
@@ -122,27 +160,41 @@ nothrow pure @safe unittest
     const ubyte[1] data = [Font.bold];
     scope c = const TextStyle(data);
     assert((const StyledText(c, "foo")).toString() == c("foo"));
+
+    immutable foo = StyledText(s, "foo");
+    assert(foo ~ "bar" == s("foo") ~ "bar");
+    assert("bar" ~ foo == "bar" ~ s("foo"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package template StyleImpl(ubyte styleCode)
 {
-    public auto StyleImpl()
+    immutable style = TextStyle(styleCode);
+
+    public TextStyle StyleImpl()
     {
-        return TextStyle(styleCode);
+        return style;
     }
     public auto StyleImpl(TextStyle otherStyle)
     {
-        return otherStyle ~ styleCode;
+        return otherStyle ~= styleCode;
     }
     public auto StyleImpl(string text)
     {
-        return StyledText(TextStyle(styleCode), text);
+        return StyledText(style, text);
     }
     public auto StyleImpl(TextStyle otherStyle, string text)
     {
-        return StyledText(otherStyle ~ styleCode, text);
+        return StyledText(otherStyle ~= styleCode, text);
+    }
+    public void StyleImpl(W)(ref W writer, const(char)[] text)
+    {
+        style(writer, text);
+    }
+    public void StyleImpl(W)(TextStyle otherStyle, ref W writer, const(char)[] text)
+    {
+        (otherStyle ~= styleCode)(writer, text);
     }
 }
 
@@ -199,6 +251,28 @@ nothrow pure @safe unittest
     assert(bold.italic.red.onWhite("foo").toString() == "\033[1;3;31;107mfoo\033[m");
 }
 
+nothrow pure @safe @nogc unittest
+{
+    auto style = bold;
+    style = italic;
+}
+
+nothrow pure @safe unittest
+{
+    import std.array: appender;
+
+    immutable boldItalic = bold.italic;
+
+    auto sink = appender!string;
+    bold(sink, "A");
+    bold(sink, ""); // No-op.
+    sink ~= 'B';
+    boldItalic(sink, "C");
+    sink ~= 'D';
+    boldItalic.red(sink, "E");
+    assert(sink[] == "\033[1mA\033[mB\033[1;3mC\033[mD\033[1;3;31mE\033[m");
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 public auto getUnstyledText(string text)
@@ -217,7 +291,7 @@ package size_t getUnstyledTextLength(string text)
 
 package size_t getUnstyledTextLength(StyledText text)
 {
-    return getUnstyledTextLength(text.toString());
+    return getUnstyledTextLength(text.text);
 }
 
 unittest
