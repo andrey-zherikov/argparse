@@ -192,39 +192,85 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-public string[] getUnstyledText(string text) nothrow pure @safe
+private size_t[3] findNextCommandSequence(scope const(char)[] text) nothrow pure @safe @nogc
 {
     import std.algorithm.searching: find, skipOver;
-    import std.array: appender;
     import std.utf: byCodeUnit;
 
-    auto result = appender!(string[]);
-    auto s = text.byCodeUnit();
-    size_t unprocessed = text.length;
-    while(s.length >= 3) // \x1b[m
+    auto s = text.byCodeUnit;
+    size_t chunkStart = text.length;
+    while(true)
     {
-        auto escape = s.find("\x1b[".byCodeUnit());
-        if(escape.empty)
-            break;
-        s = escape[2 .. $].find!(c => c - '0' >= 10u && c != ';'); // Skip over `\x1b \[ [\d;]*`.
+        s = s.find("\x1b[".byCodeUnit);
+        if(s.empty)
+            return [chunkStart, 0, 0];
+        immutable commandStart = s.length;
+        s = s[2 .. $].find!(c => c - '0' >= 10u && c != ';'); // Skip over `\x1b \[ [\d;]*`.
         if(s.skipOver('m'))
         {
-            if(unprocessed != escape.length) // Do not produce empty chunks.
-                result ~= text[$ - unprocessed .. $ - escape.length];
-            unprocessed = s.length;
+            if(chunkStart != commandStart) // If the chunk is not empty.
+                return [chunkStart, commandStart, s.length];
+            chunkStart = s.length;
         }
     }
-    if(unprocessed != 0)
-        result ~= text[$ - unprocessed .. $];
-    return result[];
 }
 
-nothrow pure @safe unittest
+public auto getUnstyledText(C : char)(C[] text)
 {
-    assert(getUnstyledText("\x1b[m") == []);
-    assert(getUnstyledText("a\x1b[m") == ["a"]);
-    assert(getUnstyledText("a\x1b[0;1m\x1b[9mm\x1b[m\x1b[") == ["a", "m", "\x1b["]);
-    assert(getUnstyledText("a\x1b[0:abc\x1b[m") == ["a\x1b[0:abc"]);
+    struct Unstyler
+    {
+        private C[] tail, head;
+
+        @property bool empty() const { return head.length == 0; }
+
+        @property inout(C)[] front() inout { return head; }
+
+        void popFront()
+        {
+            immutable a = findNextCommandSequence(tail);
+            head = tail[$ - a[0] .. $ - a[1]];
+            tail = tail[$ - a[2] .. $];
+        }
+
+        @property auto save() inout { return this; }
+    }
+
+    Unstyler u = { text };
+    u.popFront();
+    return u;
+}
+
+nothrow pure @safe @nogc unittest
+{
+    import std.range.primitives: ElementType, isForwardRange;
+
+    alias R = typeof(getUnstyledText(""));
+    assert(isForwardRange!R);
+    assert(is(ElementType!R == string));
+}
+
+nothrow pure @safe @nogc unittest
+{
+    bool eq(T)(T actual, const(char[])[] expected...) // This allows `expected` to be `@nogc` even without `-dip1000`.
+    {
+        import std.algorithm.comparison: equal;
+
+        return equal(actual, expected);
+    }
+
+    assert(eq(getUnstyledText("")));
+    assert(eq(getUnstyledText("\x1b[m")));
+    assert(eq(getUnstyledText("a\x1b[m"), "a"));
+    assert(eq(getUnstyledText("a\x1b[0;1m\x1b[9mm\x1b[m\x1b["), "a", "m", "\x1b["));
+    assert(eq(getUnstyledText("a\x1b[0:abc\x1b[m"), "a\x1b[0:abc"));
+
+    char[2] m = "\x1b[";
+    const char[2] c = "\x1b[";
+    immutable char[2] i = "\x1b[";
+
+    assert(eq(getUnstyledText(m), "\x1b["));
+    assert(eq(getUnstyledText(c), "\x1b["));
+    assert(eq(getUnstyledText(i), "\x1b["));
 }
 
 package size_t getUnstyledTextLength(string text)
