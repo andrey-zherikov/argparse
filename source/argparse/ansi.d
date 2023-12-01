@@ -192,28 +192,38 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private size_t[3] findNextCommandSequence(scope const(char)[] text) nothrow pure @safe @nogc
+/**
+    Split a string into two parts: `result[0]` (head) is the first textual chunk (i.e., with no command sequences) that
+    occurs in `text`; `result[1]` (tail) is everything that follows it, with one leading command sequence stripped.
+ */
+private inout(char)[][2] findNextTextChunk(return scope inout(char)[] text) nothrow pure @safe @nogc
 {
-    import std.algorithm.searching: find, skipOver;
-    import std.utf: byCodeUnit;
+    import std.ascii: isDigit;
+    import std.string: indexOf;
 
     static assert(separator.length == 1);
     static assert(suffix.length == 1);
 
-    auto s = text.byCodeUnit;
-    size_t chunkStart = text.length;
+    size_t chunkIdx = 0, idx = 0;
+
     while(true)
     {
-        s = s.find(prefix.byCodeUnit);
-        if(s.empty)
-            return [chunkStart, 0, 0];
-        immutable commandStart = s.length;
-        s = s[prefix.length .. $].find!(c => c - '0' >= 10u && c != separator[0]); // Skip over `\x1b \[ [\d;]*`.
-        if(s.skipOver(suffix[0]))
+        immutable seqIdx = text.indexOf(prefix, idx);
+
+        if(seqIdx < 0)
+            return [text[chunkIdx .. $], null];
+
+        idx = seqIdx + prefix.length;
+        while(idx < text.length && (text[idx] == separator[0] || isDigit(text[idx])))
+            idx++;
+
+        if(idx < text.length && text[idx] == suffix[0])
         {
-            if(chunkStart != commandStart) // If the chunk is not empty.
-                return [chunkStart, commandStart, s.length];
-            chunkStart = s.length;
+            idx++;
+            if(chunkIdx != seqIdx) // If the chunk is not empty.
+                return [text[chunkIdx .. seqIdx], text[idx .. $]];
+
+            chunkIdx = idx; // Otherwise, discard the command sequence we found and continue searching.
         }
     }
 }
@@ -222,7 +232,7 @@ public auto getUnstyledText(C : char)(C[] text)
 {
     struct Unstyler
     {
-        private C[] tail, head;
+        private C[] head, tail;
 
         @property bool empty() const { return head.length == 0; }
 
@@ -230,17 +240,16 @@ public auto getUnstyledText(C : char)(C[] text)
 
         void popFront()
         {
-            immutable a = findNextCommandSequence(tail);
-            head = tail[$ - a[0] .. $ - a[1]];
-            tail = tail[$ - a[2] .. $];
+            auto a = findNextTextChunk(tail);
+            head = a[0];
+            tail = a[1];
         }
 
         @property auto save() inout { return this; }
     }
 
-    Unstyler u = { text };
-    u.popFront();
-    return u;
+    auto a = findNextTextChunk(text);
+    return Unstyler(a[0], a[1]);
 }
 
 nothrow pure @safe @nogc unittest
