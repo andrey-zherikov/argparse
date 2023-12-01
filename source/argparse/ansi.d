@@ -88,24 +88,6 @@ package struct TextStyle
             return str;
         return style ~ suffix ~ str ~ reset;
     }
-
-    public void opCall(W)(ref W writer, const(char)[] str) const
-    {
-        import std.range.primitives: put;
-
-        if(str.length == 0)
-            return;
-
-        immutable enabled = style.length != prefix.length;
-        if(enabled)
-        {
-            put(writer, style);
-            put(writer, suffix);
-        }
-        put(writer, str);
-        if(enabled)
-            put(writer, reset);
-    }
 }
 
 nothrow pure @safe unittest
@@ -130,25 +112,15 @@ package struct StyledText
     }
 
     // this ~ rhs
-    string opBinary(string op : "~")(const(char)[] rhs) const
+    string opBinary(string op : "~")(string rhs) const
     {
-        import std.array: appender;
-
-        auto a = appender!string;
-        style(a, text);
-        a ~= rhs;
-        return a[];
+        return toString() ~ rhs;
     }
 
     // lhs ~ this
-    string opBinaryRight(string op : "~")(const(char)[] lhs) const
+    string opBinaryRight(string op : "~")(string lhs) const
     {
-        import std.array: appender;
-
-        auto a = appender!string;
-        a ~= lhs;
-        style(a, text);
-        return a[];
+        return lhs ~ toString();
     }
 }
 
@@ -187,14 +159,6 @@ package template StyleImpl(ubyte styleCode)
     public auto StyleImpl(TextStyle otherStyle, string text)
     {
         return StyledText(otherStyle ~= styleCode, text);
-    }
-    public void StyleImpl(W)(ref W writer, const(char)[] text)
-    {
-        style(writer, text);
-    }
-    public void StyleImpl(W)(TextStyle otherStyle, ref W writer, const(char)[] text)
-    {
-        (otherStyle ~= styleCode)(writer, text);
     }
 }
 
@@ -254,23 +218,7 @@ nothrow pure @safe unittest
 nothrow pure @safe @nogc unittest
 {
     auto style = bold;
-    style = italic;
-}
-
-nothrow pure @safe unittest
-{
-    import std.array: appender;
-
-    immutable boldItalic = bold.italic;
-
-    auto sink = appender!string;
-    bold(sink, "A");
-    bold(sink, ""); // No-op.
-    sink ~= 'B';
-    boldItalic(sink, "C");
-    sink ~= 'D';
-    boldItalic.red(sink, "E");
-    assert(sink[] == "\033[1mA\033[mB\033[1;3mC\033[mD\033[1;3;31mE\033[m");
+    style = italic; // Should be able to reassign.
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
