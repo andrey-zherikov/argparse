@@ -34,36 +34,23 @@ package(argparse) struct ValueParser(alias PreProcess,
 
     template addDefaults(DefaultParseFunctions)
     {
-        static if(is(PreProcess == void))
-            alias preProc = DefaultParseFunctions.PreProcessArg;
-        else
-            alias preProc = PreProcess;
+        template Get(string member)
+        {
+            alias M = mixin(member);
+            static if(is(M == void))
+                alias Get = __traits(getMember, DefaultParseFunctions, member);
+            else
+                alias Get = M;
+        }
 
-        static if(is(PreValidation == void))
-            alias preVal = DefaultParseFunctions.PreValidationArg;
-        else
-            alias preVal = PreValidation;
-
-        static if(is(Parse == void))
-            alias parse = DefaultParseFunctions.ParseArg;
-        else
-            alias parse = Parse;
-
-        static if(is(Validation == void))
-            alias val = DefaultParseFunctions.ValidationArg;
-        else
-            alias val = Validation;
-
-        static if(is(Action == void))
-            alias action = DefaultParseFunctions.ActionArg;
-        else
-            alias action = Action;
-
-        static if(is(NoValueAction == void))
-            alias addDefaults =
-                ValueParser!(preProc, preVal, parse, val, action, DefaultParseFunctions.NoValueActionArg);
-        else
-            alias addDefaults = ValueParser!(preProc, preVal, parse, val, action, NoValueAction);
+        alias addDefaults = ValueParser!(
+            Get!"PreProcessArg",
+            Get!"PreValidationArg",
+            Get!"ParseArg",
+            Get!"ValidationArg",
+            Get!"ActionArg",
+            Get!"NoValueActionArg",
+        );
     }
 
 

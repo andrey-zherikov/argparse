@@ -157,6 +157,10 @@ private ArgumentUDA getArgumentUDAImpl(MEMBERTYPE, bool checkMinMax, ArgumentUDA
     auto newUDA = getArgumentUDAImpl0!MEMBERTYPE(config, symbol, uda);
     static if(checkMinMax) // We test it here so that `Impl0` does not have `checkMinMax` in its template parameters.
     {
+        // We must guard `defaultValuesCount!MEMBERTYPE` by a `static if` to not instantiate it unless we need it
+        // because it produces a compilation error for unsupported types. Since we cannot examine `newUDA` (nor `uda`)
+        // in a `static if`, we have to be communicated by some other means if its `minValuesCount` and/or
+        // `maxValuesCount` can be null. That's why `checkMinMax` is necessary.
         if(newUDA.info.minValuesCount.isNull) newUDA.info.minValuesCount = defaultValuesCount!MEMBERTYPE.min;
         if(newUDA.info.maxValuesCount.isNull) newUDA.info.maxValuesCount = defaultValuesCount!MEMBERTYPE.max;
     }
