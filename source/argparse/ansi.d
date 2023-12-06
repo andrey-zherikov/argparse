@@ -220,9 +220,10 @@ private inout(char)[][2] findNextTextChunk(return scope inout(char)[] text) noth
         if(idx < text.length && text[idx] == suffix[0])
         {
             idx++;
-            if(seqIdx > 0) // If the chunk is not empty.
+            if(seqIdx > 0) // If the chunk is not empty
                 return [text[0 .. seqIdx], text[idx .. $]];
 
+            // Chunk is empty so we skip command sequence and continue
             text = text[idx .. $];
             idx = 0;
         }
@@ -264,7 +265,7 @@ nothrow pure @safe @nogc unittest
 
 nothrow pure @safe @nogc unittest
 {
-    bool eq(T)(T actual, const(char[])[] expected...) // This allows `expected` to be `@nogc` even without `-dip1000`.
+    bool eq(T)(T actual, const(char[])[] expected...) // This allows `expected` to be `@nogc` even without `-dip1000`
     {
         import std.algorithm.comparison: equal;
 
