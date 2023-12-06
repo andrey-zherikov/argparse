@@ -204,14 +204,14 @@ private inout(char)[][2] findNextTextChunk(return scope inout(char)[] text) noth
     static assert(separator.length == 1);
     static assert(suffix.length == 1);
 
-    size_t chunkIdx = 0, idx = 0;
+    size_t idx = 0;
 
     while(true)
     {
         immutable seqIdx = text.indexOf(prefix, idx);
 
         if(seqIdx < 0)
-            return [text[chunkIdx .. $], null];
+            return [text, null];
 
         idx = seqIdx + prefix.length;
         while(idx < text.length && (text[idx] == separator[0] || isDigit(text[idx])))
@@ -220,10 +220,11 @@ private inout(char)[][2] findNextTextChunk(return scope inout(char)[] text) noth
         if(idx < text.length && text[idx] == suffix[0])
         {
             idx++;
-            if(chunkIdx != seqIdx) // If the chunk is not empty.
-                return [text[chunkIdx .. seqIdx], text[idx .. $]];
+            if(seqIdx > 0) // If the chunk is not empty.
+                return [text[0 .. seqIdx], text[idx .. $]];
 
-            chunkIdx = idx; // Otherwise, discard the command sequence we found and continue searching.
+            text = text[idx .. $];
+            idx = 0;
         }
     }
 }
