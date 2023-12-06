@@ -1,7 +1,5 @@
 module argparse.ansi;
 
-import std.regex: ctRegex;
-
 // The string that starts an ANSI command sequence.
 private enum prefix = "\033[";
 
@@ -13,9 +11,6 @@ private enum suffix = "m";
 
 // The sequence used to reset all styling.
 private enum reset = prefix ~ suffix;
-
-// Regex to match ANSI sequence
-private enum sequenceRegex = ctRegex!(`\x1b\[(\d*(;\d*)*)?m`);
 
 // Code offset between foreground and background
 private enum colorBgOffset = 10;
@@ -223,11 +218,99 @@ nothrow pure @safe @nogc unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-public auto getUnstyledText(string text)
+/**
+    Split a string into two parts: `result[0]` (head) is the first textual chunk (i.e., with no command sequences) that
+    occurs in `text`; `result[1]` (tail) is everything that follows it, with one leading command sequence stripped.
+ */
+private inout(char)[][2] findNextTextChunk(return scope inout(char)[] text) nothrow pure @safe @nogc
 {
-    import std.regex: splitter;
+    import std.ascii: isDigit;
+    import std.string: indexOf;
 
-    return text.splitter(sequenceRegex);
+    static assert(separator.length == 1);
+    static assert(suffix.length == 1);
+
+    size_t idx = 0;
+
+    while(true)
+    {
+        immutable seqIdx = text.indexOf(prefix, idx);
+
+        if(seqIdx < 0)
+            return [text, null];
+
+        idx = seqIdx + prefix.length;
+        while(idx < text.length && (text[idx] == separator[0] || isDigit(text[idx])))
+            idx++;
+
+        if(idx < text.length && text[idx] == suffix[0])
+        {
+            idx++;
+            if(seqIdx > 0) // If the chunk is not empty
+                return [text[0 .. seqIdx], text[idx .. $]];
+
+            // Chunk is empty so we skip command sequence and continue
+            text = text[idx .. $];
+            idx = 0;
+        }
+    }
+}
+
+public auto getUnstyledText(C : char)(C[] text)
+{
+    struct Unstyler
+    {
+        private C[] head, tail;
+
+        @property bool empty() const { return head.length == 0; }
+
+        @property inout(C)[] front() inout { return head; }
+
+        void popFront()
+        {
+            auto a = findNextTextChunk(tail);
+            head = a[0];
+            tail = a[1];
+        }
+
+        @property auto save() inout { return this; }
+    }
+
+    auto a = findNextTextChunk(text);
+    return Unstyler(a[0], a[1]);
+}
+
+nothrow pure @safe @nogc unittest
+{
+    import std.range.primitives: ElementType, isForwardRange;
+
+    alias R = typeof(getUnstyledText(""));
+    assert(isForwardRange!R);
+    assert(is(ElementType!R == string));
+}
+
+nothrow pure @safe @nogc unittest
+{
+    bool eq(T)(T actual, const(char[])[] expected...) // This allows `expected` to be `@nogc` even without `-dip1000`
+    {
+        import std.algorithm.comparison: equal;
+
+        return equal(actual, expected);
+    }
+
+    assert(eq(getUnstyledText("")));
+    assert(eq(getUnstyledText("\x1b[m")));
+    assert(eq(getUnstyledText("a\x1b[m"), "a"));
+    assert(eq(getUnstyledText("a\x1b[0;1m\x1b[9mm\x1b[m\x1b["), "a", "m", "\x1b["));
+    assert(eq(getUnstyledText("a\x1b[0:abc\x1b[m"), "a\x1b[0:abc"));
+
+    char[2] m = "\x1b[";
+    const char[2] c = "\x1b[";
+    immutable char[2] i = "\x1b[";
+
+    assert(eq(getUnstyledText(m), "\x1b["));
+    assert(eq(getUnstyledText(c), "\x1b["));
+    assert(eq(getUnstyledText(i), "\x1b["));
 }
 
 package size_t getUnstyledTextLength(string text)

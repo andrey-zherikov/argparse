@@ -258,14 +258,11 @@ private void wrap(void delegate(string) sink,
 {
     import std.string: lineSplitter;
     import std.range: enumerate;
-    import std.algorithm: map;
+    import std.algorithm: map, splitter;
     import std.typecons: tuple;
-    import std.regex: ctRegex, splitter;
 
     if(s.length == 0)
         return;
-
-    enum whitespaces = ctRegex!(`\s+`);
 
     foreach(lineIdx, line; s.lineSplitter.enumerate)
     {
@@ -282,7 +279,7 @@ private void wrap(void delegate(string) sink,
             col = indent.length;
         }
 
-        foreach(wordIdx, word; line.splitter(whitespaces).map!(_ => _, getUnstyledTextLength).enumerate)
+        foreach(wordIdx, word; line.splitter.map!(_ => _, getUnstyledTextLength).enumerate)
         {
             if(wordIdx > 0)
             {
