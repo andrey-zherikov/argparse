@@ -168,8 +168,6 @@ unittest
     assert(res.shortNames == []);
     assert(res.longNames == ["default_name"]);
     assert(res.displayNames == ["default_name"]);
-    // assert(res.minValuesCount == defaultValuesCount!int.min);
-    // assert(res.maxValuesCount == defaultValuesCount!int.max);
     assert(res.placeholder == "default_name");
 
     res = getArgumentUDA!int(Config.init, "i", createUDA()).info;
@@ -177,8 +175,6 @@ unittest
     assert(res.shortNames == ["i"]);
     assert(res.longNames == []);
     assert(res.displayNames == ["i"]);
-    // assert(res.minValuesCount == defaultValuesCount!int.min);
-    // assert(res.maxValuesCount == defaultValuesCount!int.max);
     assert(res.placeholder == "i");
 
     res = getArgumentUDA!int(Config.init, "default_name", createUDA("myvalue")).info;
@@ -201,8 +197,6 @@ unittest
     assert(res.shortNames == []);
     assert(res.longNames == ["default_name"]);
     assert(res.displayNames == ["--default_name"]);
-    // assert(res.minValuesCount == defaultValuesCount!bool.min);
-    // assert(res.maxValuesCount == defaultValuesCount!bool.max);
     assert(res.placeholder == "DEFAULT_NAME");
 
     res = getArgumentUDA!bool(Config.init, "b", createUDA()).info;
@@ -210,8 +204,6 @@ unittest
     assert(res.shortNames == ["b"]);
     assert(res.longNames == []);
     assert(res.displayNames == ["-b"]);
-    // assert(res.minValuesCount == defaultValuesCount!bool.min);
-    // assert(res.maxValuesCount == defaultValuesCount!bool.max);
     assert(res.placeholder == "B");
 
     res = getArgumentUDA!bool(Config.init, "default_name", createUDA("myvalue")).info;
@@ -240,8 +232,6 @@ unittest
     assert(res.shortNames == []);
     assert(res.longNames == ["DEFAULT_NAME"]);
     assert(res.displayNames == ["--default_name"]);
-    // assert(res.minValuesCount == defaultValuesCount!bool.min);
-    // assert(res.maxValuesCount == defaultValuesCount!bool.max);
     assert(res.placeholder == "DEFAULT_NAME");
 
     res = getArgumentUDA!bool(config, "b", createUDA()).info;
@@ -249,8 +239,6 @@ unittest
     assert(res.shortNames == ["B"]);
     assert(res.longNames == []);
     assert(res.displayNames == ["-b"]);
-    // assert(res.minValuesCount == defaultValuesCount!bool.min);
-    // assert(res.maxValuesCount == defaultValuesCount!bool.max);
     assert(res.placeholder == "B");
 
     res = getArgumentUDA!bool(config, "default_name", createUDA("myvalue")).info;
@@ -324,3 +312,86 @@ package auto getMemberArgumentUDA(TYPE, string symbol, T)(const Config config, A
     return newUDA;
 }
 
+unittest
+{
+    enum defaultUDA = ArgumentUDA!void.init;
+
+    auto createUDA(ulong min, ulong max)
+    {
+        auto uda = defaultUDA;
+        uda.info.minValuesCount = min;
+        uda.info.maxValuesCount = max;
+        return uda;
+    }
+
+    @createUDA(5, 10)
+    struct FiveToTen {}
+
+    @defaultUDA
+    struct UnspecifiedA {}
+
+    struct UnspecifiedB {}
+
+    @createUDA(5, 10) @createUDA(5, 10)
+    struct Multiple {}
+
+    struct Args
+    {
+        @defaultUDA bool flag;
+        @defaultUDA int count;
+        @defaultUDA @defaultUDA int incorrect;
+
+        @defaultUDA FiveToTen fiveTen;
+        @defaultUDA UnspecifiedA ua;
+        @defaultUDA UnspecifiedB ub;
+        @defaultUDA Multiple mult;
+
+        @createUDA(1, 2) FiveToTen fiveTen1;
+        @createUDA(1, 2) UnspecifiedA ua1;
+        @createUDA(1, 2) UnspecifiedB ub1;
+        @createUDA(1, 2) Multiple mult1;
+    }
+
+    auto getInfo(string symbol)()
+    {
+        return getMemberArgumentUDA!(Args, symbol)(Config.init, defaultUDA).info;
+    }
+
+    // Built-in types:
+
+    auto res = getInfo!"flag";
+    assert(res.minValuesCount == 0);
+    assert(res.maxValuesCount == 0);
+
+    res = getInfo!"count";
+    assert(res.minValuesCount == 1);
+    assert(res.maxValuesCount == 1);
+
+    assert(!__traits(compiles, getInfo!"incorrect"));
+
+    // With type-inherited quantifiers:
+
+    res = getInfo!"fiveTen";
+    assert(res.minValuesCount == 5);
+    assert(res.maxValuesCount == 10);
+
+    assert(!__traits(compiles, getInfo!"ua"));
+    assert(!__traits(compiles, getInfo!"ub"));
+    assert(!__traits(compiles, getInfo!"mult"));
+
+    // With explicit quantifiers:
+
+    res = getInfo!"fiveTen1";
+    assert(res.minValuesCount == 1);
+    assert(res.maxValuesCount == 2);
+
+    res = getInfo!"ua1";
+    assert(res.minValuesCount == 1);
+    assert(res.maxValuesCount == 2);
+
+    res = getInfo!"ub1";
+    assert(res.minValuesCount == 1);
+    assert(res.maxValuesCount == 2);
+
+    assert(!__traits(compiles, getInfo!"mult1"));
+}
