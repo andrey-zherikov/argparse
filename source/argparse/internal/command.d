@@ -6,7 +6,7 @@ import argparse.result;
 import argparse.api.argument: TrailingArguments, NamedArgument, NumberOfValues;
 import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
 import argparse.internal.arguments: Arguments, ArgumentInfo;
-import argparse.internal.argumentuda: ArgumentUDA, getArgumentUDA, getMemberArgumentUDA;
+import argparse.internal.argumentuda: ArgumentUDA, getMemberArgumentUDA;
 import argparse.internal.commandinfo;
 import argparse.internal.help: HelpArgumentUDA;
 import argparse.internal.restriction;
@@ -269,6 +269,7 @@ private struct SubCommand(TYPE)
 
 private template TypeTraits(Config config, TYPE)
 {
+    import argparse.internal.arguments: finalize;
     import std.meta: AliasSeq, Filter, staticMap, staticSort;
     import std.range: chain;
 
@@ -282,7 +283,7 @@ private template TypeTraits(Config config, TYPE)
 
     static if(config.addHelp)
     {
-        private enum helpUDA = .getArgumentUDA!bool(config, null, HelpArgumentUDA.init);
+        private enum helpUDA = HelpArgumentUDA(HelpArgumentUDA.init.info.finalize!bool(config, null));
         enum argumentUDAs = AliasSeq!(staticMap!(getArgumentUDA, iterateArguments!TYPE), helpUDA);
     }
     else

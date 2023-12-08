@@ -6,7 +6,6 @@ import argparse.config;
 import argparse.result;
 
 import std.typecons: Nullable;
-import std.traits: getUDAs;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -98,6 +97,174 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+package ArgumentInfo finalize(MEMBERTYPE)(ArgumentInfo info, const Config config, string symbol)
+{
+    import std.algorithm: each, map;
+    import std.array: array;
+    import std.conv: text;
+    import std.range: chain;
+    import std.traits: isBoolean;
+
+    static if(!isBoolean!MEMBERTYPE)
+        info.allowBooleanNegation = false;
+
+    if(info.shortNames.length == 0 && info.longNames.length == 0)
+    {
+        if(symbol.length == 1)
+            info.shortNames = [ symbol ];
+        else
+            info.longNames = [ symbol ];
+    }
+
+    if(info.placeholder.length == 0)
+    {
+        static if(is(MEMBERTYPE == enum))
+        {
+            import argparse.internal.enumhelpers: getEnumValues;
+            import argparse.internal.utils: formatAllowedValues;
+
+            info.placeholder = formatAllowedValues(getEnumValues!MEMBERTYPE);
+        }
+        else
+        {
+            import std.uni: toUpper;
+
+            info.placeholder = info.positional ? symbol : symbol.toUpper;
+        }
+    }
+
+    info.memberSymbol = symbol;
+
+    if(info.positional)
+        info.displayNames = [ info.placeholder ];
+    else
+    {
+        alias toDisplayName = _ => ( _.length == 1 ? config.namedArgPrefix ~ _ : text(config.namedArgPrefix, config.namedArgPrefix, _));
+
+        info.displayNames = chain(info.shortNames, info.longNames).map!toDisplayName.array;
+    }
+
+    if(!config.caseSensitive)
+    {
+        info.shortNames.each!((ref _) => _ = config.convertCase(_));
+        info.longNames .each!((ref _) => _ = config.convertCase(_));
+    }
+
+    // Note: `info.{minValuesCount,maxValuesCount}` are left unchanged
+
+    return info;
+}
+
+unittest
+{
+    auto createInfo(string placeholder = "")
+    {
+        ArgumentInfo info;
+        info.allowBooleanNegation = true;
+        info.position = 0;
+        info.placeholder = placeholder;
+        return info;
+    }
+
+    auto res = createInfo().finalize!int(Config.init, "default_name");
+    assert(!res.allowBooleanNegation);
+    assert(res.shortNames == []);
+    assert(res.longNames == ["default_name"]);
+    assert(res.displayNames == ["default_name"]);
+    assert(res.placeholder == "default_name");
+
+    res = createInfo().finalize!int(Config.init, "i");
+    assert(!res.allowBooleanNegation);
+    assert(res.shortNames == ["i"]);
+    assert(res.longNames == []);
+    assert(res.displayNames == ["i"]);
+    assert(res.placeholder == "i");
+
+    res = createInfo("myvalue").finalize!int(Config.init, "default_name");
+    assert(res.placeholder == "myvalue");
+    assert(res.displayNames == ["myvalue"]);
+}
+
+unittest
+{
+    auto createInfo(string placeholder = "")
+    {
+        ArgumentInfo info;
+        info.allowBooleanNegation = true;
+        info.placeholder = placeholder;
+        return info;
+    }
+
+    auto res = createInfo().finalize!bool(Config.init, "default_name");
+    assert(res.allowBooleanNegation);
+    assert(res.shortNames == []);
+    assert(res.longNames == ["default_name"]);
+    assert(res.displayNames == ["--default_name"]);
+    assert(res.placeholder == "DEFAULT_NAME");
+
+    res = createInfo().finalize!bool(Config.init, "b");
+    assert(res.allowBooleanNegation);
+    assert(res.shortNames == ["b"]);
+    assert(res.longNames == []);
+    assert(res.displayNames == ["-b"]);
+    assert(res.placeholder == "B");
+
+    res = createInfo("myvalue").finalize!bool(Config.init, "default_name");
+    assert(res.placeholder == "myvalue");
+    assert(res.displayNames == ["--default_name"]);
+}
+
+unittest
+{
+    enum Config config = { caseSensitive: false };
+
+    auto createInfo(string placeholder = "")
+    {
+        ArgumentInfo info;
+        info.allowBooleanNegation = true;
+        info.placeholder = placeholder;
+        return info;
+    }
+
+    auto res = createInfo().finalize!bool(config, "default_name");
+    assert(res.allowBooleanNegation);
+    assert(res.shortNames == []);
+    assert(res.longNames == ["DEFAULT_NAME"]);
+    assert(res.displayNames == ["--default_name"]);
+    assert(res.placeholder == "DEFAULT_NAME");
+
+    res = createInfo().finalize!bool(config, "b");
+    assert(res.allowBooleanNegation);
+    assert(res.shortNames == ["B"]);
+    assert(res.longNames == []);
+    assert(res.displayNames == ["-b"]);
+    assert(res.placeholder == "B");
+
+    res = createInfo("myvalue").finalize!bool(config, "default_name");
+    assert(res.placeholder == "myvalue");
+    assert(res.displayNames == ["--default_name"]);
+}
+
+unittest
+{
+    enum E { a=1, b=1, c }
+
+    auto createInfo(string placeholder = "")
+    {
+        ArgumentInfo info;
+        info.placeholder = placeholder;
+        return info;
+    }
+
+    auto res = createInfo().finalize!E(Config.init, "default_name");
+    assert(res.placeholder == "{a,b,c}");
+
+    res = createInfo("myvalue").finalize!E(Config.init, "default_name");
+    assert(res.placeholder == "myvalue");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 package(argparse) struct Group
 {
     string name;
@@ -107,6 +274,8 @@ package(argparse) struct Group
 
 private template getMemberGroupUDA(TYPE, string symbol)
 {
+    import std.traits: getUDAs;
+
     private enum udas = getUDAs!(__traits(getMember, TYPE, symbol), Group);
 
     static assert(udas.length <= 1, "Member "~TYPE.stringof~"."~symbol~" has multiple 'Group' UDAs");
