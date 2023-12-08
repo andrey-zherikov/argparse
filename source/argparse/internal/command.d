@@ -282,7 +282,7 @@ private template TypeTraits(Config config, TYPE)
 
     static if(config.addHelp)
     {
-        private enum helpUDA = .getArgumentUDA!(bool, false)(config, null, HelpArgumentUDA.init);
+        private enum helpUDA = .getArgumentUDA!bool(config, null, HelpArgumentUDA.init);
         enum argumentUDAs = AliasSeq!(staticMap!(getArgumentUDA, iterateArguments!TYPE), helpUDA);
     }
     else
