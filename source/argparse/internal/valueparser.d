@@ -34,11 +34,11 @@ package(argparse) struct ValueParser(alias PreProcess,
 
     template addDefaults(DefaultParseFunctions)
     {
-        template Get(string member)
+        template Get(string symbol)
         {
-            alias M = mixin(member);
+            alias M = mixin(symbol);
             static if(is(M == void))
-                alias Get = __traits(getMember, DefaultParseFunctions, member);
+                alias Get = __traits(getMember, DefaultParseFunctions, symbol);
             else
                 alias Get = M;
         }

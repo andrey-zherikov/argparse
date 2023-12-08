@@ -113,10 +113,10 @@ struct SubCommand {
 
 alias Entry = SumType!(Unknown, EndOfArgs, Argument, SubCommand);
 
-private Entry getNextEntry(char assignChar, bool bundling)(Config config, ref string[] args,
-                                                           FindResult delegate(bool) findPositionalArg,
-                                                           FindResult delegate(string) findNamedArg,
-                                                           Command delegate() delegate(string) findCommand)
+private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
+                                          FindResult delegate(bool) findPositionalArg,
+                                          FindResult delegate(string) findNamedArg,
+                                          Command delegate() delegate(string) findCommand)
 {
     import std.range: popFront;
 
@@ -152,7 +152,7 @@ private Entry getNextEntry(char assignChar, bool bundling)(Config config, ref st
             //  --no-abc     => --abc false       < only for boolean flags
 
             // Look for assign character
-            immutable idxAssignChar = assignChar == char.init ? -1 : arg0.indexOf(assignChar);
+            immutable idxAssignChar = config.assignChar == char.init ? -1 : arg0.indexOf(config.assignChar);
             if(idxAssignChar > 0)
             {
                 // "--<arg>=<value>" case
@@ -206,7 +206,7 @@ private Entry getNextEntry(char assignChar, bool bundling)(Config config, ref st
             //              => -a -b -c             < only if config.bundling is true
 
             // Look for assign character
-            immutable idxAssignChar = assignChar == char.init ? -1 : arg0.indexOf(assignChar);
+            immutable idxAssignChar = config.assignChar == char.init ? -1 : arg0.indexOf(config.assignChar);
             if(idxAssignChar > 0)
             {
                 // "-<arg>=<value>" case
@@ -234,7 +234,7 @@ private Entry getNextEntry(char assignChar, bool bundling)(Config config, ref st
                         if(res.arg)
                         {
                             // We don't need first argument because we've already got it
-                            auto restArgs = splitSingleLetterNames(usedName, assignChar, value)[1..$];
+                            auto restArgs = splitSingleLetterNames(usedName, config.assignChar, value)[1..$];
 
                             // Replace first element with set of single-letter arguments
                             args = restArgs ~ args[1..$];
@@ -333,7 +333,7 @@ private Entry getNextEntry(char assignChar, bool bundling)(Config config, ref st
 
 unittest
 {
-    auto test(string[] args) => getNextEntry!('=', false)(Config.init, args, null, null, null);
+    auto test(string[] args) => getNextEntry!false(Config.init, args, null, null, null);
 
     assert(test([""]) == Entry(Unknown("")));
     assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
@@ -341,7 +341,7 @@ unittest
 
 unittest
 {
-    auto test(string[] args) => getNextEntry!('=', false)(Config.init, args, null, null, null);
+    auto test(string[] args) => getNextEntry!false(Config.init, args, null, null, null);
 
     assert(test([""]) == Entry(Unknown("")));
     assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
@@ -507,7 +507,7 @@ private struct Parser
 
     ///////////////////////////////////////////////////////////////////////
 
-    auto parseAll(bool completionMode, char assignChar, bool bundling)(string[] args)
+    auto parseAll(bool completionMode, bool bundling)(string[] args)
     {
         import std.range: empty, join;
         import std.sumtype : match;
@@ -519,7 +519,7 @@ private struct Parser
             {
                 if(args.length > 1)
                 {
-                    auto res = getNextEntry!(assignChar, bundling)(
+                    auto res = getNextEntry!bundling(
                             config, args,
                             _ => findArgument(cmdStack, idxPositionalStack, idxNextPositional, _),
                             _ => findArgument(cmdStack, _),
@@ -540,7 +540,7 @@ private struct Parser
             }
             else
             {
-                auto res = getNextEntry!(assignChar, bundling)(
+                auto res = getNextEntry!bundling(
                         config, args,
                         _ => findArgument(cmdStack, idxPositionalStack, idxNextPositional, _),
                         _ => findArgument(cmdStack, _),
@@ -576,7 +576,7 @@ private struct Parser
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private Result callParser(bool completionMode, char assignChar, bool bundling)(
+private Result callParser(bool completionMode, bool bundling)(
     Config config, Command cmd, string[] args, out string[] unrecognizedArgs,
 )
 {
@@ -585,7 +585,7 @@ private Result callParser(bool completionMode, char assignChar, bool bundling)(
     Parser parser = { config };
     parser.addCommand(cmd);
 
-    auto res = parser.parseAll!(completionMode, assignChar, bundling)(args);
+    auto res = parser.parseAll!(completionMode, bundling)(args);
 
     static if(!completionMode)
     {
@@ -599,7 +599,7 @@ private Result callParser(bool completionMode, char assignChar, bool bundling)(
 package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 if(config.stylingMode != Config.StylingMode.autodetect)
 {
-    return callParser!(completionMode, config.assignChar, config.bundling)(
+    return callParser!(completionMode, config.bundling)(
         config, createCommand!config(receiver, getCommandInfo!COMMAND(config)), args, unrecognizedArgs,
     );
 }
