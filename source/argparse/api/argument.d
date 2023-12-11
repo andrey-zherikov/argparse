@@ -309,7 +309,7 @@ auto AllowedValues(alias values, ARG)(ARG arg)
 
     auto desc = arg.Validation!(ValueInList!(values, KeyType!(typeof(valuesAA))));
     if(desc.info.placeholder.length == 0)
-        desc.info.placeholder = formatAllowedValues!values;
+        desc.info.placeholder = formatAllowedValues(values);
 
     return desc;
 }
@@ -321,20 +321,20 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private struct CounterParsingFunction
+{
+    static Result parse(T)(ref T receiver, const ref RawParam param)
+    {
+        assert(param.value.length == 0);
+
+        ++receiver;
+
+        return Result.Success;
+    }
+}
+
 auto Counter(T)(auto ref ArgumentUDA!T uda)
 {
-    struct CounterParsingFunction
-    {
-        static Result parse(T)(ref T receiver, const ref RawParam param)
-        {
-            assert(param.value.length == 0);
-
-            ++receiver;
-
-            return Result.Success;
-        }
-    }
-
     auto desc = ArgumentUDA!(CounterParsingFunction)(uda.tupleof);
     desc.info.minValuesCount = 0;
     desc.info.maxValuesCount = 0;
