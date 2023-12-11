@@ -155,7 +155,7 @@ package struct HelpArgumentUDA
         return info;
     }();
 
-    auto parse(Config config, COMMAND_STACK, RECEIVER)(const COMMAND_STACK cmdStack, ref RECEIVER receiver, string argName, string[] rawValues)
+    auto parse(COMMAND_STACK)(const Config config, const COMMAND_STACK cmdStack, string argName, string[] rawValues)
     {
         import std.stdio: stdout;
         import std.algorithm: map;
@@ -166,9 +166,14 @@ package struct HelpArgumentUDA
         auto args = cmdStack.map!((ref _) => &_.arguments).array;
 
         auto output = stdout.lockingTextWriter();
-        printHelp!config(_ => output.put(_), cmdStack[$-1], args, progName);
+        printHelp(_ => output.put(_), config, cmdStack[$-1], args, progName);
 
         return Result(0);
+    }
+
+    auto parse(Config config, COMMAND_STACK, RECEIVER)(const COMMAND_STACK cmdStack, ref RECEIVER, string argName, string[] rawValues)
+    {
+        return parse(config, cmdStack, argName, rawValues);
     }
 }
 
@@ -283,7 +288,7 @@ private void wrap(void delegate(string) sink,
         {
             if(wordIdx > 0)
             {
-                if (col + 1 + word[1] > columns)
+                if(col + 1 + word[1] > columns)
                 {
                     sink("\n");
                     sink(indent);
@@ -370,7 +375,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void printInvocation(NAMES)(void delegate(string) sink, const ref Style style, in ArgumentInfo info, NAMES names)
+private void printInvocation(void delegate(string) sink, const ref Style style, in ArgumentInfo info, const(string)[] names)
 {
     if(info.positional)
         sink(style.positionalArgumentValue(printValue(info)));
@@ -396,17 +401,14 @@ private void printInvocation(NAMES)(void delegate(string) sink, const ref Style 
 
 unittest
 {
-    auto test(bool positional)()
+    auto test(bool positional)
     {
-        enum info = {
-            ArgumentInfo info;
-            info.placeholder = "v";
-            info.minValuesCount = 1;
-            info.maxValuesCount = 1;
-            static if (positional)
-                info.position = 0;
-            return info;
-        }();
+        ArgumentInfo info;
+        info.placeholder = "v";
+        info.minValuesCount = 1;
+        info.maxValuesCount = 1;
+        if(positional)
+            info.position = 0;
 
         import std.array: appender;
         auto a = appender!string;
@@ -415,8 +417,8 @@ unittest
         return a[];
     }
 
-    assert(test!false == "-f v, --foo v");
-    assert(test!true == "v");
+    assert(test(false) == "-f v, --foo v");
+    assert(test(true) == "v");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -434,20 +436,17 @@ private void printUsage(void delegate(string) sink, const ref Style style, in Ar
 
 unittest
 {
-    auto test(bool required, bool positional)()
+    auto test(bool required, bool positional)
     {
-        enum info = {
-            ArgumentInfo info;
-            info.longNames ~= "foo";
-            info.displayNames ~= "--foo";
-            info.placeholder = "v";
-            info.required = required;
-            info.minValuesCount = 1;
-            info.maxValuesCount = 1;
-            static if (positional)
-                info.position = 0;
-            return info;
-        }();
+        ArgumentInfo info;
+        info.longNames ~= "foo";
+        info.displayNames ~= "--foo";
+        info.placeholder = "v";
+        info.required = required;
+        info.minValuesCount = 1;
+        info.maxValuesCount = 1;
+        if(positional)
+            info.position = 0;
 
         import std.array: appender;
         auto a = appender!string;
@@ -456,10 +455,10 @@ unittest
         return a[];
     }
 
-    assert(test!(false, false) == "[--foo v]");
-    assert(test!(false, true) == "[v]");
-    assert(test!(true, false) == "--foo v");
-    assert(test!(true, true) == "v");
+    assert(test(false, false) == "[--foo v]");
+    assert(test(false, true) == "[v]");
+    assert(test(true, false) == "--foo v");
+    assert(test(true, true) == "v");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -508,7 +507,7 @@ private string getUsage(Command)(const ref Style style, const ref Command cmd, s
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto getSections(ARGUMENTS)(const ref Style style, ARGUMENTS arguments)
+private auto getSections(const ref Style style, const(Arguments*)[] arguments)
 {
     import std.algorithm: filter, map;
     import std.array: appender, array;
@@ -622,7 +621,7 @@ private auto getSection(Command)(const ref Style style, const ref Command cmd, S
     return section;
 }
 
-package(argparse) void printHelp(Config config, ARGUMENTS, Command)(void delegate(string) sink, const ref Command cmd, ARGUMENTS arguments, string progName)
+package(argparse) void printHelp(Command)(void delegate(string) sink, const Config config, const ref Command cmd, const(Arguments*)[] arguments, string progName)
 {
     import std.algorithm: each;
 

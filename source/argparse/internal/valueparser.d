@@ -18,6 +18,13 @@ package(argparse) struct ValueParser(alias PreProcess,
                                      alias Action,
                                      alias NoValueAction)
 {
+    alias PreProcessArg = PreProcess;
+    alias PreValidationArg = PreValidation;
+    alias ParseArg = Parse;
+    alias ValidationArg = Validation;
+    alias ActionArg = Action;
+    alias NoValueActionArg = NoValueAction;
+
     alias changePreProcess   (alias func) = ValueParser!(      func, PreValidation, Parse, Validation, Action, NoValueAction);
     alias changePreValidation(alias func) = ValueParser!(PreProcess,          func, Parse, Validation, Action, NoValueAction);
     alias changeParse        (alias func) = ValueParser!(PreProcess, PreValidation,  func, Validation, Action, NoValueAction);
@@ -27,35 +34,23 @@ package(argparse) struct ValueParser(alias PreProcess,
 
     template addDefaults(DefaultParseFunctions)
     {
-        static if(is(PreProcess == void))
-            alias preProc = DefaultParseFunctions;
-        else
-            alias preProc = DefaultParseFunctions.changePreProcess!PreProcess;
+        template Get(string symbol)
+        {
+            alias M = mixin(symbol);
+            static if(is(M == void))
+                alias Get = __traits(getMember, DefaultParseFunctions, symbol);
+            else
+                alias Get = M;
+        }
 
-        static if(is(PreValidation == void))
-            alias preVal = preProc;
-        else
-            alias preVal = preProc.changePreValidation!PreValidation;
-
-        static if(is(Parse == void))
-            alias parse = preVal;
-        else
-            alias parse = preVal.changeParse!Parse;
-
-        static if(is(Validation == void))
-            alias val = parse;
-        else
-            alias val = parse.changeValidation!Validation;
-
-        static if(is(Action == void))
-            alias action = val;
-        else
-            alias action = val.changeAction!Action;
-
-        static if(is(NoValueAction == void))
-            alias addDefaults = action;
-        else
-            alias addDefaults = action.changeNoValueAction!NoValueAction;
+        alias addDefaults = ValueParser!(
+            Get!"PreProcessArg",
+            Get!"PreValidationArg",
+            Get!"ParseArg",
+            Get!"ValidationArg",
+            Get!"ActionArg",
+            Get!"NoValueActionArg",
+        );
     }
 
 

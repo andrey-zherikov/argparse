@@ -17,13 +17,11 @@ package(argparse) struct CommandInfo
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto finalize(Config config, alias initUDA)()
+private auto finalize(const Config config, CommandInfo uda)
 {
-    auto uda = initUDA;
-
     uda.displayNames = uda.names.dup;
 
-    static if(!config.caseSensitive)
+    if(!config.caseSensitive)
     {
         import std.algorithm: each;
         uda.names.each!((ref _) => _ = config.convertCase(_));
@@ -34,7 +32,7 @@ private auto finalize(Config config, alias initUDA)()
 
 unittest
 {
-    auto uda = finalize!(Config.init, CommandInfo(["cmd-Name"]));
+    auto uda = finalize(Config.init, CommandInfo(["cmd-Name"]));
     assert(uda.displayNames == ["cmd-Name"]);
     assert(uda.names == ["cmd-Name"]);
 }
@@ -47,12 +45,12 @@ unittest
         return config;
     }();
 
-    auto uda = finalize!(config, CommandInfo(["cmd-Name"]));
+    auto uda = finalize(config, CommandInfo(["cmd-Name"]));
     assert(uda.displayNames == ["cmd-Name"]);
     assert(uda.names == ["CMD-NAME"]);
 }
 
-package(argparse) template getCommandInfo(Config config, COMMAND, string name = "")
+package(argparse) CommandInfo getCommandInfo(COMMAND)(const Config config, string name = "")
 {
     import std.traits: getUDAs;
 
@@ -60,9 +58,10 @@ package(argparse) template getCommandInfo(Config config, COMMAND, string name = 
     static assert(udas.length <= 1, COMMAND.stringof~" has multiple @Command UDA");
 
     static if(udas.length > 0)
-        enum getCommandInfo = finalize!(config, udas[0]);
+        CommandInfo info = finalize(config, udas[0]);
     else
-        enum getCommandInfo = finalize!(config, CommandInfo([name]));
+        CommandInfo info = finalize(config, CommandInfo([name]));
 
-    static assert(name == "" || getCommandInfo.names.length > 0 && getCommandInfo.names[0].length > 0, "Command "~COMMAND.stringof~" must have name");
+    assert(name == "" || info.names.length > 0 && info.names[0].length > 0, "Command "~COMMAND.stringof~" must have name");
+    return info;
 }
