@@ -1,7 +1,7 @@
 module argparse.internal.argumentuda;
 
 import argparse.config;
-import argparse.internal.arguments: ArgumentInfo;
+import argparse.internal.arguments: ArgumentInfo, finalize;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -97,7 +97,6 @@ if(!is(TYPE == void))
 
 package auto getMemberArgumentUDA(TYPE, string symbol, T)(const Config config, ArgumentUDA!T defaultUDA)
 {
-    import argparse.internal.arguments: finalize;
     import std.traits: getUDAs;
 
     alias member = __traits(getMember, TYPE, symbol);
@@ -122,7 +121,7 @@ package auto getMemberArgumentUDA(TYPE, string symbol, T)(const Config config, A
 
     static if(typeUDAs.length > 0)
     {
-        auto uda1 = uda0.addDefaults(typeUDAs);
+        auto uda1 = uda0.addDefaults(typeUDAs[0]);
         enum checkMinMax1 = typeUDAs[0].info.minValuesCount.isNull || typeUDAs[0].info.maxValuesCount.isNull;
     }
     else

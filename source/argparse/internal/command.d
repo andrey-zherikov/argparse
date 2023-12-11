@@ -5,7 +5,7 @@ import argparse.param;
 import argparse.result;
 import argparse.api.argument: TrailingArguments, NamedArgument, NumberOfValues;
 import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
-import argparse.internal.arguments: Arguments, ArgumentInfo;
+import argparse.internal.arguments: Arguments, ArgumentInfo, finalize;
 import argparse.internal.argumentuda: ArgumentUDA, getMemberArgumentUDA;
 import argparse.internal.commandinfo;
 import argparse.internal.help: HelpArgumentUDA;
@@ -269,7 +269,6 @@ private struct SubCommand(TYPE)
 
 private template TypeTraits(Config config, TYPE)
 {
-    import argparse.internal.arguments: finalize;
     import std.meta: AliasSeq, Filter, staticMap, staticSort;
     import std.range: chain;
 
