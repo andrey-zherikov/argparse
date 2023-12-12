@@ -89,9 +89,9 @@ unittest
     {
         T t;
 
-        enum uda = getMemberArgumentUDA!(T, "a")(Config.init, NamedArgument("arg-name").NumberOfValues(1));
+        enum uda = getMemberArgumentUDA!(T, "a")(Config.init);
 
-        return ArgumentParsingFunction!(Config.init, uda)([], t, "arg-name", values);
+        return ArgumentParsingFunction!(Config.init, uda)([], t, "a", values);
     }
 
     assert(test(["raw-value"]));
@@ -107,11 +107,11 @@ unittest
 
     T t;
 
-    enum uda = getMemberArgumentUDA!(T, "func")(Config.init, NamedArgument("arg-name").NumberOfValues(0));
+    enum uda = getMemberArgumentUDA!(T, "func")(Config.init);
 
-    auto res = ArgumentParsingFunction!(Config.init, uda)([], t, "arg-name", []);
+    auto res = ArgumentParsingFunction!(Config.init, uda)([], t, "func", []);
 
-    assert(res.isError(Config.init.styling.argumentName("arg-name")~": My Message."));
+    assert(res.isError(Config.init.styling.argumentName("func")~": My Message."));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -276,7 +276,7 @@ private template TypeTraits(Config config, TYPE)
     /////////////////////////////////////////////////////////////////////
     /// Arguments
 
-    private enum getArgumentUDA(string sym) = getMemberArgumentUDA!(TYPE, sym)(config, NamedArgument);
+    private enum getArgumentUDA(string sym) = getMemberArgumentUDA!(TYPE, sym)(config);
     private enum getArgumentInfo(alias uda) = uda.info;
     private enum positional(ArgumentInfo info) = info.positional;
     private enum comparePosition(ArgumentInfo info1, ArgumentInfo info2) = info1.position.get - info2.position.get;

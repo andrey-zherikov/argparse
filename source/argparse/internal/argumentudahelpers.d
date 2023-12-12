@@ -1,5 +1,6 @@
 module argparse.internal.argumentudahelpers;
 
+import argparse.api.argument: NamedArgument;
 import argparse.config;
 import argparse.internal.argumentuda: ArgumentUDA;
 
@@ -66,7 +67,7 @@ if(!is(TYPE == void))
         static assert(false, "Type is not supported: " ~ T.stringof);
 }
 
-package auto getMemberArgumentUDA(TYPE, string symbol, T)(const Config config, ArgumentUDA!T defaultUDA)
+package auto getMemberArgumentUDA(TYPE, string symbol)(const Config config)
 {
     import argparse.internal.arguments: finalize;
     import std.traits: getUDAs;
@@ -81,38 +82,22 @@ package auto getMemberArgumentUDA(TYPE, string symbol, T)(const Config config, A
     static assert(typeUDAs.length <= 1, "Type "~MemberType.stringof~" has multiple '*Argument' UDAs");
 
     static if(udas.length > 0)
-    {
-        auto uda0 = udas[0];
-        enum checkMinMax0 = udas[0].info.minValuesCount.isNull || udas[0].info.maxValuesCount.isNull;
-    }
+        enum memberUDA = udas[0];
     else
-    {
-        alias uda0 = defaultUDA;
-        enum checkMinMax0 = true; // Passed `defaultUDA` always has undefined `minValuesCount`/`maxValuesCount`
-    }
+        enum memberUDA = NamedArgument();
 
     static if(typeUDAs.length > 0)
-    {
-        auto uda1 = uda0.addDefaults(typeUDAs[0]);
-        enum checkMinMax1 = typeUDAs[0].info.minValuesCount.isNull || typeUDAs[0].info.maxValuesCount.isNull;
-    }
+        enum initUDA = memberUDA.addDefaults(typeUDAs[0]);
     else
-    {
-        alias uda1 = uda0;
-        enum checkMinMax1 = true;
-    }
+        enum initUDA = memberUDA;
 
-    uda1.info = uda1.info.finalize!MemberType(config, symbol);
+    auto result = initUDA;
+    result.info = result.info.finalize!MemberType(config, symbol);
 
-    static if(checkMinMax0 && checkMinMax1)
-    {
-        // We must guard `defaultValuesCount!MemberType` by a `static if` to not instantiate it unless we need it
-        // because it produces a compilation error for unsupported types.
-        if(uda1.info.minValuesCount.isNull) uda1.info.minValuesCount = defaultValuesCount!MemberType.min;
-        if(uda1.info.maxValuesCount.isNull) uda1.info.maxValuesCount = defaultValuesCount!MemberType.max;
-    }
+    static if(initUDA.info.minValuesCount.isNull) result.info.minValuesCount = defaultValuesCount!MemberType.min;
+    static if(initUDA.info.maxValuesCount.isNull) result.info.maxValuesCount = defaultValuesCount!MemberType.max;
 
-    return uda1;
+    return result;
 }
 
 unittest
@@ -157,7 +142,7 @@ unittest
 
     auto getInfo(string symbol)()
     {
-        return getMemberArgumentUDA!(Args, symbol)(Config.init, defaultUDA).info;
+        return getMemberArgumentUDA!(Args, symbol)(Config.init).info;
     }
 
     // Built-in types:
