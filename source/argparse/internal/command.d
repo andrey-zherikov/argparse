@@ -7,7 +7,7 @@ import argparse.api.argument: TrailingArguments, NamedArgument, NumberOfValues;
 import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
 import argparse.internal.arguments: Arguments, ArgumentInfo, finalize;
 import argparse.internal.argumentuda: ArgumentUDA;
-import argparse.internal.argumentudahelpers: getMemberArgumentUDA;
+import argparse.internal.argumentudahelpers: getMemberArgumentUDA, isArgumentUDA;
 import argparse.internal.commandinfo;
 import argparse.internal.help: HelpArgumentUDA;
 import argparse.internal.restriction;
@@ -216,7 +216,7 @@ private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(i
 
 private template iterateArguments(TYPE)
 {
-    import std.meta: Filter;
+    import std.meta: Filter, anySatisfy;
     import std.sumtype: isSumType;
 
     template filter(string sym)
@@ -224,8 +224,7 @@ private template iterateArguments(TYPE)
         alias mem = __traits(getMember, TYPE, sym);
 
         enum filter = !is(mem) && (
-            hasUDA!(mem, ArgumentUDA) ||
-            hasUDA!(mem, NamedArgument) ||
+            anySatisfy!(isArgumentUDA, __traits(getAttributes, mem)) ||
             hasNoMembersWithUDA!TYPE && !isOpFunction!mem && !isSumType!(typeof(mem)));
     }
 

@@ -4,6 +4,10 @@ import argparse.api.argument: NamedArgument;
 import argparse.config;
 import argparse.internal.argumentuda: ArgumentUDA;
 
+// `@NamedArgument` attaches the function itself as a UDA, but we should treat it the same as `@NamedArgument()`.
+package enum isArgumentUDA(alias _ : NamedArgument) = true;
+package enum isArgumentUDA(alias uda) = is(typeof(uda) == ArgumentUDA!T, T);
+
 private template defaultValuesCount(TYPE)
 if(!is(TYPE == void))
 {
@@ -70,13 +74,13 @@ if(!is(TYPE == void))
 package auto getMemberArgumentUDA(TYPE, string symbol)(const Config config)
 {
     import argparse.internal.arguments: finalize;
-    import std.traits: getUDAs;
+    import std.meta: Filter;
 
     alias member = __traits(getMember, TYPE, symbol);
     alias MemberType = typeof(member);
 
-    alias udas = getUDAs!(member, ArgumentUDA);
-    alias typeUDAs = getUDAs!(MemberType, ArgumentUDA);
+    alias udas     = Filter!(isArgumentUDA, __traits(getAttributes, member));
+    alias typeUDAs = Filter!(isArgumentUDA, __traits(getAttributes, MemberType));
 
     static assert(udas.length <= 1, "Member "~TYPE.stringof~"."~symbol~" has multiple '*Argument' UDAs");
     static assert(typeUDAs.length <= 1, "Type "~MemberType.stringof~" has multiple '*Argument' UDAs");
@@ -102,42 +106,35 @@ package auto getMemberArgumentUDA(TYPE, string symbol)(const Config config)
 
 unittest
 {
-    enum defaultUDA = ArgumentUDA!void.init;
+    import argparse.api.argument: NumberOfValues;
 
-    auto createUDA(ulong min, ulong max)
-    {
-        auto uda = defaultUDA;
-        uda.info.minValuesCount = min;
-        uda.info.maxValuesCount = max;
-        return uda;
-    }
-
-    @createUDA(5, 10)
+    @(NamedArgument.NumberOfValues(5, 10))
     struct FiveToTen {}
 
-    @defaultUDA
+    @NamedArgument
     struct UnspecifiedA {}
 
     struct UnspecifiedB {}
 
-    @createUDA(5, 10) @createUDA(5, 10)
+    @(NamedArgument.NumberOfValues(5, 10))
+    @(NamedArgument.NumberOfValues(5, 10))
     struct Multiple {}
 
     struct Args
     {
-        @defaultUDA bool flag;
-        @defaultUDA int count;
-        @defaultUDA @defaultUDA int incorrect;
+        @NamedArgument bool flag;
+        @NamedArgument int count;
+        @NamedArgument @NamedArgument() int incorrect;
 
-        @defaultUDA FiveToTen fiveTen;
-        @defaultUDA UnspecifiedA ua;
-        @defaultUDA UnspecifiedB ub;
-        @defaultUDA Multiple mult;
+        @NamedArgument FiveToTen fiveTen;
+        @NamedArgument UnspecifiedA ua;
+        @NamedArgument UnspecifiedB ub;
+        @NamedArgument Multiple mult;
 
-        @createUDA(1, 2) FiveToTen fiveTen1;
-        @createUDA(1, 2) UnspecifiedA ua1;
-        @createUDA(1, 2) UnspecifiedB ub1;
-        @createUDA(1, 2) Multiple mult1;
+        @(NamedArgument.NumberOfValues(1, 2)) FiveToTen fiveTen1;
+        @(NamedArgument.NumberOfValues(1, 2)) UnspecifiedA ua1;
+        @(NamedArgument.NumberOfValues(1, 2)) UnspecifiedB ub1;
+        @(NamedArgument.NumberOfValues(1, 2)) Multiple mult1;
     }
 
     auto getInfo(string symbol)()
