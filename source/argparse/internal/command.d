@@ -6,7 +6,8 @@ import argparse.result;
 import argparse.api.argument: TrailingArguments, NamedArgument, NumberOfValues;
 import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
 import argparse.internal.arguments: Arguments, ArgumentInfo, finalize;
-import argparse.internal.argumentuda: ArgumentUDA, getMemberArgumentUDA;
+import argparse.internal.argumentuda: ArgumentUDA;
+import argparse.internal.argumentudahelpers: getMemberArgumentUDA, isArgumentUDA;
 import argparse.internal.commandinfo;
 import argparse.internal.help: HelpArgumentUDA;
 import argparse.internal.restriction;
@@ -88,9 +89,9 @@ unittest
     {
         T t;
 
-        enum uda = getMemberArgumentUDA!(T, "a")(Config.init, NamedArgument("arg-name").NumberOfValues(1));
+        enum uda = getMemberArgumentUDA!(T, "a")(Config.init);
 
-        return ArgumentParsingFunction!(Config.init, uda)([], t, "arg-name", values);
+        return ArgumentParsingFunction!(Config.init, uda)([], t, "a", values);
     }
 
     assert(test(["raw-value"]));
@@ -106,11 +107,11 @@ unittest
 
     T t;
 
-    enum uda = getMemberArgumentUDA!(T, "func")(Config.init, NamedArgument("arg-name").NumberOfValues(0));
+    enum uda = getMemberArgumentUDA!(T, "func")(Config.init);
 
-    auto res = ArgumentParsingFunction!(Config.init, uda)([], t, "arg-name", []);
+    auto res = ArgumentParsingFunction!(Config.init, uda)([], t, "func", []);
 
-    assert(res.isError(Config.init.styling.argumentName("arg-name")~": My Message."));
+    assert(res.isError(Config.init.styling.argumentName("func")~": My Message."));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -215,7 +216,7 @@ private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(i
 
 private template iterateArguments(TYPE)
 {
-    import std.meta: Filter;
+    import std.meta: Filter, anySatisfy;
     import std.sumtype: isSumType;
 
     template filter(string sym)
@@ -223,8 +224,7 @@ private template iterateArguments(TYPE)
         alias mem = __traits(getMember, TYPE, sym);
 
         enum filter = !is(mem) && (
-            hasUDA!(mem, ArgumentUDA) ||
-            hasUDA!(mem, NamedArgument) ||
+            anySatisfy!(isArgumentUDA, __traits(getAttributes, mem)) ||
             hasNoMembersWithUDA!TYPE && !isOpFunction!mem && !isSumType!(typeof(mem)));
     }
 
@@ -275,7 +275,7 @@ private template TypeTraits(Config config, TYPE)
     /////////////////////////////////////////////////////////////////////
     /// Arguments
 
-    private enum getArgumentUDA(string sym) = getMemberArgumentUDA!(TYPE, sym)(config, NamedArgument);
+    private enum getArgumentUDA(string sym) = getMemberArgumentUDA!(TYPE, sym)(config);
     private enum getArgumentInfo(alias uda) = uda.info;
     private enum positional(ArgumentInfo info) = info.positional;
     private enum comparePosition(ArgumentInfo info1, ArgumentInfo info2) = info1.position.get - info2.position.get;
