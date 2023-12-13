@@ -8,15 +8,9 @@ import argparse.internal.argumentuda: ArgumentUDA;
 package enum isArgumentUDA(alias _ : NamedArgument) = true;
 package enum isArgumentUDA(alias uda) = is(typeof(uda) == ArgumentUDA!T, T);
 
-private template defaultValuesCount(TYPE)
-if(!is(TYPE == void))
+private template defaultValuesCount(T)
 {
     import std.traits;
-
-    static if(is(typeof(*TYPE) == function) || is(typeof(*TYPE) == delegate))
-        alias T = typeof(*TYPE);
-    else
-        alias T = TYPE;
 
     static if(isBoolean!T)
     {
@@ -41,25 +35,25 @@ if(!is(TYPE == void))
     else static if(is(T == function))
     {
         // ... function()
-        static if(__traits(compiles, { T(); }))
+        static if(__traits(compiles, T()))
         {
             enum min = 0;
             enum max = 0;
         }
             // ... function(string value)
-        else static if(__traits(compiles, { T(string.init); }))
+        else static if(__traits(compiles, T(string.init)))
         {
             enum min = 1;
             enum max = 1;
         }
             // ... function(string[] value)
-        else static if(__traits(compiles, { T([string.init]); }))
+        else static if(__traits(compiles, T([string.init])))
         {
             enum min = 0;
             enum max = ulong.max;
         }
             // ... function(RawParam param)
-        else static if(__traits(compiles, { T(RawParam.init); }))
+        else static if(__traits(compiles, T(RawParam.init)))
         {
             enum min = 1;
             enum max = ulong.max;
