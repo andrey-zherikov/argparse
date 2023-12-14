@@ -18,49 +18,49 @@ unittest
 }
 
 
-auto ref Usage(T : CommandInfo)(auto ref T cmd, string text)
+auto ref Usage()(auto ref CommandInfo cmd, string text)
 {
     cmd.usage = text;
     return cmd;
 }
 
-auto ref Usage(T : CommandInfo)(auto ref T cmd, string delegate() text)
+auto ref Usage()(auto ref CommandInfo cmd, string delegate() text)
 {
     cmd.usage = text;
     return cmd;
 }
 
-auto ref Description(T : CommandInfo)(auto ref T cmd, string text)
+auto ref Description()(auto ref CommandInfo cmd, string text)
 {
     cmd.description = text;
     return cmd;
 }
 
-auto ref Description(T : CommandInfo)(auto ref T cmd, string delegate() text)
+auto ref Description()(auto ref CommandInfo cmd, string delegate() text)
 {
     cmd.description = text;
     return cmd;
 }
 
-auto ref ShortDescription(T : CommandInfo)(auto ref T cmd, string text)
+auto ref ShortDescription()(auto ref CommandInfo cmd, string text)
 {
     cmd.shortDescription = text;
     return cmd;
 }
 
-auto ref ShortDescription(T : CommandInfo)(auto ref T cmd, string delegate() text)
+auto ref ShortDescription()(auto ref CommandInfo cmd, string delegate() text)
 {
     cmd.shortDescription = text;
     return cmd;
 }
 
-auto ref Epilog(T : CommandInfo)(auto ref T cmd, string text)
+auto ref Epilog()(auto ref CommandInfo cmd, string text)
 {
     cmd.epilog = text;
     return cmd;
 }
 
-auto ref Epilog(T : CommandInfo)(auto ref T cmd, string delegate() text)
+auto ref Epilog()(auto ref CommandInfo cmd, string delegate() text)
 {
     cmd.epilog = text;
     return cmd;
