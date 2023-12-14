@@ -283,8 +283,19 @@ private template getMemberGroupUDA(TYPE, string symbol)
         enum getMemberGroupUDA = udas[0];
 }
 
-private enum hasMemberGroupUDA(TYPE, alias symbol) = __traits(compiles, { enum group = getMemberGroupUDA!(TYPE, symbol); });
+private enum hasMemberGroupUDA(TYPE, string symbol) = !is(typeof(getMemberGroupUDA!(TYPE, symbol)) == void);
 
+unittest
+{
+    struct T
+    {
+        @Group("A") @Group("B")
+        int incorrect;
+    }
+
+    assert(hasMemberGroupUDA!(T, "incorrect"));
+    assert(!__traits(compiles, getMemberGroupUDA!(T, "incorrect")));
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
