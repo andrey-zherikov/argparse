@@ -6,7 +6,6 @@ import std.sumtype: SumType;
 import argparse.config;
 import argparse.result;
 import argparse.api.ansi: ansiStylingArgument;
-import argparse.api.command: Default, SubCommands;
 import argparse.internal.arguments: ArgumentInfo;
 import argparse.internal.command: Command, createCommand;
 import argparse.internal.commandinfo: getCommandInfo;
@@ -632,13 +631,15 @@ if(config.stylingMode == Config.StylingMode.autodetect)
 
 unittest
 {
+    import argparse.api.subcommand: SubCommand;
+
     struct c1 {
         string foo;
         string boo;
     }
     struct cmd {
         string foo;
-        SumType!(c1) c;
+        SubCommand!(c1) c;
     }
 
     {
@@ -687,13 +688,15 @@ unittest
 
 unittest
 {
+    import argparse.api.subcommand: Default, SubCommand;
+
     struct c1 {
         string foo;
         string boo;
     }
     struct cmd {
         string foo;
-        SumType!(Default!c1) c;
+        SubCommand!(Default!c1) c;
     }
 
     {
@@ -708,35 +711,35 @@ unittest
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("", typeof(c.c)(Default!c1(c1("","BOO")))));
+        assert(c == cmd("", typeof(c.c)(c1("","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("","BOO")))));
+        assert(c == cmd("FOO", typeof(c.c)(c1("","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("", typeof(c.c)(Default!c1(c1("FOO","BOO")))));
+        assert(c == cmd("", typeof(c.c)(c1("FOO","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("", typeof(c.c)(Default!c1(c1("FOO","BOO")))));
+        assert(c == cmd("", typeof(c.c)(c1("FOO","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA","BOO")))));
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
 }
 
@@ -744,6 +747,7 @@ unittest
 unittest
 {
     import argparse.api.argument: PositionalArgument;
+    import argparse.api.subcommand: SubCommand;
 
     struct c1 {
         @PositionalArgument(0)
@@ -754,8 +758,8 @@ unittest
     struct cmd {
         @PositionalArgument(0)
         string foo;
-        @SubCommands
-        SumType!(c1) c;
+
+        SubCommand!(c1) c;
     }
 
     {
@@ -806,6 +810,7 @@ unittest
 unittest
 {
     import argparse.api.argument: PositionalArgument;
+    import argparse.api.subcommand: Default, SubCommand;
 
     struct c1 {
         @PositionalArgument(0)
@@ -816,8 +821,8 @@ unittest
     struct cmd {
         @PositionalArgument(0)
         string foo;
-        @SubCommands
-        SumType!(Default!c1) c;
+
+        SubCommand!(Default!c1) c;
     }
 
     {
@@ -832,35 +837,35 @@ unittest
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA")))));
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA","BOO")))));
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("c1", typeof(c.c)(Default!c1(c1("FOO")))));
+        assert(c == cmd("c1", typeof(c.c)(c1("FOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA")))));
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA","BOO")))));
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
 }
 
@@ -868,6 +873,7 @@ unittest
 unittest
 {
     import argparse.api.argument: PositionalArgument, NamedArgument;
+    import argparse.api.subcommand: Default, SubCommand;
 
     struct c2 {
         @PositionalArgument(0)
@@ -882,14 +888,14 @@ unittest
         string foo;
         @PositionalArgument(1)
         string boo;
-        @SubCommands
-        SumType!(Default!c2) c;
+
+        SubCommand!(Default!c2) c;
     }
     struct cmd {
         @PositionalArgument(0)
         string foo;
-        @SubCommands
-        SumType!(Default!c1) c;
+
+        SubCommand!(Default!c1) c;
     }
 
     {
@@ -897,14 +903,14 @@ unittest
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA","BOO", typeof(c1.c)(Default!c2(c2("FEE","BEE"))))))));
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO", typeof(c1.c)(c2("FEE","BEE"))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["--bar","BAR","FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1("FAA","BOO", typeof(c1.c)(Default!c2(c2("FEE","BEE","BAR"))))))));
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO", typeof(c1.c)(c2("FEE","BEE","BAR"))))));
     }
 }
 
@@ -912,6 +918,7 @@ unittest
 unittest
 {
     import argparse.api.argument: PositionalArgument, NamedArgument;
+    import argparse.api.subcommand: Default, SubCommand;
 
     struct c2 {
         @PositionalArgument(0)
@@ -922,14 +929,13 @@ unittest
         string bar;
     }
     struct c1 {
-        @SubCommands
-        SumType!(Default!c2) c;
+        SubCommand!(Default!c2) c;
     }
     struct cmd {
         @PositionalArgument(0)
         string foo;
-        @SubCommands
-        SumType!(Default!c1) c;
+
+        SubCommand!(Default!c1) c;
     }
 
     {
@@ -937,20 +943,20 @@ unittest
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1(typeof(c1.c)(Default!c2(c2("FAA","BOO"))))))));
+        assert(c == cmd("FOO", typeof(c.c)(c1(typeof(c1.c)(c2("FAA","BOO"))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["--bar","BAR","FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1(typeof(c1.c)(Default!c2(c2("FAA","BOO","BAR"))))))));
+        assert(c == cmd("FOO", typeof(c.c)(c1(typeof(c1.c)(c2("FAA","BOO","BAR"))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c2","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO", typeof(c.c)(Default!c1(c1(typeof(c1.c)(Default!c2(c2("FAA","BOO"))))))));
+        assert(c == cmd("FOO", typeof(c.c)(c1(typeof(c1.c)(c2("FAA","BOO"))))));
     }
 }

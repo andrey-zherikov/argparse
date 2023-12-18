@@ -59,11 +59,11 @@ template CLI(Config config, COMMANDS...)
 {
     template main(alias newMain)
     {
-        import std.sumtype: SumType, match;
+        import argparse.api.subcommand: SubCommand, match;
 
         private struct Program
         {
-            SumType!COMMANDS cmd;   // Sub-commands
+            SubCommand!COMMANDS cmd;   // Sub-commands
         }
 
         private auto forwardMain(Args...)(Program prog, auto ref Args args)
@@ -156,7 +156,7 @@ template CLI(Config config, COMMAND)
     // This is a template to avoid compiling it unless it is actually used.
     int complete()(string[] args)
     {
-        import std.sumtype: match;
+        import argparse.api.subcommand: match;
 
         // We are able to instantiate `CLI` with different arguments solely because we reside in a templated function.
         // If we weren't, that would lead to infinite template recursion.

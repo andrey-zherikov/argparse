@@ -2,13 +2,13 @@ module argparse.internal.completer;
 
 import argparse.config;
 import argparse.api.argument: NamedArgument, Description, TrailingArguments;
-import argparse.api.command: Command, SubCommands, Default, Description, ShortDescription;
+import argparse.api.command: Command, Description, ShortDescription;
 import argparse.api.restriction: MutuallyExclusive;
+import argparse.api.subcommand: SubCommand, Default;
 import argparse.internal.commandinfo: CommandInfo;
 import argparse.internal.parser: callParser;
 
 import std.traits: getUDAs;
-import std.sumtype: SumType;
 
 
 
@@ -210,6 +210,5 @@ package(argparse) struct Complete(COMMAND)
         }
     }
 
-    @SubCommands
-    SumType!(InitCmd, Default!CompleteCmd) cmd;
+    SubCommand!(InitCmd, Default!CompleteCmd) cmd;
 }

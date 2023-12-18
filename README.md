@@ -700,14 +700,14 @@ assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","b"]) != 0);
 assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
 ```
 
-## Commands
+## Subcommands
 
 Sophisticated command-line tools, like `git`, have many subcommands (e.g., `commit`, `push`, etc.), each with its own
-set of arguments. There are few ways to declare subcommands with `argparse`.
+set of arguments. There are few ways how to use subcommands with `argparse`.
 
-### Subcommands without UDA
+### Enumerating subcommands in CLI mixin
 
-All commands can be listed as template parameters to `Main.CLI`. Provided `main` function must be able to handle all
+All commands can be listed as template parameters to `Main.CLI` and provided `main` function must be able to handle all
 command types:
 
 ```d
@@ -761,8 +761,8 @@ mixin CLI!(sum, min, max).main!main_;
 
 In some cases command-line tool has arguments that are common across all subcommands. They can be specified as regular
 arguments in a struct that represents the whole program. In this case subcommands must be listed as regular data member
-having `SumType` type that contains types of all subcommands. The main function should accept a parameter for the
-program, not for each subcommand:
+having `SubCommand` type that is passed with a list of types of all subcommands. The main function should accept a parameter
+for the program, not for each subcommand:
 
 ```d
 struct sum {}
@@ -773,9 +773,8 @@ struct Program
 {
   int[] numbers;  // --numbers argument
 
-  // SumType indicates sub-command
   // name of the command is the same as a name of the type
-  SumType!(sum, min, max) cmd;
+  SubCommand!(sum, min, max) cmd;
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:
@@ -836,11 +835,11 @@ If `Command` has no names listed, then the name of the type is used as a command
 
 ### Default subcommand
 
-The default command is a command that is ran when user doesn’t specify any command in the command line.
-To mark a command as default, one should use `Default` template:
+The default command is a command that is ran when user does not specify any command in the command line.
+To mark a command as default, use `Default` template:
 
 ```d
-SumType!(sum, min, Default!max) cmd;
+SubCommand!(sum, min, Default!max) cmd;
 ```
 
 ## Help generation

@@ -87,21 +87,3 @@ unittest
     assert(c.shortDescription.get == "sum");
     assert(c.epilog.get == "epi");
 }
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-struct SubCommands {}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Default subcommand
-struct Default(COMMAND)
-{
-    COMMAND command;
-    alias command this;
-}
-
-package(argparse) enum isDefaultCommand(T) = is(T == Default!ORIG_TYPE, ORIG_TYPE);
-
-package(argparse) alias RemoveDefaultAttribute(T : Default!ORIG_TYPE, ORIG_TYPE) = ORIG_TYPE;
-package(argparse) alias RemoveDefaultAttribute(T) = T;

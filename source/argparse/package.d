@@ -8,6 +8,7 @@ public import argparse.api.cli;
 public import argparse.api.command;
 public import argparse.api.enums;
 public import argparse.api.restriction;
+public import argparse.api.subcommand;
 
 public import argparse.config;
 public import argparse.param;
@@ -347,8 +348,6 @@ unittest
 {
     struct T
     {
-        import std.sumtype: SumType;
-
         struct cmd1 { string a; }
         struct cmd2
         {
@@ -361,7 +360,7 @@ unittest
         string c;
         string d;
 
-        SumType!(cmd1, cmd2) cmd;
+        SubCommand!(cmd1, cmd2) cmd;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T("C",null,typeof(T.cmd)(T.cmd2("B")))); return 12345; })(["-c","C","cmd2","-b","B"]) == 12345);
@@ -372,12 +371,10 @@ unittest
 {
     struct T
     {
-        import std.sumtype: SumType;
-
         struct cmd1 {}
         struct cmd2 {}
 
-        SumType!(cmd1, cmd2) cmd;
+        SubCommand!(cmd1, cmd2) cmd;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T(typeof(T.cmd)(T.cmd1.init))); return 12345; })(["cmd1"]) == 12345);
@@ -388,18 +385,16 @@ unittest
 {
     struct T
     {
-        import std.sumtype: SumType;
-
         struct cmd1 { string a; }
         struct cmd2 { string b; }
 
         string c;
         string d;
 
-        SumType!(cmd1, Default!cmd2) cmd;
+        SubCommand!(cmd1, Default!cmd2) cmd;
     }
 
-    assert(CLI!T.parseArgs!((T t) { assert(t == T("C",null,typeof(T.cmd)(Default!(T.cmd2)(T.cmd2("B"))))); return 12345; })(["-c","C","-b","B"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T("C",null,typeof(T.cmd)(T.cmd2("B")))); return 12345; })(["-c","C","-b","B"]) == 12345);
     assert(CLI!T.parseArgs!((_) {assert(false);})(["-h"]) == 0);
     assert(CLI!T.parseArgs!((_) {assert(false);})(["--help"]) == 0);
 }
@@ -410,8 +405,6 @@ unittest
 {
     struct T
     {
-        import std.sumtype: SumType;
-
         struct cmd1
         {
             string foo;
@@ -430,8 +423,7 @@ unittest
         @NamedArgument
         string b = "dummyB";
 
-        @SubCommands
-        SumType!(cmd1, cmd2) cmd;
+        SubCommand!(cmd1, cmd2) cmd;
     }
 
     assert(CLI!T.completeArgs([]) == ["--apple","--help","-a","-b","-h","-s","cmd1","cmd2"]);
@@ -968,8 +960,6 @@ unittest
 
 unittest
 {
-    import std.sumtype: SumType;
-
     @(Command("MYPROG"))
     struct T
     {
@@ -987,7 +977,7 @@ unittest
         string c;
         string d;
 
-        SumType!(CMD1, CMD2) cmd;
+        SubCommand!(CMD1, CMD2) cmd;
     }
 
     import std.array: appender;
