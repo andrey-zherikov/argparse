@@ -297,9 +297,9 @@ private template TypeTraits(Config config, TYPE)
     {
         enum subCommandSymbol = .subCommandSymbol!TYPE;
         private alias subCommandMemberType = typeof(__traits(getMember, TYPE, subCommandSymbol));
-        private alias subCommandTypes = AliasSeq!(subCommandMemberType.Types);
+        private alias subCommandTypes = subCommandMemberType.Types;
 
-        enum isDefaultSubCommand(T) = is(subCommandMemberType.DefaultCommand) && is(T == subCommandMemberType.DefaultCommand);
+        enum isDefaultSubCommand(T) = is(subCommandMemberType.DefaultCommand == T);
     }
 
     enum subCommands = staticMap!(getSubcommand, subCommandTypes);
