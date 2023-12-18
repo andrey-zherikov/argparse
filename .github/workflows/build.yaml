@@ -27,22 +27,22 @@ jobs:
           compiler: ${{ matrix.dc }}
 
       - name: Run tests
-        run: dub test --build=unittest-cov --verbose
+        run: dub test --build=unittest-cov-ctfe --verbose
 
       - name: Run tests (dip1000)
         env:
           DFLAGS: -dip1000
-        run: dub test --build=unittest-cov --verbose
+        run: dub test --build=unittest-cov-ctfe --verbose
 
       - name: Run tests (in)
         env:
           DFLAGS: -preview=in
-        run: dub test --build=unittest-cov --verbose
+        run: dub test --build=unittest-cov-ctfe --verbose
 
       - name: Run tests (dip1000 & in)
         env:
           DFLAGS: -dip1000 -preview=in
-        run: dub test --build=unittest-cov --verbose
+        run: dub test --build=unittest-cov-ctfe --verbose
 
       - name: Build examples
         run: dub --root examples build --parallel --verbose
