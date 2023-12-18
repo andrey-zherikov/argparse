@@ -2,10 +2,11 @@ module argparse.param;
 
 import argparse.config;
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 struct Param(VALUE_TYPE)
 {
-    const Config* config;
+    const(Config)* config;
     string name;
 
     static if(!is(VALUE_TYPE == void))
@@ -13,3 +14,12 @@ struct Param(VALUE_TYPE)
 }
 
 alias RawParam = Param!(string[]);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    RawParam p1;
+    auto p2 = p1;
+    p1 = p2;
+}
