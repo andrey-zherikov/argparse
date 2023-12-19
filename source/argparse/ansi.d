@@ -49,7 +49,7 @@ package struct TextStyle
 {
     private string style = prefix;
 
-    private this(const(ubyte)[] st...) scope inout nothrow pure @safe
+    private this(scope const(ubyte)[] st...) scope inout nothrow pure @safe
     {
         import std.algorithm.iteration: joiner, map;
         import std.array: appender;
@@ -256,7 +256,7 @@ private inout(char)[][2] findNextTextChunk(return scope inout(char)[] text) noth
     }
 }
 
-public auto getUnstyledText(C : char)(C[] text)
+public auto getUnstyledText(C : char)(return scope C[] text)
 {
     struct Unstyler
     {
