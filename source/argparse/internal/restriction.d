@@ -24,7 +24,7 @@ unittest
 {
     auto f = RequiredArg(Config.init, ArgumentInfo([],[],[""]), 0);
 
-    assert(f(bool[size_t].init).isError("argument is required"));
+    assert(f((bool[size_t]).init).isError("argument is required"));
 
     assert(f([1:true]).isError("argument is required"));
 
@@ -64,7 +64,7 @@ unittest
 {
     auto f = RequiredTogether(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
-    assert(f(bool[size_t].init, [0,1]));
+    assert(f((bool[size_t]).init, [0,1]));
 
     assert(f([0:true], [0,1]).isError("Missed argument","--a"));
     assert(f([1:true], [0,1]).isError("Missed argument","--b"));
@@ -95,7 +95,7 @@ unittest
 {
     auto f = RequiredAnyOf(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
-    assert(f(bool[size_t].init, [0,1]).isError("One of the following arguments is required","--a","--b"));
+    assert(f((bool[size_t]).init, [0,1]).isError("One of the following arguments is required","--a","--b"));
     assert(f([2:true], [0,1]).isError("One of the following arguments is required","--a","--b"));
 
     assert(f([0:true], [0,1]));
@@ -131,7 +131,7 @@ unittest
 {
     auto f = MutuallyExclusive(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
-    assert(f(bool[size_t].init, [0,1]));
+    assert(f((bool[size_t]).init, [0,1]));
 
     assert(f([0:true], [0,1]));
     assert(f([1:true], [0,1]));

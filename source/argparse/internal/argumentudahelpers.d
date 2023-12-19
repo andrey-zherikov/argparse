@@ -68,13 +68,16 @@ private template defaultValuesCount(T)
 package auto getMemberArgumentUDA(TYPE, string symbol)(const Config config)
 {
     import argparse.internal.arguments: finalize;
-    import std.meta: Filter;
+    import std.meta: AliasSeq, Filter;
 
     alias member = __traits(getMember, TYPE, symbol);
     alias MemberType = typeof(member);
 
-    alias udas     = Filter!(isArgumentUDA, __traits(getAttributes, member));
-    alias typeUDAs = Filter!(isArgumentUDA, __traits(getAttributes, MemberType));
+    alias udas = Filter!(isArgumentUDA, __traits(getAttributes, member));
+    static if(__traits(compiles, __traits(getAttributes, MemberType)))
+        alias typeUDAs = Filter!(isArgumentUDA, __traits(getAttributes, MemberType));
+    else // On D <2.101, we are not allowed to query attributes of built-in types
+        alias typeUDAs = AliasSeq!();
 
     static assert(udas.length <= 1, "Member "~TYPE.stringof~"."~symbol~" has multiple '*Argument' UDAs");
     static assert(typeUDAs.length <= 1, "Type "~MemberType.stringof~" has multiple '*Argument' UDAs");

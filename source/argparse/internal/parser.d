@@ -333,7 +333,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
 
 unittest
 {
-    auto test(string[] args) => getNextEntry!false(Config.init, args, null, null, null);
+    auto test(string[] args) { return getNextEntry!false(Config.init, args, null, null, null); }
 
     assert(test([""]) == Entry(Unknown("")));
     assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
@@ -341,7 +341,7 @@ unittest
 
 unittest
 {
-    auto test(string[] args) => getNextEntry!false(Config.init, args, null, null, null);
+    auto test(string[] args) { return getNextEntry!false(Config.init, args, null, null, null); }
 
     assert(test([""]) == Entry(Unknown("")));
     assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
