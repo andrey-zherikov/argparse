@@ -293,7 +293,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
             }
         }
     }
-    else
+
     {
         // Check for required positional argument in the current command
         auto res = findPositionalArg(true);
@@ -329,14 +329,6 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
 
     args.popFront;
     return Entry(Unknown(arg0));
-}
-
-unittest
-{
-    auto test(string[] args) { return getNextEntry!false(Config.init, args, null, null, null); }
-
-    assert(test([""]) == Entry(Unknown("")));
-    assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
 }
 
 unittest
@@ -628,6 +620,38 @@ if(config.stylingMode == Config.StylingMode.autodetect)
         return callParser!(enableStyling(config, false), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+unittest
+{
+    import argparse.api.argument: PositionalArgument, NamedArgument;
+
+    struct T {
+        @NamedArgument bool c;
+        @PositionalArgument(0) string fileName;
+    }
+
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-", "-c"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(t == T(true, "-"));
+    }
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-c", "-"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(t == T(true, "-"));
+    }
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(t == T(false, "-"));
+    }
+}
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 unittest
