@@ -27,7 +27,7 @@ if(Commands.length > 0)
 {
     private alias DefaultCommands = Filter!(isDefaultCommand, Commands);
 
-    static assert(DefaultCommands.length <= 1, "Multiple default subcommands: "~DefaultCommands);
+    static assert(DefaultCommands.length <= 1, "Multiple default subcommands: "~DefaultCommands.stringof);
 
     static if(DefaultCommands.length > 0)
         package(argparse) alias DefaultCommand = RemoveDefaultAttribute!(DefaultCommands[0]);
