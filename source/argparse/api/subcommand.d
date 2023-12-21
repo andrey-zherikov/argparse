@@ -128,6 +128,8 @@ unittest
                 // can assign a command
                 SUBCMD s;
                 assert(!s.isSet);
+                assert(s.match!(_ => _.i) == 0);
+
                 s = CMD.init;
                 assert(s.isSet);
                 assert(s.isSetTo!CMD);
