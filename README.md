@@ -31,7 +31,7 @@
 - [Shell completion](#shell-completion).
 - [Options terminator](#trailing-arguments) (e.g., parsing up to `--` leaving any argument specified after it).
 - [Arguments groups](#argument-dependencies).
-- [Subcommands](#commands).
+- [Subcommands](#subcommands).
 - [Fully customizable parsing](#argument-parsing-customization):
     - Raw (`string`) data validation (i.e., before parsing).
     - Custom conversion of argument value (`string` -> any `destination type`).
