@@ -70,7 +70,7 @@ package(argparse) enum bool isSubCommand(T) = is(T : SubCommand!Args, Args...);
 
 public template match(handlers...)
 {
-    auto ref match(Args...)(auto ref SubCommand!Args sc)
+    auto ref match(Sub : const SubCommand!Args, Args...)(auto ref Sub sc)
     {
         alias RETURN_TYPE = typeof(SumType!(SubCommand!Args.Types).init.sumtype_match!handlers);
 
@@ -84,6 +84,18 @@ public template match(handlers...)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    struct A
+    {
+        int i;
+    }
+
+    immutable sub = SubCommand!(A)(A(1));
+    static assert(isSubCommand!(typeof(sub)));
+    assert(sub.match!(_ => _.i) == 1);
+}
 
 unittest
 {
