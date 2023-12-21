@@ -58,7 +58,14 @@ package(argparse) CommandInfo getCommandInfo(COMMAND)(const Config config, strin
     static assert(udas.length <= 1, COMMAND.stringof~" has multiple @Command UDA");
 
     static if(udas.length > 0)
-        CommandInfo info = finalize(config, udas[0]);
+    {
+        CommandInfo info = udas[0];
+
+        if(name.length > 0 && info.names.length == 0)
+            info.names = [name];
+
+        info = finalize(config, info);
+    }
     else
         CommandInfo info = finalize(config, CommandInfo([name]));
 

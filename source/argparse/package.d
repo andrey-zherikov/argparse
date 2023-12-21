@@ -973,8 +973,8 @@ unittest
     @(Command("MYPROG"))
     struct T
     {
-        @(Command("cmd1").ShortDescription("Perform cmd 1"))
-        struct CMD1
+        @(Command.ShortDescription("Perform cmd 1"))
+        struct cmd1
         {
             string a;
         }
@@ -987,7 +987,7 @@ unittest
         string c;
         string d;
 
-        SumType!(CMD1, CMD2) cmd;
+        SumType!(cmd1, CMD2) cmd;
     }
 
     import std.array: appender;
