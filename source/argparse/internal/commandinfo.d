@@ -50,6 +50,8 @@ unittest
     assert(uda.names == ["CMD-NAME"]);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 package(argparse) CommandInfo getCommandInfo(COMMAND)(const Config config, string name = "")
 {
     import std.traits: getUDAs;
@@ -71,4 +73,14 @@ package(argparse) CommandInfo getCommandInfo(COMMAND)(const Config config, strin
 
     assert(name == "" || info.names.length > 0 && info.names[0].length > 0, "Command "~COMMAND.stringof~" must have name");
     return info;
+}
+
+unittest
+{
+    @(CommandInfo([]))
+    struct T {}
+
+    auto info = getCommandInfo!T(Config.init, "t");
+    assert(info.displayNames == ["t"]);
+    assert(info.names == ["t"]);
 }
