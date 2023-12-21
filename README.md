@@ -1145,19 +1145,29 @@ Below is the exact sequence of steps `argparse` uses to determine whether or not
 
 ### Boolean
 
-Boolean types usually represent command-line flags. `argparse` supports multiple ways of providing flag value:
+Boolean types usually represent command-line flags. `argparse` supports multiple ways of providing flag value including
+negation (i.e., `--no-flag`):
 
 ```d
 struct T
 {
+    @NamedArgument("b","boo")
     bool b;
 }
 
 assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b"]) == 0);
 assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b=true"]) == 0);
 assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["-b=false"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["--no-b"]) == 0);
 assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","true"]) == 1);
 assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","false"]) == 1);
+
+assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["--boo"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["--boo=true"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["--boo=false"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["--no-boo"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["--boo","true"]) == 1);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["--boo","false"]) == 1);
 ```
 
 ### Numeric
