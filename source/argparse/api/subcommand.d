@@ -34,7 +34,10 @@ if(Commands.length > 0)
 
     package(argparse) alias Types = staticMap!(RemoveDefaultAttribute, Commands);
 
-    private SumType!(None, Types) impl;
+    static if(is(DefaultCommand))
+        private SumType!(None, Types) impl = DefaultCommand.init;
+    else
+        private SumType!(None, Types) impl;
 
 
     public this(T)(T value)
@@ -114,11 +117,17 @@ unittest
 
         static assert(is(SUBCMD.impl.Types == AliasSeq!(None,A,B)));  // underlying types have no `Default`
 
-        static assert(!SUBCMD.init.isSet);
+        static if(is(SUBCMD.DefaultCommand))
+            static assert(SUBCMD.init.isSet);
+        else
+            static assert(!SUBCMD.init.isSet);
 
         static foreach(CMD; AliasSeq!(A, B))
         {
-            static assert(!SUBCMD.init.isSetTo!CMD);
+            static if(is(SUBCMD.DefaultCommand == CMD))
+                static assert(SUBCMD.init.isSetTo!CMD);
+            else
+                static assert(!SUBCMD.init.isSetTo!CMD);
 
             // can initialize with command
             static assert(SUBCMD(CMD.init).isSet);
@@ -127,7 +136,6 @@ unittest
             {
                 // can assign a command
                 SUBCMD s;
-                assert(!s.isSet);
                 assert(s.match!(_ => _.i) == 0);
 
                 s = CMD.init;
