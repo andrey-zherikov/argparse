@@ -55,12 +55,12 @@ if(Commands.length > 0)
     public bool isSetTo(T)() const
     if(staticIndexOf!(T, Types) >= 0)
     {
-        return impl.sumtype_match!((const ref T _) { return true; }, (const ref _) { return false; });
+        return impl.sumtype_match!((const ref T _) => true, (const ref _) => false);
     }
 
     public bool isSet() const
     {
-        return impl.sumtype_match!((const ref None _) { return false; }, (const ref _) { return true; });
+        return impl.sumtype_match!((const ref None _) => false, (const ref _) => true);
     }
 }
 
@@ -77,7 +77,7 @@ public template match(handlers...)
         static if(is(RETURN_TYPE == void))
             alias NoneHandler = (None _) {};
         else
-            alias NoneHandler = (None _) { return RETURN_TYPE.init; };
+            alias NoneHandler = (None _) => RETURN_TYPE.init;
 
         return sc.impl.sumtype_match!(NoneHandler, handlers);
     }
@@ -124,7 +124,7 @@ unittest
                 s.match!((ref CMD _) { _.i = 123; },(_){});
 
                 // match with returning value
-                assert(s.match!((_) { return _.i; }) == 123);
+                assert(s.match!(_ => _.i) == 123);
             }
         }
     }
