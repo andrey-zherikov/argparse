@@ -137,8 +137,8 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         return Entry(EndOfArgs(args[1..$])); // skip "--"
     }
 
-    // Is it named argument?
-    if(arg0[0] == config.namedArgPrefix)
+    // Is it named argument (starting with '-' and longer than 1 character)?
+    if(arg0[0] == config.namedArgPrefix && arg0.length > 1)
     {
         import std.string : indexOf;
         import std.algorithm : startsWith;
@@ -293,7 +293,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
             }
         }
     }
-
+    else
     {
         // Check for required positional argument in the current command
         auto res = findPositionalArg(true);
@@ -625,7 +625,8 @@ unittest
 {
     import argparse.api.argument: PositionalArgument, NamedArgument;
 
-    struct T {
+    struct T
+    {
         @NamedArgument bool c;
         @PositionalArgument(0) string fileName;
     }
@@ -649,6 +650,13 @@ unittest
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(t, ["-"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
+        assert(t == T(false, "-"));
+    }
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-f","-"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["-f"]);
         assert(t == T(false, "-"));
     }
 }
