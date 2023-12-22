@@ -108,6 +108,13 @@ package(argparse) struct ValueParser(alias PreProcess,
     }
 }
 
+
+unittest
+{
+    int receiver;
+    assert(ValueParser!(void, void, (ref int i, RawParam p) => Result.Error("test error"), void, Assign, void).parse(receiver, RawParam(null,"",[""])).isError("test error"));
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private template DefaultValueParser(T)
