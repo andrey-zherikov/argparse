@@ -42,7 +42,7 @@ package(argparse) struct ArgumentInfo
         immutable max = maxValuesCount.get;
 
         // override for boolean flags
-        if(allowBooleanNegation && count == 1)
+        if(isBooleanFlag && count == 1)
             return Result.Success;
 
         if(min == max && count != min)
@@ -57,7 +57,7 @@ package(argparse) struct ArgumentInfo
         return Result.Success;
     }
 
-    bool allowBooleanNegation = true;
+    bool isBooleanFlag = false;
 }
 
 unittest
@@ -65,7 +65,6 @@ unittest
     auto info(int min, int max)
     {
         ArgumentInfo info;
-        info.allowBooleanNegation = false;
         info.minValuesCount = min;
         info.maxValuesCount = max;
         return info;
@@ -105,8 +104,7 @@ package ArgumentInfo finalize(MEMBERTYPE)(ArgumentInfo info, const Config config
     import std.range: chain;
     import std.traits: isBoolean;
 
-    static if(!isBoolean!MEMBERTYPE)
-        info.allowBooleanNegation = false;
+    info.isBooleanFlag = isBoolean!MEMBERTYPE;
 
     if(info.shortNames.length == 0 && info.longNames.length == 0)
     {
@@ -160,21 +158,20 @@ unittest
     auto createInfo(string placeholder = "")
     {
         ArgumentInfo info;
-        info.allowBooleanNegation = true;
         info.position = 0;
         info.placeholder = placeholder;
         return info;
     }
 
     auto res = createInfo().finalize!int(Config.init, "default_name");
-    assert(!res.allowBooleanNegation);
+    assert(!res.isBooleanFlag);
     assert(res.shortNames == []);
     assert(res.longNames == ["default_name"]);
     assert(res.displayNames == ["default_name"]);
     assert(res.placeholder == "default_name");
 
     res = createInfo().finalize!int(Config.init, "i");
-    assert(!res.allowBooleanNegation);
+    assert(!res.isBooleanFlag);
     assert(res.shortNames == ["i"]);
     assert(res.longNames == []);
     assert(res.displayNames == ["i"]);
@@ -190,20 +187,19 @@ unittest
     auto createInfo(string placeholder = "")
     {
         ArgumentInfo info;
-        info.allowBooleanNegation = true;
         info.placeholder = placeholder;
         return info;
     }
 
     auto res = createInfo().finalize!bool(Config.init, "default_name");
-    assert(res.allowBooleanNegation);
+    assert(res.isBooleanFlag);
     assert(res.shortNames == []);
     assert(res.longNames == ["default_name"]);
     assert(res.displayNames == ["--default_name"]);
     assert(res.placeholder == "DEFAULT_NAME");
 
     res = createInfo().finalize!bool(Config.init, "b");
-    assert(res.allowBooleanNegation);
+    assert(res.isBooleanFlag);
     assert(res.shortNames == ["b"]);
     assert(res.longNames == []);
     assert(res.displayNames == ["-b"]);
@@ -221,20 +217,19 @@ unittest
     auto createInfo(string placeholder = "")
     {
         ArgumentInfo info;
-        info.allowBooleanNegation = true;
         info.placeholder = placeholder;
         return info;
     }
 
     auto res = createInfo().finalize!bool(config, "default_name");
-    assert(res.allowBooleanNegation);
+    assert(res.isBooleanFlag);
     assert(res.shortNames == []);
     assert(res.longNames == ["DEFAULT_NAME"]);
     assert(res.displayNames == ["--default_name"]);
     assert(res.placeholder == "DEFAULT_NAME");
 
     res = createInfo().finalize!bool(config, "b");
-    assert(res.allowBooleanNegation);
+    assert(res.isBooleanFlag);
     assert(res.shortNames == ["B"]);
     assert(res.longNames == []);
     assert(res.displayNames == ["-b"]);

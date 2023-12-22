@@ -186,7 +186,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                 {
                     // It is a boolean flag specified as "--no-<arg>"
                     auto res = findNamedArg(argName[3..$]);    // remove "no-" prefix
-                    if(res.arg && res.arg.info.allowBooleanNegation)
+                    if(res.arg && res.arg.info.isBooleanFlag)
                     {
                         args.popFront;
                         return Entry(Argument(arg0, res, ["false"]));
