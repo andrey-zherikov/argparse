@@ -1430,6 +1430,7 @@ the following signatures:
 - `ParseType parse(string value)`
 - `ParseType parse(string[] value)`
 - `ParseType parse(RawParam param)`
+- `Result parse(ref ParseType receiver, RawParam param)`
 - `bool parse(ref ParseType receiver, RawParam param)`
 - `void parse(ref ParseType receiver, RawParam param)`
 
