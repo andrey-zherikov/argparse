@@ -183,7 +183,7 @@ package struct Command
 
     CommandInfo info;
 
-    string displayName() const { return info.displayNames[0]; }
+    string displayName() const { return info.displayNames.length > 0 ? info.displayNames[0] : ""; }
 
     SubCommands subCommands;
     Command delegate() [] subCommandCreate;

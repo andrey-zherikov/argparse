@@ -7,7 +7,7 @@ import argparse.internal.lazystring;
 
 package(argparse) struct CommandInfo
 {
-    string[] names = [""];
+    string[] names;
     string[] displayNames;
     LazyString usage;
     LazyString description;
@@ -82,7 +82,7 @@ package(argparse) CommandInfo getTopLevelCommandInfo(COMMAND)(const Config confi
 
 unittest
 {
-    @(CommandInfo([]))
+    @CommandInfo()
     struct T {}
 
     auto info = getSubCommandInfo!T(Config.init);
