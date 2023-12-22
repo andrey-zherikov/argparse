@@ -150,7 +150,11 @@ if(!is(T == void))
             ValueInList!(["true","yes","y","false","no","n"], typeof(RawParam.value)),   // pre validate
             (string value)                      // parse
             {
-                return ["true":true, "yes":true, "y":true].get(value, false);
+                switch(value)
+                {
+                    case "true", "yes", "y": return true;
+                    default:                 return false;
+                }
             },
             void,                               // validate
             void,                               // action
