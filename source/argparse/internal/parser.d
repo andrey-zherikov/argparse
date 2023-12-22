@@ -144,7 +144,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         import std.algorithm : startsWith;
 
         // Is it a long name ("--...")?
-        if(arg0.length > 1 && arg0[1] == config.namedArgPrefix)
+        if(arg0[1] == config.namedArgPrefix)
         {
             // cases (from higher to lower priority):
             //  --foo=val    => --foo val
