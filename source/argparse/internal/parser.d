@@ -9,7 +9,7 @@ import argparse.api.ansi: ansiStylingArgument;
 import argparse.api.command: Default, SubCommands;
 import argparse.internal.arguments: ArgumentInfo;
 import argparse.internal.command: Command, createCommand;
-import argparse.internal.commandinfo: getCommandInfo;
+import argparse.internal.commandinfo: getTopLevelCommandInfo;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -600,7 +600,7 @@ package(argparse) Result callParser(Config config, bool completionMode, COMMAND)
 if(config.stylingMode != Config.StylingMode.autodetect)
 {
     return callParser!(completionMode, config.bundling)(
-        config, createCommand!config(receiver, getCommandInfo!COMMAND(config)), args, unrecognizedArgs,
+        config, createCommand!config(receiver, getTopLevelCommandInfo!COMMAND(config)), args, unrecognizedArgs,
     );
 }
 
