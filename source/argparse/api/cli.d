@@ -50,6 +50,16 @@ unittest
     assert(collectExceptionMsg!Error(onError!(Config.init, printer)("text")) == "My Message.");
 }
 
+unittest
+{
+    enum config = {
+        Config config;
+        config.errorHandler = (string s) { assert(s == "error text"); };
+        return config;
+    }();
+
+    onError!config("error text");
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Public API for CLI wrapper
