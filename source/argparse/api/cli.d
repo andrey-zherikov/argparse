@@ -22,8 +22,8 @@ private void onError(Config config, alias printer = defaultErrorPrinter)(string 
 {
     import std.algorithm.iteration: joiner;
 
-    static if(config.errorHandlerFunc)
-        config.errorHandlerFunc(message);
+    if(config.errorHandler)
+        config.errorHandler(message);
     else
         try
         {
@@ -190,3 +190,16 @@ template CLI(Config config, COMMAND)
 }
 
 alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    struct Args {}
+
+    mixin CLI!({
+        Config cfg;
+        cfg.errorHandler = (string s) {};
+        return cfg;
+    }(), Args).main!((_){});
+}

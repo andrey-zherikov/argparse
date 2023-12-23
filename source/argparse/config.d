@@ -74,38 +74,17 @@ struct Config
 
 
     /**
-       Delegate that processes error messages if they happen during argument parsing.
+       Function that processes error messages if they happen during argument parsing.
        By default all errors are printed to stderr.
      */
-    package void delegate(string s) nothrow errorHandlerFunc;
-
-    @property auto errorHandler(void function(string s) nothrow func)
-    {
-        return errorHandlerFunc = (string msg) { func(msg); };
-    }
-
-    @property auto errorHandler(void delegate(string s) nothrow func)
-    {
-        return errorHandlerFunc = func;
-    }
+    void function(string s) nothrow errorHandler;
 }
 
 unittest
 {
-    auto f = function(string s) nothrow {};
-
-    Config c;
-    assert(!c.errorHandlerFunc);
-    assert((c.errorHandler = f));
-    assert(c.errorHandlerFunc);
-}
-
-unittest
-{
-    auto f = delegate(string s) nothrow {};
-
-    Config c;
-    assert(!c.errorHandlerFunc);
-    assert((c.errorHandler = f) == f);
-    assert(c.errorHandlerFunc == f);
+    enum c = {
+        Config cfg;
+        cfg.errorHandler = (string s) { };
+        return cfg;
+    }();
 }
