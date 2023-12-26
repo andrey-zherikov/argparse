@@ -1624,8 +1624,8 @@ See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 
 ### Error handling
 
-`Config.errorHandler` – this is a handler function for all errors occurred during parsing the command line. It might be
-either a function or a delegate that takes `string` parameter which would be an error message.
+`Config.errorHandler` – this is a handler function for all errors occurred during parsing the command line.
+It a function that receives `string` parameter which would be an error message.
 
 The default behavior is to print error message to `stderr`.
 
