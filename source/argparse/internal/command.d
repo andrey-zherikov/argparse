@@ -345,6 +345,10 @@ private template TypeTraits(Config config, TYPE)
         static if(positionalArgInfos.length > 0 && defaultSubCommands.length > 0)
             static assert(positionalArgInfos[$-1].required, TYPE.stringof~": Optional positional arguments and default subcommand are used together in one command");
     }
+
+    static foreach(info; subCommandInfos)
+        static foreach(name; info.names)
+            static assert(name[0] != config.namedArgPrefix, TYPE.stringof~": Subcommand name should not begin with '"~config.namedArgPrefix~"': "~name);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
