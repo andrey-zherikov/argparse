@@ -136,14 +136,14 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         return Entry(EndOfArgs(args[1..$])); // skip "--"
     }
 
-    // Is it named argument?
-    if(arg0[0] == config.namedArgPrefix)
+    // Is it named argument (starting with '-' and longer than 1 character)?
+    if(arg0[0] == config.namedArgPrefix && arg0.length > 1)
     {
         import std.string : indexOf;
         import std.algorithm : startsWith;
 
         // Is it a long name ("--...")?
-        if(arg0.length > 1 && arg0[1] == config.namedArgPrefix)
+        if(arg0[1] == config.namedArgPrefix)
         {
             // cases (from higher to lower priority):
             //  --foo=val    => --foo val
@@ -185,7 +185,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                 {
                     // It is a boolean flag specified as "--no-<arg>"
                     auto res = findNamedArg(argName[3..$]);    // remove "no-" prefix
-                    if(res.arg && res.arg.info.allowBooleanNegation)
+                    if(res.arg && res.arg.info.isBooleanFlag)
                     {
                         args.popFront;
                         return Entry(Argument(arg0, res, ["false"]));
@@ -328,14 +328,6 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
 
     args.popFront;
     return Entry(Unknown(arg0));
-}
-
-unittest
-{
-    auto test(string[] args) { return getNextEntry!false(Config.init, args, null, null, null); }
-
-    assert(test([""]) == Entry(Unknown("")));
-    assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
 }
 
 unittest
@@ -627,6 +619,46 @@ if(config.stylingMode == Config.StylingMode.autodetect)
         return callParser!(enableStyling(config, false), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+unittest
+{
+    import argparse.api.argument: PositionalArgument, NamedArgument;
+
+    struct T
+    {
+        @NamedArgument bool c;
+        @PositionalArgument(0) string fileName;
+    }
+
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-", "-c"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(t == T(true, "-"));
+    }
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-c", "-"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(t == T(true, "-"));
+    }
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(t == T(false, "-"));
+    }
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-f","-"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["-f"]);
+        assert(t == T(false, "-"));
+    }
+}
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 unittest

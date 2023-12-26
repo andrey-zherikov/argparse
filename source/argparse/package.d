@@ -336,12 +336,22 @@ unittest
 {
     struct T
     {
+        @NamedArgument("b","boo")
         bool b;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); return 12345; })(["-b"]) == 12345);
     assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); return 12345; })(["-b=true"]) == 12345);
     assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); return 12345; })(["-b=false"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); return 12345; })(["--no-b"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","true"]) == 1);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","false"]) == 1);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); return 12345; })(["--boo"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); return 12345; })(["--boo=true"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); return 12345; })(["--boo=false"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); return 12345; })(["--no-boo"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["--boo","true"]) == 1);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["--boo","false"]) == 1);
 }
 
 unittest
