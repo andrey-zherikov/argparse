@@ -104,17 +104,24 @@ package(argparse) struct ValueParser(alias PreProcess,
     }
     static Result parseImpl(T)(ref T receiver, ref RawParam rawParam)
     {
-        alias ParseType(T)     = .ParseType!(Parse, T);
-
-        alias preValidation    = ValidateFunc!(PreValidation, string[], "Pre validation");
-        alias parse(T)         = ParseFunc!(Parse, T);
-        alias validation(T)    = ValidateFunc!(Validation, ParseType!T);
-        alias action(T)        = ActionFunc!(Action, T, ParseType!T);
-        alias noValueAction(T) = NoValueActionFunc!(NoValueAction, T);
+        alias preValidation = ValidateFunc!(PreValidation, "Pre validation");
+        static if(is(Parse == void))
+        {
+            alias ParseType = Unqual!T;
+            alias parse     = ParseFunc!void;
+        }
+        else
+        {
+            alias ParseType = .ParseType!Parse;
+            alias parse     = ParseFunc!Parse;
+        }
+        alias validation    = ValidateFunc!Validation;
+        alias action        = ActionFunc!Action;
+        alias noValueAction = NoValueActionFunc!NoValueAction;
 
         if(rawParam.value.length == 0)
         {
-            return noValueAction!T(receiver, Param!void(rawParam.config, rawParam.name)) ? Result.Success : Result.Failure;
+            return noValueAction(receiver, Param!void(rawParam.config, rawParam.name)) ? Result.Success : Result.Failure;
         }
         else
         {
@@ -125,17 +132,17 @@ package(argparse) struct ValueParser(alias PreProcess,
             if(!res)
                 return res;
 
-            auto parsedParam = Param!(ParseType!T)(rawParam.config, rawParam.name);
+            auto parsedParam = Param!ParseType(rawParam.config, rawParam.name);
 
-            res = parse!T(parsedParam.value, rawParam);
+            res = parse(parsedParam.value, rawParam);
             if(!res)
                 return res;
 
-            res = validation!T(parsedParam);
+            res = validation(parsedParam);
             if(!res)
                 return res;
 
-            if(!action!T(receiver, parsedParam))
+            if(!action(receiver, parsedParam))
                 return Result.Failure;
 
             return Result.Success;
@@ -405,14 +412,14 @@ unittest
 // Result validate(T value)
 // Result validate(T[] value)
 // Result validate(Param!T param)
-private struct ValidateFunc(alias F, T, string funcName="Validation")
+private struct ValidateFunc(alias F, string funcName="Validation")
 {
-    static Result invalidValue(Param!T param)
+    static Result invalidValue(T)(Param!T param)
     {
         return processingError(param, "Invalid value");
     }
 
-    static Result opCall(Param!T param)
+    static Result opCall(T)(Param!T param)
     {
         static if(is(F == void))
         {
@@ -467,7 +474,7 @@ unittest
     auto test(alias F, T)(T[] values)
     {
         Config config;
-        return ValidateFunc!(F, T[])(Param!(T[])(&config, "", values));
+        return ValidateFunc!F(Param!(T[])(&config, "", values));
     }
 
     // void
@@ -503,7 +510,7 @@ unittest
     auto test(alias F, T)(T[] values)
     {
         Config config;
-        return ValidateFunc!(F, T[])(Param!(T[])(&config, "--argname", values));
+        return ValidateFunc!F(Param!(T[])(&config, "--argname", values));
     }
 
     // void
@@ -539,7 +546,7 @@ unittest
     auto test(alias F, T)()
     {
         Config config;
-        return ValidateFunc!(F, T)(RawParam(&config, "", ["1","2","3"]));
+        return ValidateFunc!F(RawParam(&config, "", ["1","2","3"]));
     }
     static assert(test!(void, string[]));
 
@@ -556,9 +563,9 @@ unittest
 // bool action(ref DEST receiver, Param!void param)
 // void action(ref DEST receiver, Param!void param)
 // Result action(ref DEST receiver, Param!void param)
-package struct NoValueActionFunc(alias F, T)
+package struct NoValueActionFunc(alias F)
 {
-    static Result opCall(ref T receiver, Param!void param)
+    static Result opCall(T)(ref T receiver, Param!void param)
     {
         static if(is(F == void))
         {
@@ -610,7 +617,7 @@ package struct NoValueActionFunc(alias F, T)
 unittest
 {
     string receiver;
-    assert(NoValueActionFunc!(void, string)(receiver, Param!void.init).isError("Can't process value"));
+    assert(NoValueActionFunc!void(receiver, Param!void.init).isError("Can't process value"));
 }
 
 unittest
@@ -618,13 +625,13 @@ unittest
     auto test(alias F, T)()
     {
         T receiver;
-        assert(NoValueActionFunc!(F, T)(receiver, Param!void.init));
+        assert(NoValueActionFunc!F(receiver, Param!void.init));
         return receiver;
     }
     auto testErr(alias F, T)()
     {
         T receiver;
-        return NoValueActionFunc!(F, T)(receiver, Param!void.init);
+        return NoValueActionFunc!F(receiver, Param!void.init);
     }
 
     // DEST action()
@@ -655,12 +662,10 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private template ParseType(alias F, T)
+private template ParseType(alias F)
 {
-    static if(is(F == void))
-        alias ParseType = Unqual!T;
     // T parse(string[] value)
-    else static if(__traits(compiles, { auto receiver = F(string[].init); }))
+    static if(__traits(compiles, { auto receiver = F(string[].init); }))
         alias ParseType = Unqual!(typeof(F(string[].init)));
     // T parse(string value)
     else static if(__traits(compiles, { auto receiver = F(string.init); }))
@@ -686,22 +691,21 @@ private template ParseType(alias F, T)
 
 unittest
 {
-    static assert(is(ParseType!(void, double) == double));
-    static assert(!__traits(compiles, { ParseType!((){}, double) p; }));
-    static assert(!__traits(compiles, { ParseType!((int,int,int,int,int){}, double) p; }));
+    static assert(!__traits(compiles, { ParseType!((){}) p; }));
+    static assert(!__traits(compiles, { ParseType!((int,int,int,int,int){}) p; }));
 
     // T parse(string[] value)
-    static assert(is(ParseType!((string[] _)=>3, double) == int));
+    static assert(is(ParseType!((string[] _)=>3) == int));
     // T parse(string value)
-    static assert(is(ParseType!((string _)=>3.0, int) == double));
+    static assert(is(ParseType!((string _)=>3.0) == double));
     // T parse(RawParam param)
-    static assert(is(ParseType!((RawParam _)=>"", int) == string));
+    static assert(is(ParseType!((RawParam _)=>"") == string));
 
     // T action(arg)
-    static assert(is(ParseType!((int)=>3, double) == int));
-    static assert(!__traits(compiles, { ParseType!((int){}, double) p; }));
+    static assert(is(ParseType!((int)=>3) == int));
+    static assert(!__traits(compiles, { ParseType!((int){}) p; }));
     // ... action(ref T param, arg)
-    static assert(is(ParseType!((ref int, string v) {}, double) == int));
+    static assert(is(ParseType!((ref int, string v) {}) == int));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -712,16 +716,14 @@ unittest
 // Result parse(ref T receiver, RawParam param)
 // bool parse(ref T receiver, RawParam param)
 // void parse(ref T receiver, RawParam param)
-private struct ParseFunc(alias F, T)
+private struct ParseFunc(alias F)
 {
-    alias ParseType = .ParseType!(F, T);
-
-    static Result opCall(ref ParseType receiver, RawParam param)
+    static Result opCall(ParseType)(ref ParseType receiver, RawParam param)
     {
         static if(is(F == void))
         {
             foreach(value; param.value)
-                receiver = Convert!T(value);
+                receiver = Convert!ParseType(value);
             return Result.Success;
         }
         // T parse(string[] value)
@@ -769,7 +771,7 @@ unittest
     int i;
     RawParam param;
     param.value = ["1","2","3"];
-    assert(ParseFunc!(void, int)(i, param));
+    assert(ParseFunc!void(i, param));
     assert(i == 3);
 }
 
@@ -779,14 +781,14 @@ unittest
     {
         T receiver;
         Config config;
-        assert(ParseFunc!(F, T)(receiver, RawParam(&config, "", values)));
+        assert(ParseFunc!F(receiver, RawParam(&config, "", values)));
         return receiver;
     }
     auto testErr(alias F, T)(string[] values)
     {
         T receiver;
         Config config;
-        return ParseFunc!(F, T)(receiver, RawParam(&config, "", values));
+        return ParseFunc!F(receiver, RawParam(&config, "", values));
     }
 
     // T parse(string value)
@@ -818,9 +820,9 @@ unittest
 // bool action(ref T receiver, Param!ParseType param)
 // void action(ref T receiver, Param!ParseType param)
 // Result action(ref T receiver, Param!ParseType param)
-private struct ActionFunc(alias F, T, ParseType)
+private struct ActionFunc(alias F)
 {
-    static Result opCall(ref T receiver, Param!ParseType param)
+    static Result opCall(T, ParseType)(ref T receiver, Param!ParseType param)
     {
         static if(is(F == void))
         {
@@ -870,14 +872,14 @@ unittest
     {
         T receiver;
         Config config;
-        assert(ActionFunc!(F, T, T)(receiver, Param!T(&config, "", values)));
+        assert(ActionFunc!F(receiver, Param!T(&config, "", values)));
         return receiver;
     }
     auto testErr(alias F, T)(T values)
     {
         T receiver;
         Config config;
-        return ActionFunc!(F, T, T)(receiver, Param!T(&config, "", values));
+        return ActionFunc!F(receiver, Param!T(&config, "", values));
     }
 
     static assert(!__traits(compiles, { test!(() {})(["1","2","3"]); }));
@@ -914,9 +916,9 @@ unittest
         Param!(int[]) param;
 
         alias F = Append!(int[]);
-        param.value = v1;   ActionFunc!(F, int[], int[])(res, param);
+        param.value = v1;   ActionFunc!F(res, param);
 
-        param.value = v2;   ActionFunc!(F, int[], int[])(res, param);
+        param.value = v2;   ActionFunc!F(res, param);
 
         return res;
     };
