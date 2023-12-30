@@ -100,26 +100,13 @@ package(argparse) struct ValueParser(alias PreProcess,
     // Requirement: rawValues.length must be correct
     static Result parse(T)(ref T receiver, RawParam param)
     {
-        return addDefaults!(DefaultValueParser!T).parseImpl(receiver, param);
+        return addDefaults!(TypedValueParser!T).addDefaults!DefaultValueParser.parseImpl(receiver, param);
     }
     static Result parseImpl(T)(ref T receiver, ref RawParam rawParam)
     {
         alias preValidation = ValidateFunc!(PreValidation, "Pre validation");
-        static if(is(Parse == void))
-        {
-            alias parse     = (ref receiver, RawParam param)
-            {
-                foreach(value; param.value)
-                    receiver = Convert!(typeof(receiver))(value);
-                return Result.Success;
-            };
-            alias ParseType = Unqual!T;
-        }
-        else
-        {
-            alias parse     = ParseFunc!Parse;
-            alias ParseType = parse.ReturnType;
-        }
+        alias parse         = ParseFunc!Parse;
+        alias ParseType     = parse.ReturnType;
         alias validation    = ValidateFunc!Validation;
         alias action        = ActionFunc!Action;
         alias noValueAction = NoValueActionFunc!NoValueAction;
@@ -130,8 +117,7 @@ package(argparse) struct ValueParser(alias PreProcess,
         }
         else
         {
-            static if(!is(PreProcess == void))
-                PreProcess(rawParam);
+            PreProcess(rawParam);
 
             Result res = preValidation(rawParam);
             if(!res)
@@ -164,14 +150,25 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private template DefaultValueParser(T)
+private alias DefaultValueParser = ValueParser!(
+    (_) {},                 // pre process
+    _ => Result.Success,    // pre validate
+    void,                   // parse
+    _ => Result.Success,    // validate
+    (ref receiver, value) => Assign(receiver, value),           // action
+    (ref receiver, Param!void param) => processingError(param)  // no-value action
+);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private template TypedValueParser(T)
 if(!is(T == void))
 {
     import std.conv: to;
 
     static if(is(T == enum))
     {
-        alias DefaultValueParser = ValueParser!(
+        alias TypedValueParser = ValueParser!(
             void,   // pre process
             ValueInList!(getEnumValues!T, typeof(RawParam.value)),   // pre validate
             getEnumValue!T,   // parse
@@ -182,18 +179,18 @@ if(!is(T == void))
     }
     else static if(isSomeString!T || isNumeric!T)
     {
-        alias DefaultValueParser = ValueParser!(
-            void,   // pre process
-            void,   // pre validate
-            void,   // parse
-            void,   // validate
-            void,   // action
-            void    // no-value action
+        alias TypedValueParser = ValueParser!(
+            void,       // pre process
+            void,       // pre validate
+            Convert!T,  // parse
+            void,       // validate
+            void,       // action
+            void        // no-value action
         );
     }
     else static if(isBoolean!T)
     {
-        alias DefaultValueParser = ValueParser!(
+        alias TypedValueParser = ValueParser!(
             void,                               // pre process
             void,                               // pre validate
             (string value)                      // parse
@@ -215,7 +212,7 @@ if(!is(T == void))
     }
     else static if(isSomeChar!T)
     {
-        alias DefaultValueParser = ValueParser!(
+        alias TypedValueParser = ValueParser!(
             void,                         // pre process
             void,                         // pre validate
             (string value)                // parse
@@ -238,8 +235,8 @@ if(!is(T == void))
             else
                 alias action = Assign!T;
 
-            alias DefaultValueParser =
-                DefaultValueParser!TElement
+            alias TypedValueParser =
+                TypedValueParser!TElement
                 .changePreProcess!splitValues
                 .changeParse!((ref T receiver, RawParam param)
                 {
@@ -251,7 +248,7 @@ if(!is(T == void))
 
                     foreach(i, value; param.value)
                     {
-                        if(!DefaultValueParser!TElement.parse(receiver[i],
+                        if(!TypedValueParser!TElement.parse(receiver[i],
                         RawParam(param.config, param.name, [value])))
                             return false;
                     }
@@ -263,8 +260,8 @@ if(!is(T == void))
         }
         else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
         {
-            alias DefaultValueParser =
-                DefaultValueParser!TElement
+            alias TypedValueParser =
+                TypedValueParser!TElement
                 .changeAction!(Extend!TElement)
                 .changeNoValueAction!((ref T param) { param ~= TElement.init; });
         }
@@ -274,7 +271,7 @@ if(!is(T == void))
     else static if(isAssociativeArray!T)
     {
         import std.string : indexOf;
-        alias DefaultValueParser = ValueParser!(
+        alias TypedValueParser = ValueParser!(
             splitValues,                               // pre process
             void,                                      // pre validate
             PassThrough,                               // parse
@@ -291,11 +288,11 @@ if(!is(T == void))
                         return false;
 
                     K key;
-                    if(!DefaultValueParser!K.parse(key, RawParam(param.config, param.name, [input[0 .. j]])))
+                    if(!TypedValueParser!K.parse(key, RawParam(param.config, param.name, [input[0 .. j]])))
                         return false;
 
                     V value;
-                    if(!DefaultValueParser!V.parse(value, RawParam(param.config, param.name, [input[j + 1 .. $]])))
+                    if(!TypedValueParser!V.parse(value, RawParam(param.config, param.name, [input[j + 1 .. $]])))
                         return false;
 
                     recepient[key] = value;
@@ -307,7 +304,7 @@ if(!is(T == void))
     }
     else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
-        alias DefaultValueParser = ValueParser!(
+        alias TypedValueParser = ValueParser!(
             void,                   // pre process
             void,                   // pre validate
             PassThrough,            // parse
@@ -318,7 +315,7 @@ if(!is(T == void))
     }
     else
     {
-        alias DefaultValueParser = ValueParser!(
+        alias TypedValueParser = ValueParser!(
             void,   // pre process
             void,   // pre validate
             void,   // parse
@@ -340,7 +337,7 @@ unittest
             // ensure that this compiles
             R receiver;
             Config config;
-            DefaultValueParser!R.parse(receiver, RawParam(&config, "", [""]));
+            TypedValueParser!R.parse(receiver, RawParam(&config, "", [""]));
         }}
 }
 
@@ -352,7 +349,7 @@ unittest
         R receiver;
         foreach(value; values)
         {
-            assert(DefaultValueParser!R.parse(receiver, RawParam(&config, "", value)));
+            assert(TypedValueParser!R.parse(receiver, RawParam(&config, "", value)));
         }
         return receiver;
     };
@@ -379,7 +376,7 @@ unittest
     {
         T receiver;
         Config config;
-        assert(DefaultValueParser!T.parse(receiver, RawParam(&config, "", values)));
+        assert(TypedValueParser!T.parse(receiver, RawParam(&config, "", values)));
         return receiver;
     };
 
@@ -426,12 +423,8 @@ private struct ValidateFunc(alias F, string funcName="Validation")
 
     static Result opCall(T)(Param!T param)
     {
-        static if(is(F == void))
-        {
-            return Result.Success;
-        }
         // Result validate(Param!T param)
-        else static if(__traits(compiles, { Result res = F(param); }))
+        static if(__traits(compiles, { Result res = F(param); }))
         {
             return F(param);
         }
@@ -482,9 +475,6 @@ unittest
         return ValidateFunc!F(Param!(T[])(&config, "", values));
     }
 
-    // void
-    assert(test!void(["1"]));
-
     // Result validate(Param!T param)
     assert(test!((RawParam _) => Result.Success)(["1","2","3"]));
     assert(test!((RawParam _) => Result.Error("error text"))(["1","2","3"]).isError("error text"));
@@ -518,9 +508,6 @@ unittest
         return ValidateFunc!F(Param!(T[])(&config, "--argname", values));
     }
 
-    // void
-    assert(test!void(["1"]));
-
     // Result validate(Param!T param)
     assert(test!((RawParam _) => Result.Success)(["1","2","3"]));
     assert(test!((RawParam _) => Result.Error("error text"))(["1","2","3"]).isError("error text"));
@@ -553,7 +540,6 @@ unittest
         Config config;
         return ValidateFunc!F(RawParam(&config, "", ["1","2","3"]));
     }
-    static assert(test!(void, string[]));
 
     static assert(!__traits(compiles, { test!(() {}, string[]); }));
     static assert(!__traits(compiles, { test!((int,int) {}, string[]); }));
@@ -572,12 +558,8 @@ package struct NoValueActionFunc(alias F)
 {
     static Result opCall(T)(ref T receiver, Param!void param)
     {
-        static if(is(F == void))
-        {
-            return processingError(param);
-        }
         // DEST action()
-        else static if(__traits(compiles, { receiver = cast(T) F(); }))
+        static if(__traits(compiles, { receiver = cast(T) F(); }))
         {
             receiver = cast(T) F();
             return Result.Success;
@@ -617,12 +599,6 @@ package struct NoValueActionFunc(alias F)
         else
             static assert(false, "No-value action function has too many parameters: "~Parameters!F.stringof);
     }
-}
-
-unittest
-{
-    string receiver;
-    assert(NoValueActionFunc!void(receiver, Param!void.init).isError("Can't process value"));
 }
 
 unittest
@@ -789,13 +765,8 @@ private struct ActionFunc(alias F)
 {
     static Result opCall(T, ParseType)(ref T receiver, Param!ParseType param)
     {
-        static if(is(F == void))
-        {
-            Assign!(T, ParseType)(receiver, param.value);
-            return Result.Success;
-        }
         // Result action(ref T receiver, Param!ParseType param)
-        else static if(__traits(compiles, { Result res = F(receiver, param.value); }))
+        static if(__traits(compiles, { Result res = F(receiver, param.value); }))
         {
             return F(receiver, param.value);
         }
