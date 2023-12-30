@@ -113,7 +113,7 @@ package(argparse) struct ValueParser(alias PreProcess,
 
         if(rawParam.value.length == 0)
         {
-            return noValueAction(receiver, Param!void(rawParam.config, rawParam.name)) ? Result.Success : Result.Failure;
+            return noValueAction(receiver, Param!void(rawParam.config, rawParam.name));
         }
         else
         {
@@ -133,8 +133,9 @@ package(argparse) struct ValueParser(alias PreProcess,
             if(!res)
                 return res;
 
-            if(!action(receiver, parsedParam))
-                return Result.Failure;
+            res = action(receiver, parsedParam);
+            if(!res)
+                return res;
 
             return Result.Success;
         }
