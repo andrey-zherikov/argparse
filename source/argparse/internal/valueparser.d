@@ -107,13 +107,18 @@ package(argparse) struct ValueParser(alias PreProcess,
         alias preValidation = ValidateFunc!(PreValidation, "Pre validation");
         static if(is(Parse == void))
         {
+            alias parse     = (ref receiver, RawParam param)
+            {
+                foreach(value; param.value)
+                    receiver = Convert!(typeof(receiver))(value);
+                return Result.Success;
+            };
             alias ParseType = Unqual!T;
-            alias parse     = ParseFunc!void;
         }
         else
         {
-            alias ParseType = .ParseType!Parse;
             alias parse     = ParseFunc!Parse;
+            alias ParseType = parse.ReturnType;
         }
         alias validation    = ValidateFunc!Validation;
         alias action        = ActionFunc!Action;
@@ -662,54 +667,6 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private template ParseType(alias F)
-{
-    // T parse(string[] value)
-    static if(__traits(compiles, { auto receiver = F(string[].init); }))
-        alias ParseType = Unqual!(typeof(F(string[].init)));
-    // T parse(string value)
-    else static if(__traits(compiles, { auto receiver = F(string.init); }))
-        alias ParseType = Unqual!(typeof(F(string.init)));
-    // T parse(RawParam param)
-    else static if(__traits(compiles, { auto receiver = F(RawParam.init); }))
-        alias ParseType = Unqual!(typeof(F(RawParam.init)));
-
-    else static if(Parameters!F.length == 1)
-    {
-        // T action(arg)
-        alias ParseType = Unqual!(ReturnType!F);
-        static assert(!is(ParseType == void), "Parse function should return value");
-    }
-    else static if(Parameters!F.length == 2)
-    {
-        // ... action(ref T param, arg)
-        alias ParseType = Parameters!F[0];
-    }
-    else
-        static assert(false, "Parse function has too many parameters: "~Parameters!F.stringof);
-}
-
-unittest
-{
-    static assert(!__traits(compiles, { ParseType!((){}) p; }));
-    static assert(!__traits(compiles, { ParseType!((int,int,int,int,int){}) p; }));
-
-    // T parse(string[] value)
-    static assert(is(ParseType!((string[] _)=>3) == int));
-    // T parse(string value)
-    static assert(is(ParseType!((string _)=>3.0) == double));
-    // T parse(RawParam param)
-    static assert(is(ParseType!((RawParam _)=>"") == string));
-
-    // T action(arg)
-    static assert(is(ParseType!((int)=>3) == int));
-    static assert(!__traits(compiles, { ParseType!((int){}) p; }));
-    // ... action(ref T param, arg)
-    static assert(is(ParseType!((ref int, string v) {}) == int));
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // T parse(string[] value)
 // T parse(string value)
 // T parse(RawParam param)
@@ -718,61 +675,69 @@ unittest
 // void parse(ref T receiver, RawParam param)
 private struct ParseFunc(alias F)
 {
-    static Result opCall(ParseType)(ref ParseType receiver, RawParam param)
+    // T parse(string[] value)
+    static if(__traits(compiles, { F(RawParam.init.value); }))
     {
-        static if(is(F == void))
-        {
-            foreach(value; param.value)
-                receiver = Convert!ParseType(value);
-            return Result.Success;
-        }
-        // T parse(string[] value)
-        else static if(__traits(compiles, { receiver = cast(ParseType) F(param.value); }))
-        {
-            receiver = cast(ParseType) F(param.value);
-            return Result.Success;
-        }
-        // T parse(string value)
-        else static if(__traits(compiles, { receiver = cast(ParseType) F(param.value[0]); }))
-        {
-            foreach(value; param.value)
-                receiver = cast(ParseType) F(value);
-            return Result.Success;
-        }
-        // T parse(RawParam param)
-        else static if(__traits(compiles, { receiver = cast(ParseType) F(param); }))
-        {
-            receiver = cast(ParseType) F(param);
-            return Result.Success;
-        }
-        // Result parse(ref T receiver, RawParam param)
-        else static if(__traits(compiles, { Result res = F(receiver, param); }))
-        {
-            return F(receiver, param);
-        }
-        // bool parse(ref T receiver, RawParam param)
-        else static if(__traits(compiles, { auto res = cast(bool) F(receiver, param); }))
-        {
-            return (cast(bool) F(receiver, param)) ? Result.Success : processingError(param);
-        }
-        // void parse(ref T receiver, RawParam param)
-        else static if(__traits(compiles, { F(receiver, param); }))
-        {
-            F(receiver, param);
-            return Result.Success;
-        }
-        else
-            static assert(false, "Parse function is not supported");
-    }
-}
+        alias ReturnType = Unqual!(typeof(F(RawParam.init.value)));
 
-unittest
-{
-    int i;
-    RawParam param;
-    param.value = ["1","2","3"];
-    assert(ParseFunc!void(i, param));
-    assert(i == 3);
+        static Result opCall(ref ReturnType receiver, RawParam param)
+        {
+            receiver = cast(ReturnType) F(param.value);
+            return Result.Success;
+        }
+    }
+    // T parse(string value)
+    else static if(__traits(compiles, { F(RawParam.init.value[0]); }))
+    {
+        alias ReturnType = Unqual!(typeof(F(RawParam.init.value[0])));
+
+        static Result opCall(ref ReturnType receiver, RawParam param)
+        {
+            foreach (value; param.value)
+                receiver = cast(ReturnType) F(value);
+            return Result.Success;
+        }
+    }
+    // T parse(RawParam param)
+    else static if(__traits(compiles, { F(RawParam.init); }))
+    {
+        alias ReturnType = Unqual!(typeof(F(RawParam.init)));
+
+        static Result opCall(ref ReturnType receiver, RawParam param)
+        {
+            receiver = cast(ReturnType) F(param);
+            return Result.Success;
+        }
+    }
+    // ... parse(..., ...)
+    else static if(isCallable!F && Parameters!F.length == 2)
+    {
+        alias ReturnType = Parameters!F[0];
+
+        static Result opCall(ref ReturnType receiver, RawParam param)
+        {
+            // Result parse(ref T receiver, RawParam param)
+            static if(__traits(compiles, { Result res = F(receiver, param); }))
+            {
+                return F(receiver, param);
+            }
+            // bool parse(ref T receiver, RawParam param)
+            else static if(__traits(compiles, { auto res = cast(bool) F(receiver, param); }))
+            {
+                return (cast(bool) F(receiver, param)) ? Result.Success : processingError(param);
+            }
+            // void parse(ref T receiver, RawParam param)
+            else static if(__traits(compiles, { F(receiver, param); }))
+            {
+                F(receiver, param);
+                return Result.Success;
+            }
+            else
+                static assert(false, "Parse function is not supported");
+        }
+    }
+    else
+        static assert(false, "Parse function is not supported");
 }
 
 unittest
