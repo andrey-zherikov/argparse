@@ -1387,9 +1387,9 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T(Value("foo"))); return 12345; })([
 
 ## Argument parsing customization
 
-Some time the functionality provided out of the box is not enough and it needs to be tuned.
+Sometime the functionality that is provided out of the box is not enough and needs to be tuned.
 
-Parsing of command-line string values into some typed `receiver` member consists of multiple steps:
+Parsing of command-line string values into some typed `receiver` member consists of following steps:
 
 - **Pre-validation** – argument values are validated as raw strings.
 - **Parsing** – raw argument values are converted to a different type (usually the type of the receiver).
@@ -1397,19 +1397,21 @@ Parsing of command-line string values into some typed `receiver` member consists
 - **Action** – depending on a type of the `receiver`, it might be either assignment of converted value to a `receiver`,
   appending value if `receiver` is an array or other operation.
 
-In case if argument does not expect any value, then the only one step is involved:
+In case if argument does not have any value to parse, then the only one step is involved:
 
 - **Action if no value** – similar to **Action** step above but without converted value.
 
 If any of the steps fails, then the command-line parsing fails as well.
 
 Each of the steps above can be customized with UDA modifiers below. These modifiers take a function that might accept
-either argument value(s) or `Param` struct that has these fields (there is also an alias, `RawParam`, where the type of
-the `value` field is `string[]`):
+either argument value(s) or `Param` struct that has the fields below:
 
 - `config`- Config object that is passed to parsing function.
 - `name` – Argument name that is specified in command line.
 - `value` – Array of argument values that are provided in command line.
+
+There is also an alias, `RawParam`, where the type of the `value` field is `string[]`. This alias represents "raw"
+values from command line.
 
 ### Pre-validation
 
@@ -1419,44 +1421,66 @@ the following signatures:
 - `bool validate(string value)`
 - `bool validate(string[] value)`
 - `bool validate(RawParam param)`
+- `Result validate(string value)`
+- `Result validate(string[] value)`
+- `Result validate(RawParam param)`
 
-The function should return `true` if validation passed and `false` otherwise.
+Note that the first function will be called once for every value specified in command line for an argument.
+
+Parameters:
+
+- `value`/`param` values to be parsed.
+
+Return value:
+
+- `true`/`Result.Success` if validation passed or
+- `false`/`Result.Error` otherwise.
 
 ### Parsing
 
-`Parse` modifier allows providing custom conversion from raw string to typed value. It accepts a function with one of
+`Parse` modifier allows providing custom conversion from raw string to a typed value. It accepts a function with one of
 the following signatures:
 
 - `ParseType parse(string value)`
 - `ParseType parse(string[] value)`
 - `ParseType parse(RawParam param)`
-- `Result parse(ref ParseType receiver, RawParam param)`
 - `bool parse(ref ParseType receiver, RawParam param)`
 - `void parse(ref ParseType receiver, RawParam param)`
+- `Result parse(ref ParseType receiver, RawParam param)`
+
+Note that `ParseType` is a type that a string value is supposed to be parsed to and it is not required be the same as
+a target type.
 
 Parameters:
 
-- `ParseType` is a type that the string value will be parsed to.
 - `value`/`param` values to be parsed.
 - `receiver` is an output variable for parsed value.
 
-Parse function is supposed to parse values from `value`/`param` parameter into `ParseType` type and optionally return
-boolean type indicating whether parsing was done successfully (`true`) or not (`false`).
+Return value:
+
+- `true`/`Result.Success` if parsing was successful or
+- `false`/`Result.Error` otherwise.
 
 ### Validation
 
-`Validation` modifier can be used to validate the parsed value. It accepts a function with one of the following
+`Validation` modifier can be used to validate parsed value. It accepts a function with one of the following
 signatures:
 
-- `bool validate(ParseType value)`
-- `bool validate(ParseType[] value)`
-- `bool validate(Param!ParseType param)`
+- `bool validate(string value)`
+- `bool validate(string[] value)`
+- `bool validate(RawParam param)`
+- `Result validate(string value)`
+- `Result validate(string[] value)`
+- `Result validate(RawParam param)`
 
 Parameters:
 
-- `value`/`param` has a value returned from `Parse` step.
+- `value`/`param` contains a value returned from `Parse` step.
 
-The function should return `true` if validation passed and `false` otherwise.
+Return value:
+
+- `true`/`Result.Success` if validation passed or
+- `false`/`Result.Error` otherwise.
 
 ### Action
 
@@ -1465,13 +1489,20 @@ command line. It accepts a function with one of the following signatures:
 
 - `bool action(ref T receiver, ParseType value)`
 - `void action(ref T receiver, ParseType value)`
+- `Result action(ref T receiver, ParseType value)`
 - `bool action(ref T receiver, Param!ParseType param)`
 - `void action(ref T receiver, Param!ParseType param)`
+- `Result action(ref T receiver, Param!ParseType param)`
 
 Parameters:
 
 - `receiver` is a receiver (destination field) which is supposed to be changed based on a `value`/`param`.
 - `value`/`param` has a value returned from `Parse` step.
+
+Return value:
+
+- `true`/`Result.Success` if operation was successful or
+- `false`/`Result.Error` otherwise.
 
 ### Arguments with no values
 
