@@ -141,11 +141,14 @@ if(!is(T == void))
         alias DefaultValueParser = ValueParser!(
             (ref RawParam param)                // pre process
             {
-                import std.string: toLower;
-                import std.algorithm: each;
+                import std.algorithm.iteration: map;
+                import std.array: array;
+                import std.ascii: toLower;
+                import std.string: representation;
 
                 // convert values to lower case and replace "" with "y"
-                param.value.each!((ref _) { _ = _.length == 0 ? "y" : _.toLower; });
+                foreach(ref value; param.value)
+                    value = value.length == 0 ? "y" : value.representation.map!(_ => immutable char(_.toLower)).array;
             },
             ValueInList!(["true","yes","y","false","no","n"], typeof(RawParam.value)),   // pre validate
             (string value)                      // parse
