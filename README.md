@@ -76,19 +76,12 @@
 
 ### Enhancements and bug fixes
 
-* Boolean values (`yes`,`y`,`true`,`no`,`n` and `false`) are now parsed case-insensitively.
 * Fix for `Command()` UDA: `ArrayIndexError` is not thrown anymore.
 * Error messages are printed with `Config.styling` and now have the same styling as help text.
 * New `errorMessagePrefix` member in `Config.styling` that determines the style of "Error:" prefix in error messages. This prefix is printed in red by default.
 * New checks:
   * Argument is not allowed to be in multiple argument groups.
   * Subcommand name can't start with `Config.namedArgPrefix` (dash `-` by default).
-  * For positional arguments within a command:
-    * There should be no gaps in indexes, e.g. `0,1,3,4` indexes are not allowed because `2` is missed.
-    * Indexes should be unique, e.g. `0,1,2,3,2` indexes are not allowed because `2` is repeated.
-    * Number of values should be fixed (i.e. minimum number of values should be the same as maximum number of values) unless it's the last positional argument.
-    * Required positional arguments must go before optional positional arguments.
-    * Optional positional arguments are now allowed if command has default subcommand.
 * Functions for parsing customization (`PreValidation`, `Parse`, `Validation` and `Action`) can now return `Result` through `Result.Success` or `Result.Error` and provide error message if needed.
 * Fixes for bundling of single-letter arguments.
   For example, the following cases are supported for `bool b; string s;` arguments:
