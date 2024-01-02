@@ -86,7 +86,6 @@ unittest
     struct T {}
 
     auto info = getSubCommandInfo!T(Config.init);
-    import std.stdio;stderr.writeln(info);
     assert(info.displayNames == ["T"]);
     assert(info.names == ["T"]);
 }
