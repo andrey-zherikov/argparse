@@ -183,7 +183,7 @@ package struct Command
 
     CommandInfo info;
 
-    string displayName() const { return info.displayNames[0]; }
+    string displayName() const { return info.displayNames.length > 0 ? info.displayNames[0] : ""; }
 
     SubCommands subCommands;
     Command delegate() [] subCommandCreate;
@@ -294,7 +294,7 @@ private template TypeTraits(Config config, TYPE)
     /////////////////////////////////////////////////////////////////////
     /// Subcommands
 
-    private enum getCommandInfo(CMD) = .getCommandInfo!(RemoveDefaultAttribute!CMD)(config, RemoveDefaultAttribute!CMD.stringof);
+    private enum getCommandInfo(CMD) = .getSubCommandInfo!(RemoveDefaultAttribute!CMD)(config);
     private enum getSubcommand(CMD) = SubCommand!CMD(getCommandInfo!CMD);
 
     static if(.subCommandSymbol!TYPE.length == 0)

@@ -70,7 +70,7 @@ unittest
 {
     CommandInfo c;
     c = c.Usage("usg").Description("desc").ShortDescription("sum").Epilog("epi");
-    assert(c.names == [""]);
+    assert(c.names == []);
     assert(c.usage.get == "usg");
     assert(c.description.get == "desc");
     assert(c.shortDescription.get == "sum");
@@ -81,7 +81,7 @@ unittest
 {
     CommandInfo c;
     c = c.Usage(() => "usg").Description(() => "desc").ShortDescription(() => "sum").Epilog(() => "epi");
-    assert(c.names == [""]);
+    assert(c.names == []);
     assert(c.usage.get == "usg");
     assert(c.description.get == "desc");
     assert(c.shortDescription.get == "sum");

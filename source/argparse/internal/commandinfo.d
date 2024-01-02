@@ -7,7 +7,7 @@ import argparse.internal.lazystring;
 
 package(argparse) struct CommandInfo
 {
-    string[] names = [""];
+    string[] names;
     string[] displayNames;
     LazyString usage;
     LazyString description;
@@ -50,18 +50,42 @@ unittest
     assert(uda.names == ["CMD-NAME"]);
 }
 
-package(argparse) CommandInfo getCommandInfo(COMMAND)(const Config config, string name = "")
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private template getCommandInfo(TYPE)
 {
     import std.traits: getUDAs;
 
-    enum udas = getUDAs!(COMMAND, CommandInfo);
-    static assert(udas.length <= 1, COMMAND.stringof~" has multiple @Command UDA");
+    enum udas = getUDAs!(TYPE, CommandInfo);
+    static assert(udas.length <= 1, TYPE.stringof~" has multiple @Command UDA");
 
     static if(udas.length > 0)
-        CommandInfo info = finalize(config, udas[0]);
+        enum getCommandInfo = udas[0];
     else
-        CommandInfo info = finalize(config, CommandInfo([name]));
+        enum getCommandInfo = CommandInfo.init;
+}
 
-    assert(name == "" || info.names.length > 0 && info.names[0].length > 0, "Command "~COMMAND.stringof~" must have name");
-    return info;
+package(argparse) CommandInfo getSubCommandInfo(COMMAND)(const Config config)
+{
+    CommandInfo info = getCommandInfo!COMMAND;
+
+    if(info.names.length == 0)
+        info.names = [COMMAND.stringof];
+
+    return finalize(config, info);
+}
+
+package(argparse) CommandInfo getTopLevelCommandInfo(COMMAND)(const Config config)
+{
+    return finalize(config, getCommandInfo!COMMAND);
+}
+
+unittest
+{
+    @CommandInfo()
+    struct T {}
+
+    auto info = getSubCommandInfo!T(Config.init);
+    assert(info.displayNames == ["T"]);
+    assert(info.names == ["T"]);
 }
