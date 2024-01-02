@@ -183,7 +183,7 @@ package struct Command
 
     CommandInfo info;
 
-    string displayName() const { return info.displayNames[0]; }
+    string displayName() const { return info.displayNames.length > 0 ? info.displayNames[0] : ""; }
 
     SubCommands subCommands;
     Command delegate() [] subCommandCreate;
@@ -294,7 +294,7 @@ private template TypeTraits(Config config, TYPE)
     /////////////////////////////////////////////////////////////////////
     /// Subcommands
 
-    private enum getCommandInfo(CMD) = .getCommandInfo!(RemoveDefaultAttribute!CMD)(config, RemoveDefaultAttribute!CMD.stringof);
+    private enum getCommandInfo(CMD) = .getSubCommandInfo!(RemoveDefaultAttribute!CMD)(config);
     private enum getSubcommand(CMD) = SubCommand!CMD(getCommandInfo!CMD);
 
     static if(.subCommandSymbol!TYPE.length == 0)
@@ -345,6 +345,10 @@ private template TypeTraits(Config config, TYPE)
         static if(positionalArgInfos.length > 0 && defaultSubCommands.length > 0)
             static assert(positionalArgInfos[$-1].required, TYPE.stringof~": Optional positional arguments and default subcommand are used together in one command");
     }
+
+    static foreach(info; subCommandInfos)
+        static foreach(name; info.names)
+            static assert(name[0] != config.namedArgPrefix, TYPE.stringof~": Subcommand name should not begin with '"~config.namedArgPrefix~"': "~name);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

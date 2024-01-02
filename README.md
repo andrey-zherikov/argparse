@@ -850,8 +850,8 @@ SumType!(sum, min, Default!max) cmd;
 `Command` UDA provides few customizations that affect help text. It can be used for **top-level command** and **subcommands**.
 
 - Program name (i.e., the name of top-level command) and subcommand name can be provided to `Command` UDA as a parameter.
-  If program name is not provided, then `Runtime.args[0]` (a.k.a. `argv[0]` from `main` function) is used. If subcommand name is not provided, then the name of
-  the type that represents the command is used.
+  If program name is not provided, then `Runtime.args[0]` (a.k.a. `argv[0]` from `main` function) is used.
+  If subcommand name is not provided (e.g., `@(Command.Description(...))`), then the name of the type that represents the command is used.
 - `Usage` – allows custom usage text. By default, the parser calculates the usage message from the arguments it contains
   but this can be overridden with `Usage` call. If the custom text contains `%(PROG)` then it will be replaced by the
   command/program name.
@@ -1145,19 +1145,29 @@ Below is the exact sequence of steps `argparse` uses to determine whether or not
 
 ### Boolean
 
-Boolean types usually represent command-line flags. `argparse` supports multiple ways of providing flag value:
+Boolean types usually represent command-line flags. `argparse` supports multiple ways of providing flag value including
+negation (i.e., `--no-flag`):
 
 ```d
 struct T
 {
+    @NamedArgument("b","boo")
     bool b;
 }
 
 assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b"]) == 0);
 assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["-b=true"]) == 0);
 assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["-b=false"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["--no-b"]) == 0);
 assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","true"]) == 1);
 assert(CLI!T.parseArgs!((T t) { assert(false); })(["-b","false"]) == 1);
+
+assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["--boo"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(true)); })(["--boo=true"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["--boo=false"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(t == T(false)); })(["--no-boo"]) == 0);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["--boo","true"]) == 1);
+assert(CLI!T.parseArgs!((T t) { assert(false); })(["--boo","false"]) == 1);
 ```
 
 ### Numeric
@@ -1646,8 +1656,8 @@ See [ANSI coloring and styling](#ansi-colors-and-styles) for details.
 
 ### Error handling
 
-`Config.errorHandler` – this is a handler function for all errors occurred during parsing the command line. It might be
-either a function or a delegate that takes `string` parameter which would be an error message.
+`Config.errorHandler` – this is a handler function for all errors occurred during parsing the command line.
+It a function that receives `string` parameter which would be an error message.
 
 The default behavior is to print error message to `stderr`.
 
