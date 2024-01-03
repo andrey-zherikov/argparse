@@ -35,6 +35,12 @@ private Result processingError(T)(Param!T param, string prefix = "Can't process 
     return Result.Error(a[]);
 }
 
+private Result invalidValueError(T)(Param!T param)
+{
+    return processingError(param, "Invalid value");
+}
+
+
 unittest
 {
     Config config;
@@ -429,11 +435,6 @@ unittest
 // Result validate(Param!T param)
 private struct ValidateFunc(alias F, string funcName="Validation")
 {
-    static Result invalidValue(T)(Param!T param)
-    {
-        return processingError(param, "Invalid value");
-    }
-
     static Result opCall(T)(Param!T param)
     {
         // Result validate(Param!T param)
@@ -444,7 +445,7 @@ private struct ValidateFunc(alias F, string funcName="Validation")
         // bool validate(Param!T param)
         else static if(__traits(compiles, { F(param); }))
         {
-            return F(param) ? Result.Success : invalidValue(param);
+            return F(param) ? Result.Success : invalidValueError(param);
         }
         // Result validate(T value)
         else static if(__traits(compiles, { Result res = F(param.value); }))
@@ -454,7 +455,7 @@ private struct ValidateFunc(alias F, string funcName="Validation")
         // bool validate(T value)
         else static if(__traits(compiles, { F(param.value); }))
         {
-            return F(param.value) ? Result.Success : invalidValue(param);
+            return F(param.value) ? Result.Success : invalidValueError(param);
         }
         // Result validate(T[] value)
         else static if(__traits(compiles, { Result res = F(param.value[0]); }))
@@ -472,7 +473,7 @@ private struct ValidateFunc(alias F, string funcName="Validation")
         {
             foreach(value; param.value)
                 if(!F(value))
-                    return invalidValue(param);
+                    return invalidValueError(param);
             return Result.Success;
         }
         else
