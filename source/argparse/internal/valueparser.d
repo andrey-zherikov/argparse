@@ -261,12 +261,12 @@ if(!is(T == void))
 
                     foreach(i, value; param.value)
                     {
-                        if(!TypedValueParser!TElement.parse(receiver[i],
-                        RawParam(param.config, param.name, [value])))
-                            return false;
+                        Result res = TypedValueParser!TElement.parse(receiver[i], RawParam(param.config, param.name, [value]));
+                        if(!res)
+                            return res;
                     }
 
-                    return true;
+                    return Result.Success;
                 })
                 .changeAction!(action)
                 .changeNoValueAction!((ref T param) {});
@@ -298,19 +298,21 @@ if(!is(T == void))
                 {
                     auto j = indexOf(input, param.config.assignChar);
                     if(j < 0)
-                        return false;
+                        return invalidValueError(param);
 
                     K key;
-                    if(!TypedValueParser!K.parse(key, RawParam(param.config, param.name, [input[0 .. j]])))
-                        return false;
+                    Result res = TypedValueParser!K.parse(key, RawParam(param.config, param.name, [input[0 .. j]]));
+                    if(!res)
+                        return res;
 
                     V value;
-                    if(!TypedValueParser!V.parse(value, RawParam(param.config, param.name, [input[j + 1 .. $]])))
-                        return false;
+                    res = TypedValueParser!V.parse(value, RawParam(param.config, param.name, [input[j + 1 .. $]]));
+                    if(!res)
+                        return res;
 
                     recepient[key] = value;
                 }
-                return true;
+                return Result.Success;
             },
             (ref T param) {}    // no-value action
         );
