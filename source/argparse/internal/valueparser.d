@@ -139,18 +139,24 @@ if(!is(T == void))
     else static if(isBoolean!T)
     {
         alias DefaultValueParser = ValueParser!(
-            void,                               // pre process
-            void,                               // pre validate
+            (ref RawParam param)                // pre process
+            {
+                import std.algorithm.iteration: map;
+                import std.array: array;
+                import std.ascii: toLower;
+                import std.string: representation;
+
+                // convert values to lower case and replace "" with "y"
+                foreach(ref value; param.value)
+                    value = value.length == 0 ? "y" : value.representation.map!(_ => immutable char(_.toLower)).array;
+            },
+            ValueInList!(["true","yes","y","false","no","n"], typeof(RawParam.value)),   // pre validate
             (string value)                      // parse
             {
                 switch(value)
                 {
-                    case "":    goto case;
-                    case "yes": goto case;
-                    case "y":   return true;
-                    case "no":  goto case;
-                    case "n":   return false;
-                    default:    return value.to!T;
+                    case "true", "yes", "y": return true;
+                    default:                 return false;
                 }
             },
             void,                               // validate
@@ -341,11 +347,17 @@ unittest
     assert(test!bool([]) == true);
     assert(test!bool([""]) == true);
     assert(test!bool(["yes"]) == true);
+    assert(test!bool(["Yes"]) == true);
     assert(test!bool(["y"]) == true);
+    assert(test!bool(["Y"]) == true);
     assert(test!bool(["true"]) == true);
+    assert(test!bool(["True"]) == true);
     assert(test!bool(["no"]) == false);
+    assert(test!bool(["No"]) == false);
     assert(test!bool(["n"]) == false);
+    assert(test!bool(["N"]) == false);
     assert(test!bool(["false"]) == false);
+    assert(test!bool(["False"]) == false);
     assert(test!MyEnum(["foo"]) == MyEnum.foo);
     assert(test!MyEnum(["bar"]) == MyEnum.bar);
     assert(test!(MyEnum[])(["bar","foo"]) == [MyEnum.bar, MyEnum.foo]);

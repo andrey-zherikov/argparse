@@ -20,7 +20,7 @@ public import argparse.result;
 version(unittest)
 {
     import argparse.internal.command : createCommand;
-    import argparse.internal.commandinfo : getCommandInfo;
+    import argparse.internal.commandinfo : getTopLevelCommandInfo;
     import argparse.internal.help : printHelp;
     import argparse.ansi : cleanStyleEnv, restoreStyleEnv;
 }
@@ -52,7 +52,7 @@ unittest
     }();
 
     T receiver;
-    auto a = createCommand!config(receiver, getCommandInfo!T(config));
+    auto a = createCommand!config(receiver, getTopLevelCommandInfo!T(config));
     assert(a.arguments.requiredGroup.argIndex == [2,4]);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -72,7 +72,7 @@ unittest
     }();
 
     T receiver;
-    auto a = createCommand!config(receiver, getCommandInfo!T(config));
+    auto a = createCommand!config(receiver, getTopLevelCommandInfo!T(config));
     assert(a.arguments.requiredGroup.argIndex == []);
     assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
@@ -86,7 +86,7 @@ unittest
         @(NamedArgument("2"))
         int a;
     }
-    static assert(!__traits(compiles, { T1 t; enum c = createCommand!(Config.init)(t, getCommandInfo!T1(Config.init)); }));
+    static assert(!__traits(compiles, { T1 t; enum c = createCommand!(Config.init)(t, getTopLevelCommandInfo!T1(Config.init)); }));
 
     struct T2
     {
@@ -95,28 +95,28 @@ unittest
         @(NamedArgument("1"))
         int b;
     }
-    static assert(!__traits(compiles, { T2 t; enum c = createCommand!(Config.init)(t, getCommandInfo!T2(Config.init)); }));
+    static assert(!__traits(compiles, { T2 t; enum c = createCommand!(Config.init)(t, getTopLevelCommandInfo!T2(Config.init)); }));
 
     struct T3
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(0)) int b;
     }
-    static assert(!__traits(compiles, { T3 t; enum c = createCommand!(Config.init)(t, getCommandInfo!T3(Config.init)); }));
+    static assert(!__traits(compiles, { T3 t; enum c = createCommand!(Config.init)(t, getTopLevelCommandInfo!T3(Config.init)); }));
 
     struct T4
     {
         @(PositionalArgument(0)) int a;
         @(PositionalArgument(2)) int b;
     }
-    static assert(!__traits(compiles, { T4 t; enum c = createCommand!(Config.init)(t, getCommandInfo!T4(Config.init)); }));
+    static assert(!__traits(compiles, { T4 t; enum c = createCommand!(Config.init)(t, getTopLevelCommandInfo!T4(Config.init)); }));
 
     struct T5
     {
         @(PositionalArgument(0)) int[] a;
         @(PositionalArgument(1)) int b;
     }
-    static assert(!__traits(compiles, { T5 t; enum c = createCommand!(Config.init)(t, getCommandInfo!T5(Config.init)); }));
+    static assert(!__traits(compiles, { T5 t; enum c = createCommand!(Config.init)(t, getTopLevelCommandInfo!T5(Config.init)); }));
 }
 
 unittest
@@ -158,7 +158,7 @@ unittest
     }
 
     params receiver;
-    auto a = createCommand!(Config.init)(receiver, getCommandInfo!params(Config.init));
+    auto a = createCommand!(Config.init)(receiver, getTopLevelCommandInfo!params(Config.init));
 }
 
 unittest
@@ -887,7 +887,7 @@ unittest
     auto a = appender!string;
 
     T receiver;
-    auto cmd = createCommand!(Config.init)(receiver, getCommandInfo!T(Config.init));
+    auto cmd = createCommand!(Config.init)(receiver, getTopLevelCommandInfo!T(Config.init));
 
     auto isEnabled = ansiStylingArgument.isEnabled;
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;
@@ -943,7 +943,7 @@ unittest
     auto a = appender!string;
 
     T receiver;
-    auto cmd = createCommand!(Config.init)(receiver, getCommandInfo!T(Config.init));
+    auto cmd = createCommand!(Config.init)(receiver, getTopLevelCommandInfo!T(Config.init));
 
     auto isEnabled = ansiStylingArgument.isEnabled;
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;
@@ -973,8 +973,8 @@ unittest
     @(Command("MYPROG"))
     struct T
     {
-        @(Command("cmd1").ShortDescription("Perform cmd 1"))
-        struct CMD1
+        @(Command.ShortDescription("Perform cmd 1"))
+        struct cmd1
         {
             string a;
         }
@@ -987,7 +987,7 @@ unittest
         string c;
         string d;
 
-        SubCommand!(CMD1, CMD2) cmd;
+        SubCommand!(cmd1, CMD2) cmd;
     }
 
     import std.array: appender;
@@ -995,7 +995,7 @@ unittest
     auto a = appender!string;
 
     T receiver;
-    auto cmd = createCommand!(Config.init)(receiver, getCommandInfo!T(Config.init));
+    auto cmd = createCommand!(Config.init)(receiver, getTopLevelCommandInfo!T(Config.init));
 
     auto isEnabled = ansiStylingArgument.isEnabled;
     scope(exit) ansiStylingArgument.isEnabled = isEnabled;

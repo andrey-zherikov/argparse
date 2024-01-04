@@ -849,8 +849,8 @@ SubCommand!(sum, min, Default!max) cmd;
 `Command` UDA provides few customizations that affect help text. It can be used for **top-level command** and **subcommands**.
 
 - Program name (i.e., the name of top-level command) and subcommand name can be provided to `Command` UDA as a parameter.
-  If program name is not provided, then `Runtime.args[0]` (a.k.a. `argv[0]` from `main` function) is used. If subcommand name is not provided, then the name of
-  the type that represents the command is used.
+  If program name is not provided, then `Runtime.args[0]` (a.k.a. `argv[0]` from `main` function) is used.
+  If subcommand name is not provided (e.g., `@(Command.Description(...))`), then the name of the type that represents the command is used.
 - `Usage` – allows custom usage text. By default, the parser calculates the usage message from the arguments it contains
   but this can be overridden with `Usage` call. If the custom text contains `%(PROG)` then it will be replaced by the
   command/program name.

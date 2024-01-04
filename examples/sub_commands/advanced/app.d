@@ -22,11 +22,11 @@ auto filter(R)(R numbers, Filter filt)
     return numbers.filter!func;
 }
 
-@(Command("sum")
+@(Command       // use "sum" (type name) as a command name
 .Usage("%(PROG) [<number>...]")
 .Description(() => "Print sum of the numbers")
 )
-struct SumCmd
+struct sum
 {
     @PositionalArgument(0)
     int[] numbers;
@@ -66,7 +66,7 @@ struct Program
 
     // Sub-command
     // name of the command is the same as a name of the type
-    SubCommand!(SumCmd, MinCmd, MaxCmd) cmd;
+    SubCommand!(sum, MinCmd, MaxCmd) cmd;
 }
 
 
@@ -86,7 +86,7 @@ mixin CLI!Program.main!((prog)
             import std.algorithm: minElement;
             return cmd.numbers.filter(prog.filter).minElement(0);
         },
-        (SumCmd cmd)
+        (sum cmd)
         {
             import std.algorithm: sum;
             return cmd.numbers.filter(prog.filter).sum;
