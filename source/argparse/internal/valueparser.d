@@ -244,9 +244,9 @@ if(!is(T == void))
         static if(!isArray!TElement || isSomeString!TElement)  // 1D array
         {
             static if(!isStaticArray!T)
-                alias action = Append!T;
+                alias action = Append;
             else
-                alias action = Assign!T;
+                alias action = Assign;
 
             alias TypedValueParser =
                 TypedValueParser!TElement
@@ -275,7 +275,7 @@ if(!is(T == void))
         {
             alias TypedValueParser =
                 TypedValueParser!TElement
-                .changeAction!(Extend!TElement)
+                .changeAction!Extend
                 .changeNoValueAction!((ref T param) { param ~= TElement.init; });
         }
         else
@@ -865,10 +865,9 @@ unittest
 
         Param!(int[]) param;
 
-        alias F = Append!(int[]);
-        param.value = v1;   ActionFunc!F(res, param);
+        param.value = v1;   ActionFunc!Append(res, param);
 
-        param.value = v2;   ActionFunc!F(res, param);
+        param.value = v2;   ActionFunc!Append(res, param);
 
         return res;
     };
