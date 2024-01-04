@@ -425,6 +425,24 @@ unittest
     assert(test!(string[string])(["a=bar","b=foo"]) == ["a":"bar", "b":"foo"]);
     assert(test!(MyEnum[string])(["a=bar","b=foo"]) == ["a":MyEnum.bar, "b":MyEnum.foo]);
     assert(test!(int[MyEnum])(["bar=3","foo=5"]) == [MyEnum.bar:3, MyEnum.foo:5]);
+    assert(test!(int[][])([]) == [[]]);
+}
+
+unittest
+{
+    alias testErr(T) = (string[] values)
+    {
+        T receiver;
+        Config config;
+        return TypedValueParser!T.parse(receiver, RawParam(&config, "", values));
+    };
+
+    assert(testErr!string([]).isError("Can't process value"));
+    assert(testErr!(int[])(["123","unknown"]).isError());
+    assert(testErr!(bool[])(["True","unknown"]).isError());
+    assert(testErr!(int[int])(["123=1","unknown"]).isError("Invalid value","unknown"));
+    assert(testErr!(int[int])(["123=1","unknown=2"]).isError());
+    assert(testErr!(int[int])(["123=1","2=unknown"]).isError());
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
