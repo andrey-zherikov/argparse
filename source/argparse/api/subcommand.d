@@ -3,6 +3,7 @@ module argparse.api.subcommand;
 
 import std.sumtype: SumType, sumtype_match = match;
 import std.meta;
+import std.typecons: Nullable;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,8 +21,6 @@ private alias RemoveDefaultAttribute(T) = T;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private struct None {}
-
 public struct SubCommand(Commands...)
 if(Commands.length > 0)
 {
@@ -30,27 +29,31 @@ if(Commands.length > 0)
     static assert(DefaultCommands.length <= 1, "Multiple default subcommands: "~DefaultCommands.stringof);
 
     static if(DefaultCommands.length > 0)
+    {
         package(argparse) alias DefaultCommand = RemoveDefaultAttribute!(DefaultCommands[0]);
 
-    package(argparse) alias Types = staticMap!(RemoveDefaultAttribute, Commands);
+        package(argparse) alias Types = AliasSeq!(DefaultCommand, Filter!(templateNot!isDefaultCommand, Commands));
 
-    static if(is(DefaultCommand))
-        private SumType!(None, Types) impl = DefaultCommand.init;
+        private SumType!Types impl = DefaultCommand.init;
+    }
     else
-        private SumType!(None, Types) impl;
+    {
+        package(argparse) alias Types = Commands;
 
+        private Nullable!(SumType!Types) impl;
+    }
 
     public this(T)(T value)
     if(staticIndexOf!(T, Types) >= 0)
     {
-        impl = value;
+        impl = SumType!Types(value);
     }
 
 
     public ref SubCommand opAssign(T)(T value)
     if(staticIndexOf!(T, Types) >= 0)
     {
-        impl = value;
+        impl = SumType!Types(value);
         return this;
     }
 
@@ -58,12 +61,21 @@ if(Commands.length > 0)
     public bool isSetTo(T)() const
     if(staticIndexOf!(T, Types) >= 0)
     {
-        return impl.sumtype_match!((const ref T _) => true, (const ref _) => false);
+        if(!isSet())
+            return false;
+
+        static if(Types.length == 1)
+            return true;
+        else
+            return this.match!((const ref T _) => true, (const ref _) => false);
     }
 
     public bool isSet() const
     {
-        return impl.sumtype_match!((const ref None _) => false, (const ref _) => true);
+        static if(is(DefaultCommand))
+            return true;
+        else
+            return !impl.isNull;
     }
 }
 
@@ -75,14 +87,20 @@ public template match(handlers...)
 {
     auto ref match(Sub : const SubCommand!Args, Args...)(auto ref Sub sc)
     {
-        alias RETURN_TYPE = typeof(SumType!(SubCommand!Args.Types).init.sumtype_match!handlers);
-
-        static if(is(RETURN_TYPE == void))
-            alias NoneHandler = (None _) {};
+        static if(is(Sub.DefaultCommand))
+            return sc.impl.sumtype_match!(handlers);
         else
-            alias NoneHandler = (None _) => RETURN_TYPE.init;
+        {
+            if (!sc.impl.isNull)
+                return sc.impl.get.sumtype_match!(handlers);
+            else
+            {
+                alias RETURN_TYPE = typeof(sc.impl.get.init.sumtype_match!handlers);
 
-        return sc.impl.sumtype_match!(NoneHandler, handlers);
+                static if(!is(RETURN_TYPE == void))
+                    return RETURN_TYPE.init;
+            }
+        }
     }
 }
 
@@ -115,7 +133,7 @@ unittest
     {
         static assert(isSubCommand!SUBCMD);
 
-        static assert(is(SUBCMD.impl.Types == AliasSeq!(None,A,B)));  // underlying types have no `Default`
+        static assert(Filter!(isDefaultCommand, SUBCMD.Types).length == 0);  // underlying types have no `Default`
 
         static if(is(SUBCMD.DefaultCommand))
             static assert(SUBCMD.init.isSet);
