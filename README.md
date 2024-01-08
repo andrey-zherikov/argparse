@@ -1428,11 +1428,11 @@ values from command line.
 `PreValidation` modifier can be used to customize the validation of raw string values. It accepts a function with one of
 the following signatures:
 
-- `bool validate(string value)`
-- `bool validate(string[] value)`
-- `bool validate(RawParam param)`
+- `bool   validate(string value)`
 - `Result validate(string value)`
+- `bool   validate(string[] value)`
 - `Result validate(string[] value)`
+- `bool   validate(RawParam param)`
 - `Result validate(RawParam param)`
 
 Note that the first function will be called once for every value specified in command line for an argument.
@@ -1454,8 +1454,8 @@ the following signatures:
 - `ParseType parse(string value)`
 - `ParseType parse(string[] value)`
 - `ParseType parse(RawParam param)`
-- `bool parse(ref ParseType receiver, RawParam param)`
-- `void parse(ref ParseType receiver, RawParam param)`
+- `bool   parse(ref ParseType receiver, RawParam param)`
+- `void   parse(ref ParseType receiver, RawParam param)`
 - `Result parse(ref ParseType receiver, RawParam param)`
 
 Note that `ParseType` is a type that a string value is supposed to be parsed to and it is not required be the same as
@@ -1476,12 +1476,12 @@ Return value:
 `Validation` modifier can be used to validate parsed value. It accepts a function with one of the following
 signatures:
 
-- `bool validate(string value)`
-- `bool validate(string[] value)`
-- `bool validate(RawParam param)`
-- `Result validate(string value)`
-- `Result validate(string[] value)`
-- `Result validate(RawParam param)`
+- `bool   validate(ParseType value)`
+- `Result validate(ParseType value)`
+- `bool   validate(ParseType[] value)`
+- `Result validate(ParseType[] value)`
+- `bool   validate(Param!ParseType param)`
+- `Result validate(Param!ParseType param)`
 
 Parameters:
 
@@ -1497,11 +1497,11 @@ Return value:
 `Action` modifier allows providing a custom logic of how `receiver` should be changed when argument has a value in
 command line. It accepts a function with one of the following signatures:
 
-- `bool action(ref T receiver, ParseType value)`
-- `void action(ref T receiver, ParseType value)`
+- `bool   action(ref T receiver, ParseType value)`
+- `void   action(ref T receiver, ParseType value)`
 - `Result action(ref T receiver, ParseType value)`
-- `bool action(ref T receiver, Param!ParseType param)`
-- `void action(ref T receiver, Param!ParseType param)`
+- `bool   action(ref T receiver, Param!ParseType param)`
+- `void   action(ref T receiver, Param!ParseType param)`
 - `Result action(ref T receiver, Param!ParseType param)`
 
 Parameters:
