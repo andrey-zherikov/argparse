@@ -526,8 +526,9 @@ private struct Parser
                 else
                 {
                     // Provide suggestions for the last argument only
-
-                    return Result(0, Result.Status.success, "", cmdStack.map!((ref _) => _.suggestions(args[0])).join);
+                    auto res = Result.Success;
+                    res.suggestions = cmdStack.map!((ref _) => _.suggestions(args[0])).join;
+                    return res;
                 }
             }
             else

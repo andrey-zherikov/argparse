@@ -6,7 +6,11 @@ struct Result
     ////////////////////////////////////////////////////////////////
     /// Public API
     ////////////////////////////////////////////////////////////////
-    int  resultCode;
+
+    int exitCode() const
+    {
+        return resultCode;
+    }
 
     bool opCast(T : bool)() const
     {
@@ -30,6 +34,10 @@ struct Result
     ////////////////////////////////////////////////////////////////
     /// Private API
     ////////////////////////////////////////////////////////////////
+
+    private this(int i, Status s, string err = "") { resultCode = i; status = s; errorMsg = err; }
+
+    package int resultCode;
 
     package enum Status { error, success, unknownArgument };
     package Status status;
@@ -60,7 +68,13 @@ struct Result
 
 unittest
 {
+    assert(Result.Success);
+
     assert(!Result.Success.isError);
+    assert(!Result.Error(""));
+    assert(!Result.Error(5, ""));
+    assert(Result.Error("").exitCode == 1);
+    assert(Result.Error(5, "").exitCode == 5);
 
     auto r = Result.Error("some text",",","more text");
     assert(r.isError("some", "more"));
