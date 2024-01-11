@@ -5,22 +5,52 @@ import argparse.result;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package auto Convert(T)(string value)
+package Result Convert(T)(ref T receiver, RawParam param)
 {
-    import std.conv: to;
-    return value.length > 0 ? value.to!T : T.init;
+    try
+    {
+        import std.conv: to;
+
+        foreach (value; param.value)
+           receiver = value.length > 0 ? value.to!T : T.init;
+
+        return Result.Success;
+    }
+    catch(Exception e)
+    {
+        return Result.Error(e.msg);
+    }
 }
 
 unittest
 {
-    assert(Convert!int("7") == 7);
-    assert(Convert!string("7") == "7");
-    assert(Convert!char("7") == '7');
+    alias test(T) = (string value)
+    {
+        T receiver;
+        assert(Convert!T(receiver, RawParam(null, "", [value])));
+        return receiver;
+    };
+
+    assert(test!int("7") == 7);
+    assert(test!string("7") == "7");
+    assert(test!char("7") == '7');
+}
+
+unittest
+{
+    alias testErr(T) = (string value)
+    {
+        T receiver;
+        return Convert!T(receiver, RawParam(null, "", [value]));
+    };
+
+    assert(testErr!int("unknown").isError());
+    assert(testErr!bool("unknown").isError());
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) auto PassThrough(string[] values)
+package(argparse) string[] PassThrough(string[] values)
 {
     return values;
 }
@@ -32,45 +62,61 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package auto Assign(DEST, SRC=DEST)(ref DEST param, SRC value)
+package struct Assign
 {
-    param  = value;
+    static void opCall(T)(ref T param, T[] value)
+    {
+        foreach(ref v; value)
+            param = v;
+    }
+    static void opCall(T)(ref T receiver, T value)
+    {
+        receiver = value;
+    }
 }
 
 unittest
 {
     int i;
-    Assign!(int)(i,7);
+    Assign(i,7);
     assert(i == 7);
+
+    Assign(i,[1,2,3]);
+    assert(i == 3);
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package auto Append(T)(ref T param, T value)
+package struct Append
 {
-    param ~= value;
+    static void opCall(T)(ref T param, T value)
+    {
+        param ~= value;
+    }
 }
-
 
 unittest
 {
     int[] i;
-    Append!(int[])(i, [1, 2, 3]);
-    Append!(int[])(i, [7, 8, 9]);
+    Append(i, [1, 2, 3]);
+    Append(i, [7, 8, 9]);
     assert(i == [1, 2, 3, 7, 8, 9]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package auto Extend(T)(ref T[] param, T value)
+package struct Extend
 {
-    param ~= value;
+    static void opCall(T)(ref T[] param, T value)
+    {
+        param ~= value;
+    }
 }
 
 unittest
 {
     int[][] i;
-    Extend!(int[])(i,[1,2,3]);
-    Extend!(int[])(i,[7,8,9]);
+    Extend(i,[1,2,3]);
+    Extend(i,[7,8,9]);
     assert(i == [[1,2,3],[7,8,9]]);
 }
 
