@@ -167,7 +167,7 @@ package struct HelpArgumentUDA
         auto output = stdout.lockingTextWriter();
         printHelp(_ => output.put(_), config, cmdStack[$-1], args, progName);
 
-        return Result(0);
+        return Result.Error(0, ""); // hack to force-exit (to be removed)
     }
 
     auto parse(Config config, COMMAND_STACK, RECEIVER)(const COMMAND_STACK cmdStack, ref RECEIVER, string argName, string[] rawValues)
