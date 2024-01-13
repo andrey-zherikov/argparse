@@ -122,7 +122,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
 
     assert(args.length > 0);
 
-    auto arg0 = args[0];
+    const arg0 = args[0];
 
     if(arg0.length == 0)
     {
@@ -201,9 +201,12 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
             // cases (from higher to lower priority):
             //  -foo=val    => -foo val             < similar to "--..."
             //  -abc=val    => -a -b -c=val         < only if config.bundling is true
+            //  -abcval     => -a -b -c val         < only if config.bundling is true
             //  -abc        => -abc                 < similar to "--..."
             //              => -a bc
             //              => -a -b -c             < only if config.bundling is true
+
+            // First we will try o match whole argument name, then will try bundling
 
             // Look for assign character
             immutable idxAssignChar = config.assignChar == char.init ? -1 : arg0.indexOf(config.assignChar);
@@ -222,27 +225,6 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                         return Entry(Argument(usedName, res, [value]));
                     }
                 }
-
-                static if(bundling)
-                    if(argName.length > 1)     // Ensure that there is something to split
-                    {
-                        // Try to process "-ABC=<value>" case where "A","B","C" are single-letter arguments
-                        // The above example is equivalent to ["-A","-B","-C=<value>"]
-
-                        // Look for the first argument ("-A" from the example above)
-                        auto res = findNamedArg([argName[0]]);
-                        if(res.arg)
-                        {
-                            // We don't need first argument because we've already got it
-                            auto restArgs = splitSingleLetterNames(usedName, config.assignChar, value)[1..$];
-
-                            // Replace first element with set of single-letter arguments
-                            args = restArgs ~ args[1..$];
-
-                            // Due to bundling argument has no value
-                            return Entry(Argument(usedName[0..2], res, []));
-                        }
-                    }
             }
             else
             {
@@ -259,10 +241,9 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                     }
                 }
 
+                // Try to process "-ABC" case where "A" is a single-letter argument and BC is a value
                 if(argName.length > 1)     // Ensure that there is something to split
                 {
-                    // Try to process "-ABC" case where "A" is a single-letter argument
-
                     // Look for the first argument ("-A" from the example above)
                     auto res = findNamedArg([argName[0]]);
                     if(res.arg)
@@ -274,23 +255,29 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                             args.popFront;
                             return Entry(Argument(arg0[0..2], res, [value]));
                         }
-
-                        static if(bundling)
-                        {
-                            // Process "ABC" as "-A","-B","-C"
-
-                            // We don't need first argument because we've already got it
-                            auto restArgs = splitSingleLetterNames(arg0)[1..$];
-
-                            // Replace first element with set of single-letter arguments
-                            args = restArgs ~ args[1..$];
-
-                            // Due to bundling argument has no value
-                            return Entry(Argument(arg0[0..2], res, []));
-                        }
                     }
                 }
             }
+
+            static if(bundling)
+                if(arg0.length >= 3 && arg0[2] != config.assignChar)  // At least -AB and not -A=...
+                {
+                    // Process "-ABC" as "-A","-BC": extract first letter and leave the rest
+
+                    // Look for the first argument ("-A" from the example above)
+                    auto res = findNamedArg(config.convertCase([arg0[1]]));
+                    if(res.arg)
+                    {
+                        // Drop first letter
+                        auto rest = arg0[0]~arg0[2..$];// splitSingleLetterNames(usedName, config.assignChar, value)[1..$];
+
+                        // Replace first element with the rest
+                        args[0] = rest;
+
+                        // Due to bundling argument has no value
+                        return Entry(Argument(arg0[0..2], res, []));
+                    }
+                }
         }
     }
     else
