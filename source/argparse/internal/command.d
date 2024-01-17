@@ -4,7 +4,7 @@ import argparse.config;
 import argparse.param;
 import argparse.result;
 import argparse.api.argument: TrailingArguments, NamedArgument, NumberOfValues;
-import argparse.api.command: isDefaultCommand, RemoveDefaultAttribute, SubCommandsUDA = SubCommands;
+import argparse.api.subcommand: match, isSubCommand;
 import argparse.internal.arguments: Arguments, ArgumentInfo, finalize;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.argumentudahelpers: getMemberArgumentUDA, isArgumentUDA;
@@ -14,7 +14,6 @@ import argparse.internal.restriction;
 
 import std.typecons: Nullable, nullable;
 import std.traits: getSymbolsByUDA, hasUDA, getUDAs;
-import std.sumtype: match, isSumType;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -207,8 +206,7 @@ package struct Command
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA   ).length == 0 &&
-                                            getSymbolsByUDA!(COMMAND, NamedArgument ).length == 0 &&
-                                            getSymbolsByUDA!(COMMAND, SubCommands).length == 0;
+                                            getSymbolsByUDA!(COMMAND, NamedArgument ).length == 0;
 
 private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
 
@@ -217,15 +215,14 @@ private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(i
 private template iterateArguments(TYPE)
 {
     import std.meta: Filter, anySatisfy;
-    import std.sumtype: isSumType;
 
     template filter(string sym)
     {
         alias mem = __traits(getMember, TYPE, sym);
 
-        enum filter = !is(mem) && (
+        enum filter = !is(mem) && !isSubCommand!(typeof(mem)) && (
             anySatisfy!(isArgumentUDA, __traits(getAttributes, mem)) ||
-            hasNoMembersWithUDA!TYPE && !isOpFunction!mem && !isSumType!(typeof(mem)));
+            hasNoMembersWithUDA!TYPE && !isOpFunction!mem);
     }
 
     alias iterateArguments = Filter!(filter, __traits(allMembers, TYPE));
@@ -236,15 +233,12 @@ private template iterateArguments(TYPE)
 private template subCommandSymbol(TYPE)
 {
     import std.meta: Filter, AliasSeq;
-    import std.sumtype: isSumType;
 
     template filter(string sym)
     {
         alias mem = __traits(getMember, TYPE, sym);
 
-        enum filter = !is(mem) && (
-            hasUDA!(mem, SubCommandsUDA) ||
-            hasNoMembersWithUDA!TYPE && !isOpFunction!mem && isSumType!(typeof(mem)));
+        enum filter = !is(mem) && isSubCommand!(typeof(mem));
     }
 
     alias symbols = Filter!(filter, __traits(allMembers, TYPE));
@@ -294,7 +288,7 @@ private template TypeTraits(Config config, TYPE)
     /////////////////////////////////////////////////////////////////////
     /// Subcommands
 
-    private enum getCommandInfo(CMD) = .getSubCommandInfo!(RemoveDefaultAttribute!CMD)(config);
+    private enum getCommandInfo(CMD) = .getSubCommandInfo!CMD(config);
     private enum getSubcommand(CMD) = SubCommand!CMD(getCommandInfo!CMD);
 
     static if(.subCommandSymbol!TYPE.length == 0)
@@ -302,13 +296,15 @@ private template TypeTraits(Config config, TYPE)
     else
     {
         enum subCommandSymbol = .subCommandSymbol!TYPE;
-        private alias subCommandTypes = AliasSeq!(typeof(__traits(getMember, TYPE, subCommandSymbol)).Types);
+        private alias subCommandMemberType = typeof(__traits(getMember, TYPE, subCommandSymbol));
+        private alias subCommandTypes = subCommandMemberType.Types;
+
+        enum isDefaultSubCommand(T) = is(subCommandMemberType.DefaultCommand == T);
     }
 
     enum subCommands = staticMap!(getSubcommand, subCommandTypes);
     enum subCommandInfos = staticMap!(getCommandInfo, subCommandTypes);
 
-    private alias defaultSubCommands = Filter!(isDefaultCommand, subCommandTypes);
 
     /////////////////////////////////////////////////////////////////////
     /// Static checks whether TYPE does not violate argparse requirements
@@ -338,11 +334,9 @@ private template TypeTraits(Config config, TYPE)
             return true;
         }());
 
-    static if(is(subCommandSymbol))
+    static if(is(subCommandMemberType))
     {
-        static assert(defaultSubCommands.length <= 1, TYPE.stringof~": Multiple default subcommands in "~TYPE.stringof~"."~subCommandSymbol);
-
-        static if(positionalArgInfos.length > 0 && defaultSubCommands.length > 0)
+        static if(positionalArgInfos.length > 0 && is(subCommandMemberType.DefaultCommand))
             static assert(positionalArgInfos[$-1].required, TYPE.stringof~": Optional positional arguments and default subcommand are used together in one command");
     }
 
@@ -393,7 +387,7 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE)(ref COMMAND
             subcmd.info,
         );
 
-        static if(isDefaultCommand!(subcmd.Type))
+        static if(typeTraits.isDefaultSubCommand!(subcmd.Type))
             res.defaultSubCommand = createFunc;
 
         res.subCommandCreate ~= createFunc;
@@ -407,16 +401,16 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE)(ref COMMAND
 private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, TARGET)(ref TARGET target, CommandInfo info)
 {
     alias create = (ref COMMAND_TYPE actualTarget) =>
-        createCommand!(config, RemoveDefaultAttribute!COMMAND_TYPE)(actualTarget, info);
+        createCommand!(config, COMMAND_TYPE)(actualTarget, info);
+
+    // Initialize if needed
+    if(!target.isSetTo!COMMAND_TYPE)
+        target = COMMAND_TYPE.init;
 
     static if(TARGET.Types.length == 1)
         return target.match!create;
     else
     {
-        // Initialize if needed
-        if(target.match!((ref COMMAND_TYPE t) => false, _ => true))
-            target = COMMAND_TYPE.init;
-
         return target.match!(create,
             function Command(_)
             {
@@ -430,7 +424,7 @@ private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, TARGET)(ref TA
 
 private void setTrailingArgs(RECEIVER)(ref RECEIVER receiver, ref string[] rawArgs)
 {
-    alias ORIG_TYPE = RemoveDefaultAttribute!RECEIVER;
+    alias ORIG_TYPE = RECEIVER;
 
     alias symbols = getSymbolsByUDA!(ORIG_TYPE, TrailingArguments);
 

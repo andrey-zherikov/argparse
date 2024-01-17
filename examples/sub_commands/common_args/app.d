@@ -1,6 +1,5 @@
 import argparse;
 import std.stdio: writeln;
-import std.sumtype: SumType, match;
 
 
 struct sum {}
@@ -11,9 +10,8 @@ struct Program
 {
     int[] numbers;  // --numbers argument
 
-    // SumType indicates sub-command
     // name of the command is the same as a name of the type
-    SumType!(sum, min, max) cmd;
+    SubCommand!(sum, min, max) cmd;
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:

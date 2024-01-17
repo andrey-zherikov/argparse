@@ -1,6 +1,5 @@
 import argparse;
 import std.stdio: writeln;
-import std.sumtype: SumType, match;
 
 enum Filter { none, even, odd };
 
@@ -67,8 +66,7 @@ struct Program
 
     // Sub-command
     // name of the command is the same as a name of the type
-    @SubCommands
-    SumType!(sum, MinCmd, MaxCmd) cmd;
+    SubCommand!(sum, MinCmd, MaxCmd) cmd;
 }
 
 

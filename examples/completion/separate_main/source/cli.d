@@ -1,5 +1,7 @@
 module cli;
 
+import argparse: SubCommand;
+
 struct cmd1
 {
     string car;
@@ -10,9 +12,7 @@ struct cmd2 {}
 
 struct Program
 {
-    import std.sumtype: SumType;
-
     string foo, bar, baz;
 
-    SumType!(cmd1, cmd2) cmd;
+    SubCommand!(cmd1, cmd2) cmd;
 }
