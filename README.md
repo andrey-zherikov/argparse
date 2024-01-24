@@ -1600,9 +1600,10 @@ assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T(["1","2","3","4","5"])); })
 
 Default is dash (`-`).
 
-### End of arguments
+### End of named arguments
 
-`Config.endOfArgs` – the string that conventionally marks the end of all arguments.
+`Config.endOfNamedArgs` – the string that conventionally marks the end of all named arguments. All arguments that are specified
+after this one are treated as positional regardless to the value which can start with `namedArgPrefix` (dash `-` by default).
 
 Default is double dash (`--`).
 

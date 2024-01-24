@@ -39,7 +39,7 @@ private string[] consumeValuesFromCLI(Config config, ref string[] args,
     // consume up to maximum number of values
     while(!args.empty &&
         values.length < maxValuesCount &&
-        args.front != config.endOfArgs &&
+        args.front != config.endOfNamedArgs &&
         !isCommand(args.front) &&
         !(args.front.length > 0 && args.front[0] == config.namedArgPrefix))
     {
@@ -130,7 +130,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
     }
 
     // Is it "--"?
-    if(arg0 == config.endOfArgs)
+    if(arg0 == config.endOfNamedArgs)
     {
         scope(success) args = [];            // nothing else left to parse
         return Entry(EndOfArgs(args[1..$])); // skip "--"

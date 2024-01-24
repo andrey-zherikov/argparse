@@ -29,11 +29,11 @@ struct Config
     char namedArgPrefix = '-';
 
     /**
-       The string that conventionally marks the end of all options.
-       Assigning an empty string to `endOfArgs` effectively disables it.
+       The string that conventionally marks the end of all named arguments.
+       Assigning an empty string effectively disables it.
        Defaults to "--".
      */
-    string endOfArgs = "--";
+    string endOfNamedArgs = "--";
 
     /**
        If set then argument names are case-sensitive.
