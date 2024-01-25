@@ -12,9 +12,9 @@ import argparse.internal.commandinfo: getTopLevelCommandInfo;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private string[] consumeValuesFromCLI(Config config, ref string[] args,
+private string[] consumeValuesFromCLI(ref string[] args,
                                       ulong minValuesCount, ulong maxValuesCount,
-                                      bool delegate(string) isCommand)
+                                      bool delegate(string) isArgumentValue)
 {
     import std.range: empty, front, popFront;
 
@@ -37,11 +37,7 @@ private string[] consumeValuesFromCLI(Config config, ref string[] args,
     }
 
     // consume up to maximum number of values
-    while(!args.empty &&
-        values.length < maxValuesCount &&
-        args.front != config.endOfNamedArgs &&
-        !isCommand(args.front) &&
-        !(args.front.length > 0 && args.front[0] == config.namedArgPrefix))
+    while(!args.empty && values.length < maxValuesCount && isArgumentValue(args.front))
     {
         values ~= args.front;
         args.popFront();
@@ -136,6 +132,14 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         return Entry(EndOfArgs(args[1..$])); // skip "--"
     }
 
+    auto isArgumentValue = (string str)
+    {
+        return str.length == 0 ||                   // empty string is a value
+               str != config.endOfNamedArgs &&      // `--` is not a value
+               str[0] != config.namedArgPrefix &&   // `-...` is not a value
+               findCommand(str) is null;            // command is not a value
+    };
+
     // Is it named argument (starting with '-' and longer than 1 character)?
     if(arg0[0] == config.namedArgPrefix && arg0.length > 1)
     {
@@ -176,7 +180,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                     if (res.arg)
                     {
                         args.popFront;
-                        auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+                        auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
                         return Entry(Argument(arg0, res, values));
                     }
                 }
@@ -235,7 +239,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                     if (res.arg)
                     {
                         args.popFront;
-                        auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+                        auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
                         return Entry(Argument(arg0, res, values));
                     }
                 }
@@ -285,7 +289,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         auto res = findPositionalArg(true);
         if(res.arg && res.arg.info.required)
         {
-            auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+            auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
             return Entry(Argument(res.arg.info.placeholder, res, values));
         }
 
@@ -300,7 +304,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         // Check for optional positional argument in the current command
         if(res.arg)
         {
-            auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+            auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
             return Entry(Argument(res.arg.info.placeholder, res, values));
         }
 
@@ -308,7 +312,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         res = findPositionalArg(false);
         if(res.arg)
         {
-            auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+            auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
             return Entry(Argument(res.arg.info.placeholder, res, values));
         }
     }
