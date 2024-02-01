@@ -84,9 +84,6 @@ unittest
 struct Unknown {
     string value;
 }
-struct EndOfArgs {
-    string[] args;
-}
 struct Argument {
     size_t index;
     const(ArgumentInfo)* info;
@@ -106,7 +103,7 @@ struct SubCommand {
     Command delegate() cmdInit;
 }
 
-alias Entry = SumType!(Unknown, EndOfArgs, Argument, SubCommand);
+alias Entry = SumType!(Unknown, Argument, SubCommand);
 
 private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                                           FindResult delegate(bool) findPositionalArg,
@@ -123,13 +120,6 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
     {
         args.popFront;
         return Entry(Unknown(arg0));
-    }
-
-    // Is it "--"?
-    if(arg0 == config.endOfNamedArgs)
-    {
-        scope(success) args = [];            // nothing else left to parse
-        return Entry(EndOfArgs(args[1..$])); // skip "--"
     }
 
     auto isArgumentValue = (string str)
@@ -321,12 +311,38 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
     return Entry(Unknown(arg0));
 }
 
+private Entry getNextPositionalArgument(ref string[] args,
+                                        FindResult delegate(bool) findPositionalArg)
+{
+    import std.range : popFront;
+
+    assert(args.length > 0);
+
+    const arg0 = args[0];
+
+    // Check for positional argument in the current command
+    auto res = findPositionalArg(true);
+    if(!res.arg)
+    {
+        // Check for positional argument in sub commands
+        res = findPositionalArg(false);
+    }
+
+    if(res.arg)
+    {
+        auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, _ => true);
+        return Entry(Argument(res.arg.info.placeholder, res, values));
+    }
+
+    args.popFront;
+    return Entry(Unknown(arg0));
+}
+
 unittest
 {
     auto test(string[] args) { return getNextEntry!false(Config.init, args, null, null, null); }
 
     assert(test([""]) == Entry(Unknown("")));
-    assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -469,10 +485,6 @@ private struct Parser
 
         return Result.Success;
     }
-    auto parse(EndOfArgs)
-    {
-        return Result.Success;
-    }
     auto parse(SubCommand subcmd)
     {
         addCommand(subcmd.cmdInit());
@@ -507,18 +519,30 @@ private struct Parser
         import std.sumtype : match;
         import std.algorithm : map;
 
+        bool forcePositionalOnly = false;
+
         while(!args.empty)
         {
+            // Is it "--"?
+            if(args[0] == config.endOfNamedArgs)
+            {
+                args = args[1..$];
+                forcePositionalOnly = true;
+                continue;// to check for args.empty
+            }
+
             static if(completionMode)
             {
                 if(args.length > 1)
                 {
-                    auto res = getNextEntry!bundling(
+                    auto res = (forcePositionalOnly ?
+                        getNextPositionalArgument(args, &findPositionalArgument) :
+                        getNextEntry!bundling(
                             config, args,
                             &findPositionalArgument,
                             &findNamedArgument,
                             &findCommand,
-                        )
+                        ))
                         .match!(
                             (Argument a) => parse(a, Result.Success),
                             _ => parse(_));
@@ -535,23 +559,16 @@ private struct Parser
             }
             else
             {
-                auto res = getNextEntry!bundling(
+                auto res = (forcePositionalOnly ?
+                    getNextPositionalArgument(args, &findPositionalArgument) :
+                    getNextEntry!bundling(
                         config, args,
                         &findPositionalArgument,
                         &findNamedArgument,
                         &findCommand,
-                    )
+                    ))
                     .match!(
                         (Argument a) => parse(a, a.parse()),
-                        (EndOfArgs e)
-                        {
-                            import std.range: back;
-
-                            cmdStack.back.setTrailingArgs(e.args);
-                            unrecognizedArgs ~= e.args;
-
-                            return parse(e);
-                        },
                         _ => parse(_)
                     );
                 if (!res)
