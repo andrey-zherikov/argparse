@@ -457,9 +457,8 @@ private struct Parser
 
     ///////////////////////////////////////////////////////////////////////
 
-    auto parse(Argument a, Result delegate() parseFunc)
+    auto parse(Argument a, Result res)
     {
-        auto res = parseFunc();
         if(!res)
             return res;
 
@@ -489,6 +488,19 @@ private struct Parser
 
     ///////////////////////////////////////////////////////////////////////
 
+    FindResult findPositionalArgument(bool currentStackOnly)
+    {
+        return findArgument(cmdStack, idxPositionalStack, idxNextPositional, currentStackOnly);
+    }
+    FindResult findNamedArgument(string name)
+    {
+        return findArgument(cmdStack, name);
+    }
+    Command delegate() findCommand(string name)
+    {
+        return .findCommand(cmdStack, name);
+    }
+
     auto parseAll(bool completionMode, bool bundling)(string[] args)
     {
         import std.range: empty, join;
@@ -503,12 +515,12 @@ private struct Parser
                 {
                     auto res = getNextEntry!bundling(
                             config, args,
-                            _ => findArgument(cmdStack, idxPositionalStack, idxNextPositional, _),
-                            _ => findArgument(cmdStack, _),
-                            _ => findCommand(cmdStack, _),
+                            &findPositionalArgument,
+                            &findNamedArgument,
+                            &findCommand,
                         )
                         .match!(
-                            (Argument a) => parse(a, a.complete),
+                            (Argument a) => parse(a, Result.Success),
                             _ => parse(_));
                     if (!res)
                         return res;
@@ -525,12 +537,12 @@ private struct Parser
             {
                 auto res = getNextEntry!bundling(
                         config, args,
-                        _ => findArgument(cmdStack, idxPositionalStack, idxNextPositional, _),
-                        _ => findArgument(cmdStack, _),
-                        _ => findCommand(cmdStack, _),
+                        &findPositionalArgument,
+                        &findNamedArgument,
+                        &findCommand,
                     )
                     .match!(
-                        (Argument a) => parse(a, a.parse),
+                        (Argument a) => parse(a, a.parse()),
                         (EndOfArgs e)
                         {
                             import std.range: back;
