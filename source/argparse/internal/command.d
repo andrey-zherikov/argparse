@@ -3,7 +3,7 @@ module argparse.internal.command;
 import argparse.config;
 import argparse.param;
 import argparse.result;
-import argparse.api.argument: TrailingArguments, NamedArgument, NumberOfValues;
+import argparse.api.argument: NamedArgument, NumberOfValues;
 import argparse.api.subcommand: match, isSubCommand;
 import argparse.internal.arguments: Arguments, ArgumentInfo, finalize;
 import argparse.internal.argumentuda: ArgumentUDA;
@@ -155,9 +155,6 @@ package struct Command
 
         return Argument(res.index, res.arg, parseFuncs[res.index], completeFuncs[res.index]);
     }
-
-
-    void delegate(ref string[] args) setTrailingArgs;
 
 
 
@@ -373,11 +370,6 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE)(ref COMMAND
 
     res.completeFuncs = [staticMap!(getArgumentCompleteFunction, typeTraits.argumentUDAs)];
 
-    res.setTrailingArgs = (ref string[] args)
-    {
-        .setTrailingArgs(receiver, args);
-    };
-
     res.subCommands.add([typeTraits.subCommandInfos]);
 
     static foreach(subcmd; typeTraits.subCommands)
@@ -417,29 +409,6 @@ private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, TARGET)(ref TA
                 assert(false, "This should never happen");
             }
         );
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private void setTrailingArgs(RECEIVER)(ref RECEIVER receiver, ref string[] rawArgs)
-{
-    alias ORIG_TYPE = RECEIVER;
-
-    alias symbols = getSymbolsByUDA!(ORIG_TYPE, TrailingArguments);
-
-    static assert(symbols.length <= 1, "Type "~ORIG_TYPE.stringof~" must have at most one 'TrailingArguments' UDA");
-    static if(symbols.length == 1)
-    {
-        enum symbol = __traits(identifier, symbols[0]);
-        auto target = &__traits(getMember, receiver, symbol);
-
-        static if(__traits(compiles, { *target = rawArgs; }))
-            *target = rawArgs;
-        else
-            static assert(false, "Type '"~typeof(*target).stringof~"' of `"~ORIG_TYPE.stringof~"."~symbol~"` is not supported for 'TrailingArguments' UDA");
-
-        rawArgs = [];
     }
 }
 

@@ -12,9 +12,9 @@ import argparse.internal.commandinfo: getTopLevelCommandInfo;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private string[] consumeValuesFromCLI(Config config, ref string[] args,
+private string[] consumeValuesFromCLI(ref string[] args,
                                       ulong minValuesCount, ulong maxValuesCount,
-                                      bool delegate(string) isCommand)
+                                      bool delegate(string) isArgumentValue)
 {
     import std.range: empty, front, popFront;
 
@@ -37,11 +37,7 @@ private string[] consumeValuesFromCLI(Config config, ref string[] args,
     }
 
     // consume up to maximum number of values
-    while(!args.empty &&
-        values.length < maxValuesCount &&
-        args.front != config.endOfArgs &&
-        !isCommand(args.front) &&
-        !(args.front.length > 0 && args.front[0] == config.namedArgPrefix))
+    while(!args.empty && values.length < maxValuesCount && isArgumentValue(args.front))
     {
         values ~= args.front;
         args.popFront();
@@ -88,9 +84,6 @@ unittest
 struct Unknown {
     string value;
 }
-struct EndOfArgs {
-    string[] args;
-}
 struct Argument {
     size_t index;
     const(ArgumentInfo)* info;
@@ -110,7 +103,7 @@ struct SubCommand {
     Command delegate() cmdInit;
 }
 
-alias Entry = SumType!(Unknown, EndOfArgs, Argument, SubCommand);
+alias Entry = SumType!(Unknown, Argument, SubCommand);
 
 private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                                           FindResult delegate(bool) findPositionalArg,
@@ -129,12 +122,13 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         return Entry(Unknown(arg0));
     }
 
-    // Is it "--"?
-    if(arg0 == config.endOfArgs)
+    auto isArgumentValue = (string str)
     {
-        scope(success) args = [];            // nothing else left to parse
-        return Entry(EndOfArgs(args[1..$])); // skip "--"
-    }
+        return str.length == 0 ||                   // empty string is a value
+               str != config.endOfNamedArgs &&      // `--` is not a value
+               str[0] != config.namedArgPrefix &&   // `-...` is not a value
+               findCommand(str) is null;            // command is not a value
+    };
 
     // Is it named argument (starting with '-' and longer than 1 character)?
     if(arg0[0] == config.namedArgPrefix && arg0.length > 1)
@@ -176,7 +170,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                     if (res.arg)
                     {
                         args.popFront;
-                        auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+                        auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
                         return Entry(Argument(arg0, res, values));
                     }
                 }
@@ -235,7 +229,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                     if (res.arg)
                     {
                         args.popFront;
-                        auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+                        auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
                         return Entry(Argument(arg0, res, values));
                     }
                 }
@@ -285,7 +279,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         auto res = findPositionalArg(true);
         if(res.arg && res.arg.info.required)
         {
-            auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+            auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
             return Entry(Argument(res.arg.info.placeholder, res, values));
         }
 
@@ -300,7 +294,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         // Check for optional positional argument in the current command
         if(res.arg)
         {
-            auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+            auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
             return Entry(Argument(res.arg.info.placeholder, res, values));
         }
 
@@ -308,9 +302,36 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         res = findPositionalArg(false);
         if(res.arg)
         {
-            auto values = consumeValuesFromCLI(config, args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, n => (findCommand(n) !is null));
+            auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
             return Entry(Argument(res.arg.info.placeholder, res, values));
         }
+    }
+
+    args.popFront;
+    return Entry(Unknown(arg0));
+}
+
+private Entry getNextPositionalArgument(ref string[] args,
+                                        FindResult delegate(bool) findPositionalArg)
+{
+    import std.range : popFront;
+
+    assert(args.length > 0);
+
+    const arg0 = args[0];
+
+    // Check for positional argument in the current command
+    auto res = findPositionalArg(true);
+    if(!res.arg)
+    {
+        // Check for positional argument in sub commands
+        res = findPositionalArg(false);
+    }
+
+    if(res.arg)
+    {
+        auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, _ => true);
+        return Entry(Argument(res.arg.info.placeholder, res, values));
     }
 
     args.popFront;
@@ -322,7 +343,6 @@ unittest
     auto test(string[] args) { return getNextEntry!false(Config.init, args, null, null, null); }
 
     assert(test([""]) == Entry(Unknown("")));
-    assert(test(["--","a","-b","c"]) == Entry(EndOfArgs(["a","-b","c"])));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -453,9 +473,8 @@ private struct Parser
 
     ///////////////////////////////////////////////////////////////////////
 
-    auto parse(Argument a, Result delegate() parseFunc)
+    auto parse(Argument a, Result res)
     {
-        auto res = parseFunc();
         if(!res)
             return res;
 
@@ -464,10 +483,6 @@ private struct Parser
         if(a.info.positional)
             idxNextPositional++;
 
-        return Result.Success;
-    }
-    auto parse(EndOfArgs)
-    {
         return Result.Success;
     }
     auto parse(SubCommand subcmd)
@@ -485,26 +500,51 @@ private struct Parser
 
     ///////////////////////////////////////////////////////////////////////
 
+    FindResult findPositionalArgument(bool currentStackOnly)
+    {
+        return findArgument(cmdStack, idxPositionalStack, idxNextPositional, currentStackOnly);
+    }
+    FindResult findNamedArgument(string name)
+    {
+        return findArgument(cmdStack, name);
+    }
+    Command delegate() findCommand(string name)
+    {
+        return .findCommand(cmdStack, name);
+    }
+
     auto parseAll(bool completionMode, bool bundling)(string[] args)
     {
         import std.range: empty, join;
         import std.sumtype : match;
         import std.algorithm : map;
 
+        bool forcePositionalOnly = false;
+
         while(!args.empty)
         {
+            // Is it "--"?
+            if(args[0] == config.endOfNamedArgs)
+            {
+                args = args[1..$];
+                forcePositionalOnly = true;
+                continue;// to check for args.empty
+            }
+
             static if(completionMode)
             {
                 if(args.length > 1)
                 {
-                    auto res = getNextEntry!bundling(
+                    auto res = (forcePositionalOnly ?
+                        getNextPositionalArgument(args, &findPositionalArgument) :
+                        getNextEntry!bundling(
                             config, args,
-                            _ => findArgument(cmdStack, idxPositionalStack, idxNextPositional, _),
-                            _ => findArgument(cmdStack, _),
-                            _ => findCommand(cmdStack, _),
-                        )
+                            &findPositionalArgument,
+                            &findNamedArgument,
+                            &findCommand,
+                        ))
                         .match!(
-                            (Argument a) => parse(a, a.complete),
+                            (Argument a) => parse(a, Result.Success),
                             _ => parse(_));
                     if (!res)
                         return res;
@@ -519,23 +559,16 @@ private struct Parser
             }
             else
             {
-                auto res = getNextEntry!bundling(
+                auto res = (forcePositionalOnly ?
+                    getNextPositionalArgument(args, &findPositionalArgument) :
+                    getNextEntry!bundling(
                         config, args,
-                        _ => findArgument(cmdStack, idxPositionalStack, idxNextPositional, _),
-                        _ => findArgument(cmdStack, _),
-                        _ => findCommand(cmdStack, _),
-                    )
+                        &findPositionalArgument,
+                        &findNamedArgument,
+                        &findCommand,
+                    ))
                     .match!(
-                        (Argument a) => parse(a, a.parse),
-                        (EndOfArgs e)
-                        {
-                            import std.range: back;
-
-                            cmdStack.back.setTrailingArgs(e.args);
-                            unrecognizedArgs ~= e.args;
-
-                            return parse(e);
-                        },
+                        (Argument a) => parse(a, a.parse()),
                         _ => parse(_)
                     );
                 if (!res)
@@ -799,6 +832,20 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO"));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","--","FAA"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["FAA"]);
+        assert(c == cmd("FOO"));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FAA","BOO"]);
         assert(c == cmd("FOO"));
@@ -813,6 +860,13 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","c1","FOO"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["FOO"]);
+        assert(c == cmd("c1"));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
@@ -821,6 +875,13 @@ unittest
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
@@ -869,6 +930,27 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO"));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","--","FAA"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO","FAA","BOO"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("c1", typeof(c.c)(c1("FOO"))));
@@ -886,6 +968,20 @@ unittest
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO","c1","FAA"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO", typeof(c.c)(c1("c1","FAA"))));
     }
 }
 

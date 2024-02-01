@@ -541,27 +541,6 @@ The following usages of the argument in the command line are equivalent:
 `--name John`, `--name=John`, `--n John`, `--n=John`, `-nJohn`, `-n John`, `-n=John`. Note that any other character can
 be used instead of `=` – see [Parser customization](#parser-customization) for details.
 
-### Trailing arguments
-
-A lone double dash terminates argument parsing by default. It is used to separate program arguments from other
-parameters (e.g., arguments to be passed to another program). To store trailing arguments, simply add a data member of
-type `string[]` with `TrailingArguments` UDA:
-
-```d
-struct T
-{
-    string a;
-    string b;
-
-    @TrailingArguments string[] args;
-}
-
-assert(CLI!T.parseArgs!((T t) { assert(t == T("A","",["-b","B"])); })(["-a","A","--","-b","B"]) == 0);
-```
-
-Note that any other character sequence can be used instead of `--` – see [Parser customization](#parser-customization)
-for details.
-
 ### Optional and required arguments
 
 Arguments can be marked as required or optional by adding `.Required()` or `.Optional()` to UDA. If required argument is
@@ -901,8 +880,6 @@ struct T
 
   @(PositionalArgument(0).Description(() => "This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string param0;
   @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
-
-  @TrailingArguments string[] args;
 }
 
 CLI!T.parseArgs!((T t) {})(["-h"]);
@@ -1600,9 +1577,10 @@ assert(CLI!(cfg, T).parseArgs!((T t) { assert(t == T(["1","2","3","4","5"])); })
 
 Default is dash (`-`).
 
-### End of arguments
+### End of named arguments
 
-`Config.endOfArgs` – the string that conventionally marks the end of all arguments.
+`Config.endOfNamedArgs` – the string that conventionally marks the end of all named arguments. All arguments that are specified
+after this one are treated as positional regardless to the value which can start with `namedArgPrefix` (dash `-` by default).
 
 Default is double dash (`--`).
 

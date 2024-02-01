@@ -366,9 +366,10 @@ unittest
         struct cmd1 { string a; }
         struct cmd2
         {
+            @NamedArgument
             string b;
 
-            @TrailingArguments
+            @PositionalArgument(0)
             string[] args;
         }
 
@@ -567,10 +568,13 @@ unittest
 {
     struct T
     {
+        @NamedArgument
         string a;
+        @NamedArgument
         string b;
 
-        @TrailingArguments string[] args;
+        @PositionalArgument(0)
+        string[] args;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T("A","",["-b","B"])); return 12345; })(["-a","A","--","-b","B"]) == 12345);
@@ -883,8 +887,6 @@ unittest
 
         @(PositionalArgument(0, "param0").Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string _param0;
         @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
-
-        @TrailingArguments string[] args;
     }
 
     import std.array: appender;
