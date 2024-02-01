@@ -832,6 +832,20 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO"));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","--","FAA"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["FAA"]);
+        assert(c == cmd("FOO"));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FAA","BOO"]);
         assert(c == cmd("FOO"));
@@ -846,6 +860,13 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","c1","FOO"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["FOO"]);
+        assert(c == cmd("c1"));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
@@ -854,6 +875,13 @@ unittest
         cmd c;
         string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
@@ -902,6 +930,27 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO"));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","--","FAA"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO","FAA","BOO"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("c1", typeof(c.c)(c1("FOO"))));
@@ -919,6 +968,20 @@ unittest
         assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO","c1","FAA"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd("FOO", typeof(c.c)(c1("c1","FAA"))));
     }
 }
 
