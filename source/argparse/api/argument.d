@@ -19,7 +19,7 @@ auto ref Description(T)(auto ref ArgumentUDA!T uda, string text)
     return uda;
 }
 
-auto ref Description(T)(auto ref ArgumentUDA!T uda, string delegate() text)
+auto ref Description(T)(auto ref ArgumentUDA!T uda, string function() text)
 {
     uda.info.description = text;
     return uda;

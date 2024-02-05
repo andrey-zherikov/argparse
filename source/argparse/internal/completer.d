@@ -120,12 +120,6 @@ private struct CompleteCmd
     }
 }
 
-// DMD 2.100.2 fails with 'Illegal instruction' if delegate is put directly into NamedArgument.Description
-private alias Complete_Init_CommandName_Description(COMMAND) = delegate ()
-{
-    return "Command name. Default value: "~defaultCommandName!COMMAND~".";
-};
-
 package(argparse) struct Complete(COMMAND)
 {
     @(Command("init")
@@ -149,8 +143,7 @@ package(argparse) struct Complete(COMMAND)
         @(NamedArgument.Description("Path to completer. Default value: path to this executable."))
         string completerPath; // path to this binary
 
-        // DMD 2.100.2 fails with 'Illegal instruction' if delegate is put directly here
-        @(NamedArgument.Description(Complete_Init_CommandName_Description!COMMAND))
+        @(NamedArgument.Description("Command name. Default value: "~defaultCommandName!COMMAND~"."))
         string commandName;   // command to complete
 
         void execute(Config config, COMMAND)()

@@ -586,10 +586,8 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
 
     alias getItem = (ref _)
     {
-        return Item(_.displayNames.map!(_ => style.subcommandName(_)).join(","), LazyString(() {
-            auto shortDescription = _.shortDescription.get;
-            return shortDescription.length > 0 ? shortDescription : _.description.get;
-        }));
+        return Item(_.displayNames.map!(_ => style.subcommandName(_)).join(","),
+                    _.shortDescription.isSet ? _.shortDescription : _.description);
     };
 
     auto section = Section(style.argumentGroupTitle("Available commands"));

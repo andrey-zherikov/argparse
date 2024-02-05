@@ -839,7 +839,7 @@ SubCommand!(sum, min, Default!max) cmd;
   only and is displayed in *Available commands* section on help screen of the parent command.
 - `Epilog` – custom text that is printed after the list of the arguments.
 
-`Usage`, `Description`, `ShortDescription` and `Epilog` modifiers take either `string` or `string delegate()`
+`Usage`, `Description`, `ShortDescription` and `Epilog` modifiers take either `string` or `string function()`
 value – the latter can be used to return a value that is not known at compile time.
 
 ### Argument
@@ -847,7 +847,7 @@ value – the latter can be used to return a value that is not known at compile 
 There are some customizations supported on argument level for both `PositionalArgument` and `NamedArgument` UDAs:
 
 - `Description` – provides brief description of the argument. This text is printed next to the argument
-  in the argument-list section of a help message. `Description` takes either `string` or `string delegate()`
+  in the argument-list section of a help message. `Description` takes either `string` or `string function()`
   value – the latter can be used to return a value that is not known at compile time.
 - `HideFromHelp` – can be used to indicate that the argument shouldn’t be printed in help message.
 - `Placeholder` – provides custom text that is used to indicate the value of the argument in help message.
@@ -920,7 +920,7 @@ created using `ArgumentGroup` UDA.
 This UDA has some customization for displaying text:
 
 - `Description` – provides brief description of the group. This text is printed right after group name.
-  It takes either `string` or `string delegate()` value – the latter can be used to return a value that is not known
+  It takes either `string` or `string function()` value – the latter can be used to return a value that is not known
   at compile time.
 
 Example:
