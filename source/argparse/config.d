@@ -55,10 +55,10 @@ struct Config
     bool bundling = false;
 
     /**
-       Add a -h/--help option to the parser.
+       Add a -h/--help argument to the parser.
        Defaults to true.
      */
-    bool addHelp = true;
+    bool addHelpArgument = true;
 
     /**
        Styling.

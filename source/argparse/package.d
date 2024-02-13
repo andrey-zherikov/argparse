@@ -47,7 +47,7 @@ unittest
 
     enum config = {
         Config config;
-        config.addHelp = false;
+        config.addHelpArgument = false;
         return config;
     }();
 
@@ -67,7 +67,7 @@ unittest
 
     enum config = {
         Config config;
-        config.addHelp = false;
+        config.addHelpArgument = false;
         return config;
     }();
 
