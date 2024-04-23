@@ -4,19 +4,19 @@ import std.sumtype: SumType, match;
 
 package(argparse) struct LazyString
 {
-    SumType!(string, string delegate()) value;
+    SumType!(string, string function()) value;
 
     this(string s) { value = s; }
-    this(string delegate() dg) { value = dg; }
+    this(string function() fn) { value = fn; }
 
     void opAssign(string s) { value = s; }
-    void opAssign(string delegate() dg) { value = dg; }
+    void opAssign(string function() fn) { value = fn; }
 
     @property string get() const
     {
         return value.match!(
                 (string _) => _,
-                (dg) => dg()
+                (string function() fn) => fn()
         );
     }
 
@@ -24,7 +24,7 @@ package(argparse) struct LazyString
     {
         return value.match!(
                 (string s) => s.length > 0,
-                (dg) => dg != null
+                (string function() fn) => fn != null
         );
     }
 }

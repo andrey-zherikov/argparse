@@ -20,7 +20,7 @@ auto ref Description()(auto ref Group group, string text)
     return group;
 }
 
-auto ref Description()(auto ref Group group, string delegate() text)
+auto ref Description()(auto ref Group group, string function() text)
 {
     group.description = text;
     return group;

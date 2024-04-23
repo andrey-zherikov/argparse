@@ -24,7 +24,7 @@ auto ref Usage()(auto ref CommandInfo cmd, string text)
     return cmd;
 }
 
-auto ref Usage()(auto ref CommandInfo cmd, string delegate() text)
+auto ref Usage()(auto ref CommandInfo cmd, string function() text)
 {
     cmd.usage = text;
     return cmd;
@@ -36,7 +36,7 @@ auto ref Description()(auto ref CommandInfo cmd, string text)
     return cmd;
 }
 
-auto ref Description()(auto ref CommandInfo cmd, string delegate() text)
+auto ref Description()(auto ref CommandInfo cmd, string function() text)
 {
     cmd.description = text;
     return cmd;
@@ -48,7 +48,7 @@ auto ref ShortDescription()(auto ref CommandInfo cmd, string text)
     return cmd;
 }
 
-auto ref ShortDescription()(auto ref CommandInfo cmd, string delegate() text)
+auto ref ShortDescription()(auto ref CommandInfo cmd, string function() text)
 {
     cmd.shortDescription = text;
     return cmd;
@@ -60,7 +60,7 @@ auto ref Epilog()(auto ref CommandInfo cmd, string text)
     return cmd;
 }
 
-auto ref Epilog()(auto ref CommandInfo cmd, string delegate() text)
+auto ref Epilog()(auto ref CommandInfo cmd, string function() text)
 {
     cmd.epilog = text;
     return cmd;
