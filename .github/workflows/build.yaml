@@ -15,9 +15,10 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        dc: [dmd-2.099.1, dmd-latest, ldc-latest]
+        dc: [dmd-2.099, dmd, ldc]
         include:
-          - { os: macOS-latest, dc: ldc-latest }
+          - { os: macOS-latest,  dc: ldc    }
+          - { os: ubuntu-latest, dc: gdc-12 }
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -27,6 +28,7 @@ jobs:
         uses: dlang-community/setup-dlang@v2
         with:
           compiler: ${{ matrix.dc }}
+          dub: latest  # need for gdc
 
       - name: Run tests
         run: dub test --build=unittest-cov --verbose
