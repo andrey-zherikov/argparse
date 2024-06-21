@@ -1,6 +1,6 @@
 {
 	"license": "BSL-1.0",
-	"name": "getting_started-advanced",
+	"name": "getting_started-without_uda",
 	"targetType":"executable",
 	"sourcePaths":["."],
 	"dependencies":{ "all:argparse":"*" }

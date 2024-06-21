@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rules SYSTEM "https://resources.jetbrains.com/writerside/1.0/redirection-rules.dtd">
+<rules>
+    <!-- format is as follows
+    <rule id="<unique id>">
+        <accepts>page.html</accepts>
+    </rule>
+    -->
+    <rule id="78220e94">
+        <description>Created after removal of "Param and RawParam" from argparse documentation</description>
+        <accepts>Param-and-RawParam.html</accepts>
+    </rule>
+    <rule id="3cee5ffb">
+        <description>Created after removal of "ANSI styling" from argparse documentation</description>
+        <accepts>ANSI-styling.html</accepts>
+    </rule>
+    <rule id="131ccee3">
+        <description>Created after removal of "ANSI colors and styles" from argparse documentation</description>
+        <accepts>ANSI-colors-and-styles.html</accepts>
+    </rule>
+    <rule id="792b3ad1">
+        <description>Created after removal of "Without User-Defined Attributes" from argparse documentation
+        </description>
+        <accepts>Without-User-Defined-Attributes.html</accepts>
+    </rule>
+    <rule id="1eff9aec">
+        <description>Created after removal of "With User-Defined Attributes" from argparse documentation</description>
+        <accepts>With-User-Defined-Attributes.html</accepts>
+    </rule>
+    <rule id="4103045">
+        <description>Created after removal of "About argparse documentation" from argparse documentation</description>
+        <accepts>starter-topic.html</accepts>
+    </rule>
+    <rule id="37780bc8">
+        <description>Created after removal of "Default" from argparse documentation</description>
+        <accepts>Default.html</accepts>
+    </rule>
+</rules>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE instance-profile
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/product-profile.dtd">
+
+<instance-profile id="ad"
+                 name="argparse documentation"
+                 start-page="Introduction.md">
+
+    <toc-element topic="Introduction.md"/>
+    <toc-element topic="Getting-started.md"/>
+    <toc-element topic="Arguments.md">
+        <toc-element topic="Positional-arguments.md"/>
+        <toc-element topic="Named-arguments.md">
+            <toc-element topic="Arguments-bundling.md"/>
+            <toc-element topic="End-of-named-arguments.md"/>
+        </toc-element>
+        <toc-element topic="Supported-types.md"/>
+        <toc-element topic="Arity.md"/>
+        <toc-element topic="Optional-and-required-arguments.md"/>
+        <toc-element topic="Restrict-allowed-values.md"/>
+        <toc-element topic="Parsing-customization.md"/>
+    </toc-element>
+    <toc-element topic="Argument-dependencies.md"/>
+    <toc-element topic="Calling-the-parser.md"/>
+    <toc-element topic="ANSI-coloring-and-styling.md"/>
+    <toc-element topic="Subcommands.md"/>
+    <toc-element topic="Help-generation.md"/>
+    <toc-element topic="Shell-completion.md"/>
+    <toc-element toc-title="Reference">
+        <toc-element topic="CLI-API.md"/>
+        <toc-element topic="Config.md"/>
+        <toc-element topic="Param-RawParam.md"/>
+        <toc-element topic="Result.md"/>
+        <toc-element toc-title="UDAs">
+            <toc-element topic="ArgumentGroup.md"/>
+            <toc-element topic="ArgumentValue.md"/>
+            <toc-element topic="Command.md"/>
+            <toc-element topic="MutuallyExclusive.md"/>
+            <toc-element topic="PositionalNamedArgument.md"/>
+            <toc-element topic="RequiredTogether.md"/>
+        </toc-element>
+        <toc-element topic="SubCommand.md"/>
+        <toc-element topic="ansiStylingArgument.md"/>
+    </toc-element>
+</instance-profile>
