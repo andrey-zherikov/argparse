@@ -14,12 +14,14 @@ jobs:
     name: Matrix Build
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest, windows-latest]
         dc: [dmd-latest, ldc-latest]
+        include:
+          - { os: macOS-latest, dc: ldc-latest }
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install D compiler
         uses: dlang-community/setup-dlang@v1
@@ -48,4 +50,6 @@ jobs:
         run: dub --root examples build --parallel --verbose
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
