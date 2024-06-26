@@ -1,6 +1,6 @@
 {
 	"license": "BSL-1.0",
-	"name": "getting_started-basic",
+	"name": "getting_started-with_uda",
 	"targetType":"executable",
 	"sourcePaths":["."],
 	"dependencies":{ "all:argparse":"*" }

@@ -1,0 +1,99 @@
+name: Build documentation
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+
+# Gives the workflow permissions to clone the repo and create a page deployment
+permissions:
+  id-token: write
+  pages: write
+
+env:
+  # Name of help module and instance id separated by a slash
+  INSTANCE: docs/ad
+  # AD = the ID of the instance in capital letters
+  ARTIFACT: webHelpAD2-all.zip
+  # Writerside docker image version
+  DOCKER_VERSION: 241.15989
+  # Add the variable below to upload Algolia indexes
+  # AD = the ID of the instance in capital letters
+  ALGOLIA_ARTIFACT: algolia-indexes-AD.zip
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Writerside docs using Docker
+        uses: JetBrains/writerside-github-action@v4
+        with:
+          instance: ${{ env.INSTANCE }}
+          artifact: ${{ env.ARTIFACT }}
+          docker-version: ${{ env.DOCKER_VERSION }}
+
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs
+          retention-days: 7
+          path: |
+            artifacts/${{ env.ARTIFACT }}
+            artifacts/report.json
+
+      # Add the step below to upload Algolia indexes
+      - name: Upload algolia-indexes
+        uses: actions/upload-artifact@v4
+        with:
+          name: algolia-indexes
+          retention-days: 7
+          path: artifacts/${{ env.ALGOLIA_ARTIFACT }}
+
+  # fail the build when documentation contains errors
+  test:
+    # Requires build job results
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: docs
+          path: artifacts
+
+      - name: Test documentation
+        uses: JetBrains/writerside-checker-action@v1
+        with:
+          instance: ${{ env.INSTANCE }}
+
+  deploy:
+    if: ${{ github.ref_name == 'master' }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # Requires the test job results
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs
+
+      - name: Unzip artifact
+        run: unzip -O UTF-8 -qq ${{ env.ARTIFACT }} -d dir
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dir
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

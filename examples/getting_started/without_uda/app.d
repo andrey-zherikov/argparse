@@ -1,7 +1,7 @@
 import argparse;
 
 // If struct has no UDA then all members are named arguments
-struct Basic
+struct Example
 {
     // Basic data types are supported:
         // '--name' argument
@@ -18,7 +18,7 @@ struct Basic
         string unused = "some default value";
 
 
-    // Enums are also supported
+    // Enums are supported
         enum Enum { unset, foo, boo }
         // '--choice' argument
         Enum choice;
@@ -41,10 +41,10 @@ struct Basic
 }
 
 // This mixin defines standard main function that parses command line and calls the provided function:
-mixin CLI!Basic.main!((args)
+mixin CLI!Example.main!((args)
 {
-    // 'args' has 'Baisc' type
-    static assert(is(typeof(args) == Basic));
+    // 'args' has 'Example' type
+    static assert(is(typeof(args) == Example));
 
     // do whatever you need
     import std.stdio: writeln;

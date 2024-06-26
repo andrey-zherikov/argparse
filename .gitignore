@@ -3,7 +3,6 @@
 out/
 docs.json
 __dummy.html
-docs/
 /argparse
 argparse.iml
 *argparse.so
