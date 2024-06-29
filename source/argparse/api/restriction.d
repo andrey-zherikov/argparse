@@ -2,8 +2,6 @@ module argparse.api.restriction;
 
 import argparse.internal.restriction: RestrictionGroup;
 
-import std.conv: to;
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Public API for restrictions
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,6 +25,8 @@ unittest
 
 auto RequiredTogether(string file=__FILE__, uint line = __LINE__)
 {
+    import std.conv: to;
+
     return RestrictionGroup(file~":"~line.to!string, RestrictionGroup.Type.together);
 }
 
@@ -42,6 +42,8 @@ unittest
 
 auto MutuallyExclusive(string file=__FILE__, uint line = __LINE__)
 {
+    import std.conv: to;
+
     return RestrictionGroup(file~":"~line.to!string, RestrictionGroup.Type.exclusive);
 }
 
