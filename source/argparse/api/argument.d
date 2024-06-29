@@ -95,13 +95,13 @@ unittest
     arg = arg.Description(() => "qwer").Placeholder("text");
     assert(arg.info.description.get == "qwer");
 
-    arg = arg.HideFromHelp().Required().NumberOfValues(10);
+    arg = arg.HideFromHelp.Required.NumberOfValues(10);
     assert(arg.info.hideFromHelp);
     assert(arg.info.required);
     assert(arg.info.minValuesCount.get == 10);
     assert(arg.info.maxValuesCount.get == 10);
 
-    arg = arg.Optional().NumberOfValues(20,30);
+    arg = arg.Optional.NumberOfValues(20,30);
     assert(!arg.info.required);
     assert(arg.info.minValuesCount.get == 20);
     assert(arg.info.maxValuesCount.get == 30);
@@ -189,7 +189,7 @@ auto RequireNoValue(alias valueToUse, T)(ArgumentUDA!T uda)
 
 unittest
 {
-    auto uda = NamedArgument().AllowNoValue!({});
+    auto uda = NamedArgument.AllowNoValue!({});
     assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, void, void, FUNC)), alias FUNC));
     assert(!is(FUNC == void));
     assert(uda.info.minValuesCount == 0);
@@ -197,7 +197,7 @@ unittest
 
 unittest
 {
-    auto uda = NamedArgument().RequireNoValue!"value";
+    auto uda = NamedArgument.RequireNoValue!"value";
     assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, void, void, FUNC)), alias FUNC));
     assert(!is(FUNC == void));
     assert(uda.info.minValuesCount == 0);
@@ -247,21 +247,21 @@ auto ActionNoValue(alias func, T)(ArgumentUDA!T uda)
 
 unittest
 {
-    auto uda = NamedArgument().PreValidation!({});
+    auto uda = NamedArgument.PreValidation!({});
     assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, FUNC, void, void, void, void)), alias FUNC));
     assert(!is(FUNC == void));
 }
 
 unittest
 {
-    auto uda = NamedArgument().Parse!({});
+    auto uda = NamedArgument.Parse!({});
     assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, FUNC, void, void, void)), alias FUNC));
     assert(!is(FUNC == void));
 }
 
 unittest
 {
-    auto uda = NamedArgument().Parse!((string _) => _);
+    auto uda = NamedArgument.Parse!((string _) => _);
     assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, FUNC, void, void, void)), alias FUNC));
     assert(!is(FUNC == void));
     assert(uda.info.minValuesCount == 1);
@@ -270,7 +270,7 @@ unittest
 
 unittest
 {
-    auto uda = NamedArgument().Parse!((string[] _) => _);
+    auto uda = NamedArgument.Parse!((string[] _) => _);
     assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, FUNC, void, void, void)), alias FUNC));
     assert(!is(FUNC == void));
     assert(uda.info.minValuesCount == 0);
@@ -279,14 +279,14 @@ unittest
 
 unittest
 {
-    auto uda = NamedArgument().Validation!({});
+    auto uda = NamedArgument.Validation!({});
     assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, FUNC, void, void)), alias FUNC));
     assert(!is(FUNC == void));
 }
 
 unittest
 {
-    auto uda = NamedArgument().Action!({});
+    auto uda = NamedArgument.Action!({});
     assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, void, FUNC, void)), alias FUNC));
     assert(!is(FUNC == void));
 }
@@ -339,7 +339,7 @@ auto Counter(T)(ArgumentUDA!T uda)
 
 unittest
 {
-    auto uda = NamedArgument().Counter();
+    auto uda = NamedArgument.Counter();
     assert(is(typeof(uda) : ArgumentUDA!TYPE, TYPE));
     assert(is(TYPE));
     assert(!is(TYPE == void));
