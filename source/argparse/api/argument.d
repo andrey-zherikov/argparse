@@ -237,7 +237,7 @@ auto Action(alias func, T)(ArgumentUDA!T uda)
     return ArgumentUDA!(uda.parsingFunc.changeAction!func)(uda.tupleof);
 }
 
-auto ActionNoValue(alias func, T)(ArgumentUDA!T uda)
+package auto ActionNoValue(alias func, T)(ArgumentUDA!T uda)
 {
     auto desc = ArgumentUDA!(uda.parsingFunc.changeNoValueAction!func)(uda.tupleof);
     desc.info.minValuesCount = 0;
