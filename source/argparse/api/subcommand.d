@@ -10,8 +10,6 @@ import std.typecons: Nullable;
 /// Default subcommand
 public struct Default(COMMAND)
 {
-    COMMAND command;
-    alias command this;
 }
 
 private enum isDefaultCommand(T) = is(T == Default!TYPE, TYPE);
