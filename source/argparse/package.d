@@ -321,11 +321,7 @@ unittest
         bool b;
         string c;
     }
-    enum config = {
-        Config config;
-        config.bundling = true;
-        return config;
-    }();
+    enum Config config = { bundling: true };
 
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-a","-b"]) == 12345);
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-ab"]) == 12345);
@@ -335,6 +331,8 @@ unittest
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-cfoo"]) == 12345);
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-c=foo"]) == 12345);
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-c","foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","--c=foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","--c","foo"]) == 12345);
 }
 
 unittest
