@@ -49,7 +49,7 @@ struct Config
     }
 
     /**
-        Single-letter arguments can be bundled together, i.e. "-abc" is the same as "-a -b -c".
+        Single-character arguments can be bundled together, i.e. "-abc" is the same as "-a -b -c".
         Disabled by default.
      */
     bool bundling = false;
