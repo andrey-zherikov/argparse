@@ -122,21 +122,21 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-auto PositionalArgument(uint pos)
+auto PositionalArgument(uint position)
 {
     auto arg = ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo.init).Required();
-    arg.info.position = pos;
+    arg.info.position = position;
     return arg;
 }
 
-auto PositionalArgument(uint pos, string name)
+auto PositionalArgument(uint position, string placeholder)
 {
-    return PositionalArgument(pos).Placeholder(name);
+    return PositionalArgument(position).Placeholder(placeholder);
 }
 
-auto NamedArgument(string[] name...)
+auto NamedArgument(string[] names...)
 {
-    return ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo(name.dup)).Optional();
+    return ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo(names.dup)).Optional();
 }
 
 unittest
@@ -294,7 +294,7 @@ unittest
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-auto AllowedValues(alias values, ARG)(ARG arg)
+auto AllowedValues(alias values, T)(ArgumentUDA!T uda)
 {
     import std.array : assocArray;
     import std.range : repeat;
@@ -302,7 +302,7 @@ auto AllowedValues(alias values, ARG)(ARG arg)
 
     enum valuesAA = assocArray(values, false.repeat);
 
-    auto desc = arg.Validation!(ValueInList!(values, KeyType!(typeof(valuesAA))));
+    auto desc = uda.Validation!(ValueInList!(values, KeyType!(typeof(valuesAA))));
     if(desc.info.placeholder.length == 0)
         desc.info.placeholder = formatAllowedValues(values);
 
