@@ -234,7 +234,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                     }
                 }
 
-                // Try to process "-ABC" case where "A" is a single-letter argument and BC is a value
+                // Try to process "-ABC" case where "A" is a single-character argument and BC is a value
                 if(argName.length > 1)     // Ensure that there is something to split
                 {
                     // Look for the first argument ("-A" from the example above)
@@ -255,13 +255,13 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
             static if(bundling)
                 if(arg0.length >= 3 && arg0[2] != config.assignChar)  // At least -AB and not -A=...
                 {
-                    // Process "-ABC" as "-A","-BC": extract first letter and leave the rest
+                    // Process "-ABC" as "-A","-BC": extract first character and leave the rest
 
                     // Look for the first argument ("-A" from the example above)
                     auto res = findNamedArg(config.convertCase([arg0[1]]));
                     if(res.arg)
                     {
-                        // Drop first letter
+                        // Drop first character
                         auto rest = arg0[0]~arg0[2..$];// splitSingleLetterNames(usedName, config.assignChar, value)[1..$];
 
                         // Replace first element with the rest
