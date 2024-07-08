@@ -12,6 +12,8 @@ struct cmd2
 
 mixin CLI!(cmd1, cmd2).main!((args, unparsed)
 {
+    import std.stdio: writeln;
+
     // 'args' has either 'cmd1' or 'cmd2' type
     static if(is(typeof(args) == cmd1))
         writeln("cmd1: ", args);
