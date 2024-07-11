@@ -21,7 +21,7 @@ int main_(max cmd)
 {
     import std.algorithm: maxElement;
 
-    writeln("max = ", cmd.numbers.maxElement(0));
+    writeln("max = ", cmd.numbers.maxElement(int.min));
 
     return 0;
 }
@@ -30,7 +30,7 @@ int main_(min cmd)
 {
     import std.algorithm: minElement;
 
-    writeln("min = ", cmd.numbers.minElement(0));
+    writeln("min = ", cmd.numbers.minElement(int.max));
 
     return 0;
 }

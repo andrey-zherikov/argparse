@@ -19,25 +19,25 @@ mixin CLI!Program.main!((prog)
 {
     static assert(is(typeof(prog) == Program));
 
-    int result = prog.cmd.match!(
+    writeln("prog = ", prog);
+
+    prog.cmd.match!(
         (.max)
         {
             import std.algorithm: maxElement;
-            return prog.numbers.maxElement(0);
+            writeln("max = ", prog.numbers.maxElement(int.min));
         },
         (.min)
         {
             import std.algorithm: minElement;
-            return prog.numbers.minElement(0);
+            writeln("min = ", prog.numbers.minElement(int.max));
         },
         (.sum)
         {
             import std.algorithm: sum;
-            return prog.numbers.sum;
+            writeln("sum = ", prog.numbers.sum);
         }
     );
-
-    writeln("result = ", result);
 
     return 0;
 });

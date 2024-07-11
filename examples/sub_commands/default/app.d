@@ -22,16 +22,18 @@ mixin CLI!Program.main!((prog)
 {
     static assert(is(typeof(prog) == Program));
 
+    writeln("prog = ", prog);
+
     prog.cmd.match!(
         (.max m)
         {
             import std.algorithm: maxElement;
-            writeln("max = ", prog.numbers.maxElement(0), " foo = ", m.foo);
+            writeln("max = ", prog.numbers.maxElement(int.min), " foo = ", m.foo);
         },
         (.min)
         {
             import std.algorithm: minElement;
-            writeln("min = ", prog.numbers.minElement(0));
+            writeln("min = ", prog.numbers.minElement(int.max));
         },
         (.sum)
         {
