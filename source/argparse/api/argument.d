@@ -49,29 +49,29 @@ auto ref Placeholder(T)(auto ref ArgumentUDA!T uda, string value)
     return uda;
 }
 
-auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong num)
+auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t num)
 {
     uda.info.minValuesCount = num;
     uda.info.maxValuesCount = num;
     return uda;
 }
 
-auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong min, ulong max)
+auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t min, size_t max)
 {
     uda.info.minValuesCount = min;
     uda.info.maxValuesCount = max;
     return uda;
 }
 
-auto ref MinNumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong min)
+auto ref MinNumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t min)
 {
-    assert(min <= uda.info.maxValuesCount.get(ulong.max));
+    assert(min <= uda.info.maxValuesCount.get(size_t.max));
 
     uda.info.minValuesCount = min;
     return uda;
 }
 
-auto ref MaxNumberOfValues(T)(auto ref ArgumentUDA!T uda, ulong max)
+auto ref MaxNumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t max)
 {
     assert(max >= uda.info.minValuesCount.get(0));
 
@@ -221,7 +221,7 @@ auto Parse(alias func, T)(ArgumentUDA!T uda)
     else
     {
         desc.info.minValuesCount = 0;
-        desc.info.maxValuesCount = ulong.max;
+        desc.info.maxValuesCount = size_t.max;
     }
 
     return desc;
@@ -274,7 +274,7 @@ unittest
     assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, FUNC, void, void, void)), alias FUNC));
     assert(!is(FUNC == void));
     assert(uda.info.minValuesCount == 0);
-    assert(uda.info.maxValuesCount == ulong.max);
+    assert(uda.info.maxValuesCount == size_t.max);
 }
 
 unittest

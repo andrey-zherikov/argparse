@@ -8,10 +8,10 @@ Sometimes an argument might accept more than one value. This is especially a cas
 - Unlimited range where only minimum number of values is provided (e.g. argument accepts _any number_ of values).
 
 To adjust the arity, use one the following API:
-- `NumberOfValues(ulong min, ulong max)` – sets both minimum and maximum number of values.
-- `NumberOfValues(ulong num)` – sets the exact number of values.
-- `MinNumberOfValues(ulong min)` – sets minimum number of values.
-- `MaxNumberOfValues(ulong max)` – sets maximum number of values.
+- `NumberOfValues(size_t min, size_t max)` – sets both minimum and maximum number of values.
+- `NumberOfValues(size_t num)` – sets the exact number of values.
+- `MinNumberOfValues(size_t min)` – sets minimum number of values.
+- `MaxNumberOfValues(size_t max)` – sets maximum number of values.
 
 > Positional argument must have at least one value.
 >

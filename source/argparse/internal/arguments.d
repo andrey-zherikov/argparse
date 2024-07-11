@@ -33,10 +33,10 @@ package(argparse) struct ArgumentInfo
 
     bool positional() const { return !position.isNull; }
 
-    Nullable!ulong minValuesCount;
-    Nullable!ulong maxValuesCount;
+    Nullable!size_t minValuesCount;
+    Nullable!size_t maxValuesCount;
 
-    auto checkValuesCount(const Config config, string argName, ulong count) const
+    auto checkValuesCount(const Config config, string argName, size_t count) const
     {
         immutable min = minValuesCount.get;
         immutable max = maxValuesCount.get;

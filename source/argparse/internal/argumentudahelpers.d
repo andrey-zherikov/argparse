@@ -30,7 +30,7 @@ private template defaultValuesCount(T)
     else static if(isArray!T || isAssociativeArray!T)
     {
         enum min = 1;
-        enum max = ulong.max;
+        enum max = size_t.max;
     }
     else static if(is(T == function))
     {
@@ -50,13 +50,13 @@ private template defaultValuesCount(T)
         else static if(__traits(compiles, T([string.init])))
         {
             enum min = 0;
-            enum max = ulong.max;
+            enum max = size_t.max;
         }
             // ... function(RawParam param)
         else static if(__traits(compiles, T(RawParam.init)))
         {
             enum min = 1;
-            enum max = ulong.max;
+            enum max = size_t.max;
         }
         else
             static assert(false, "Unsupported callback: " ~ T.stringof);

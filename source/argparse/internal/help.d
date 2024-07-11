@@ -35,7 +35,7 @@ package struct Section
         return title.length == 0 || entries.match!(_ => _.length) == 0;
     }
 
-    private ulong maxItemNameLength(ulong limit) const
+    private size_t maxItemNameLength(size_t limit) const
     {
         import std.algorithm: maxElement, map, filter;
 
@@ -236,7 +236,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private string spaces(ulong num)
+private string spaces(size_t num)
 {
     import std.range: repeat;
     import std.array: array;
@@ -547,7 +547,7 @@ private auto getSections(const ref Style style, const(Arguments*)[] arguments)
         foreach(ref group; chain(args.userGroups, [args.requiredGroup, args.optionalGroup]))
         {
             auto p = (group.name in sectionMap);
-            ulong index;
+            size_t index;
             if(p !is null)
                 index = *p;
             else

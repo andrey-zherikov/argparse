@@ -160,8 +160,8 @@ struct my_command
 **Signature**
 
 ```C++
-NumberOfValues(auto ref ... argument, ulong min, ulong max)
-NumberOfValues(auto ref ... argument, ulong num)
+NumberOfValues(auto ref ... argument, size_t min, size_t max)
+NumberOfValues(auto ref ... argument, size_t num)
 ```
 
 **Parameters**
@@ -198,7 +198,7 @@ struct my_command
 **Signature**
 
 ```C++
-MinNumberOfValues(auto ref ... argument, ulong min)
+MinNumberOfValues(auto ref ... argument, size_t min)
 ```
 
 **Parameters**
@@ -224,7 +224,7 @@ struct my_command
 **Signature**
 
 ```C++
-MaxNumberOfValues(auto ref ... argument, ulong max)
+MaxNumberOfValues(auto ref ... argument, size_t max)
 ```
 
 **Parameters**

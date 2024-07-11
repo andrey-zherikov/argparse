@@ -13,7 +13,7 @@ import argparse.internal.commandinfo: getTopLevelCommandInfo;
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private string[] consumeValuesFromCLI(ref string[] args,
-                                      ulong minValuesCount, ulong maxValuesCount,
+                                      size_t minValuesCount, size_t maxValuesCount,
                                       bool delegate(string) isArgumentValue)
 {
     import std.range: empty, front, popFront;
