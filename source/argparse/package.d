@@ -131,10 +131,6 @@ unittest
 
 unittest
 {
-
-    import std.conv;
-    import std.traits;
-
     struct params
     {
         int no_a;
