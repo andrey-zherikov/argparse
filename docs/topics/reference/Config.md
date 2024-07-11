@@ -70,9 +70,9 @@ Example:
 
 <code-block src="code_snippets/config_bundling.d" lang="c++"/>
 
-## Adding help generation {id="addHelp"}
+## Adding help generation {id="addHelpArgument"}
 
-`Config.addHelp` can be used to add (if `true`) or not (if `false`) `-h`/`--help` argument.
+`Config.addHelpArgument` can be used to add (if `true`) or not (if `false`) `-h`/`--help` argument.
 In case if the command line has `-h` or `--help`, then the corresponding help text is printed and the parsing is stopped.
 If `CLI!(...).parseArgs(alias newMain)` or `CLI!(...).main(alias newMain)` is used, then provided `newMain` function will
 not be called.
@@ -81,7 +81,7 @@ Default is `true`.
 
 Example:
 
-<code-block src="code_snippets/config_addHelp.d" lang="c++"/>
+<code-block src="code_snippets/config_addHelpArgument.d" lang="c++"/>
 
 Help text from the first part of the example code above:
 

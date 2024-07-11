@@ -9,7 +9,7 @@ T t1;
 CLI!T.parseArgs(t1, ["-a", "A", "-h", "-b", "B"]);
 assert(t1 == T("A"));
 
-enum Config cfg = { addHelp: false };
+enum Config cfg = { addHelpArgument: false };
 
 T t2;
 string[] unrecognizedArgs;

@@ -271,7 +271,7 @@ private template TypeTraits(Config config, TYPE)
     private enum positional(ArgumentInfo info) = info.positional;
     private enum comparePosition(ArgumentInfo info1, ArgumentInfo info2) = info1.position.get - info2.position.get;
 
-    static if(config.addHelp)
+    static if(config.addHelpArgument)
     {
         private enum helpUDA = HelpArgumentUDA(HelpArgumentUDA.init.info.finalize!bool(config, null));
         enum argumentUDAs = AliasSeq!(staticMap!(getArgumentUDA, iterateArguments!TYPE), helpUDA);

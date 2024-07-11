@@ -1600,7 +1600,7 @@ Default is `false`.
 
 ### Adding help generation
 
-`Config.addHelp` – when it is set to `true`, then `-h` and `--help` arguments are added to the parser. In case if the
+`Config.addHelpArgument` – when it is set to `true`, then `-h` and `--help` arguments are added to the parser. In case if the
 command line has one of these arguments, then the corresponding help text is printed and the parsing will be stopped.
 If `CLI!(...).parseArgs(alias newMain)` or `CLI!(...).main(alias newMain)` is used, then provided `newMain` function will
 not be called.
