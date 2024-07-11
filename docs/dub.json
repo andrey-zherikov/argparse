@@ -1,0 +1,6 @@
+{
+	"license": "BSL-1.0",
+	"name": "build_code_snippets",
+	"targetType": "executable",
+	"sourceFiles": ["build_code_snippets.d"]
+}

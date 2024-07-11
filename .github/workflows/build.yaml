@@ -49,6 +49,9 @@ jobs:
       - name: Build examples
         run: dub --root examples build --parallel --verbose
 
+      - name: Build code snippets in documentation
+        run: dub --root docs --verbose run
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:

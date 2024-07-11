@@ -76,7 +76,7 @@ template CLI(Config config, COMMANDS...)
             SubCommand!COMMANDS cmd;   // Sub-commands
         }
 
-        private auto forwardMain(Args...)(Program prog, auto ref Args args)
+        private static auto forwardMain(Args...)(Program prog, auto ref Args args)
         {
             import core.lifetime: forward;
             return prog.cmd.match!(_ => newMain(_, forward!args));
