@@ -6,9 +6,9 @@ import argparse.internal.commandinfo: CommandInfo;
 /// Public API for command and subcommand UDAs
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-auto Command(string[] name...)
+auto Command(string[] names...)
 {
-    return CommandInfo(name.dup);
+    return CommandInfo(names.dup);
 }
 
 unittest

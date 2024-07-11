@@ -75,25 +75,25 @@ mixin CLI!Program.main!((prog)
 {
     static assert(is(typeof(prog) == Program));
 
-    int result = prog.cmd.match!(
+    writeln("prog = ", prog);
+
+    prog.cmd.match!(
         (MaxCmd cmd)
         {
             import std.algorithm: maxElement;
-            return cmd.numbers.filter(prog.filter).maxElement(0);
+            writeln("max = ", cmd.numbers.filter(prog.filter).maxElement(int.min));
         },
         (MinCmd cmd)
         {
             import std.algorithm: minElement;
-            return cmd.numbers.filter(prog.filter).minElement(0);
+            writeln("min = ", cmd.numbers.filter(prog.filter).minElement(int.max));
         },
         (sum cmd)
         {
             import std.algorithm: sum;
-            return cmd.numbers.filter(prog.filter).sum;
+            writeln("sum = ", cmd.numbers.filter(prog.filter).sum);
         }
     );
-
-    writeln("result = ", result);
 
     return 0;
 });

@@ -6,9 +6,9 @@ import argparse.internal.enumhelpers: EnumValue;
 /// Public API for enums
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-auto ArgumentValue(string[] name...)
+auto ArgumentValue(string[] values...)
 {
-    return EnumValue(name.dup);
+    return EnumValue(values.dup);
 }
 
 unittest

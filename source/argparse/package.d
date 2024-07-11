@@ -33,13 +33,13 @@ unittest
     {
         @NamedArgument
         int a;
-        @(NamedArgument.Optional())
+        @(NamedArgument.Optional)
         int b;
-        @(NamedArgument.Required())
+        @(NamedArgument.Required)
         int c;
         @NamedArgument
         int d;
-        @(NamedArgument.Required())
+        @(NamedArgument.Required)
         int e;
         @NamedArgument
         int f;
@@ -131,10 +131,6 @@ unittest
 
 unittest
 {
-
-    import std.conv;
-    import std.traits;
-
     struct params
     {
         int no_a;
@@ -262,8 +258,8 @@ unittest
     {
         @NamedArgument                           string x;
         @NamedArgument                           string foo;
-        @(PositionalArgument(0, "a").Optional()) string a;
-        @(PositionalArgument(1, "b").Optional()) string[] b;
+        @(PositionalArgument(0, "a").Optional) string a;
+        @(PositionalArgument(1, "b").Optional) string[] b;
     }
     test!(["--foo","FOO","-x","X"], T("X", "FOO"));
     test!(["--foo=FOO","-x=X"], T("X", "FOO"));
@@ -286,10 +282,10 @@ unittest
 
     struct T3
     {
-        @(PositionalArgument(0, "a").Optional())
+        @(PositionalArgument(0, "a").Optional)
         string a = "not set";
 
-        @(NamedArgument.Required())
+        @(NamedArgument.Required)
         int b;
     }
     test!(["-b", "4"], T3("not set", 4));
@@ -321,11 +317,7 @@ unittest
         bool b;
         string c;
     }
-    enum config = {
-        Config config;
-        config.bundling = true;
-        return config;
-    }();
+    enum Config config = { bundling: true };
 
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-a","-b"]) == 12345);
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-ab"]) == 12345);
@@ -335,6 +327,8 @@ unittest
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-cfoo"]) == 12345);
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-c=foo"]) == 12345);
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-c","foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","--c=foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","--c","foo"]) == 12345);
 }
 
 unittest
@@ -509,7 +503,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument.Counter()) int a;
+        @(NamedArgument.Counter) int a;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T(3)); return 12345; })(["-a","-a","-a"]) == 12345);
@@ -758,7 +752,7 @@ unittest
     @Command("MYPROG")
     struct T
     {
-        @(NamedArgument.HideFromHelp())  string s;
+        @(NamedArgument.HideFromHelp)  string s;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(false); })(["-h","-s","asd"]) == 0);
@@ -773,7 +767,7 @@ unittest
     @Command("MYPROG")
     struct T
     {
-        @(NamedArgument.Required())  string s;
+        @(NamedArgument.Required)  string s;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
@@ -805,7 +799,7 @@ unittest
     @Command("MYPROG")
     struct T
     {
-        @(MutuallyExclusive().Required())
+        @(MutuallyExclusive.Required)
         {
             string a;
             string b;
@@ -847,7 +841,7 @@ unittest
     @Command("MYPROG")
     struct T
     {
-        @(RequiredTogether().Required())
+        @(RequiredTogether.Required)
         {
             string a;
             string b;
@@ -878,10 +872,10 @@ unittest
         @NamedArgument  string s;
         @(NamedArgument.Placeholder("VALUE"))  string p;
 
-        @(NamedArgument.HideFromHelp())  string hidden;
+        @(NamedArgument.HideFromHelp)  string hidden;
 
         enum Fruit { apple, pear };
-        @(NamedArgument(["f","fruit"]).Required().Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
+        @(NamedArgument(["f","fruit"]).Required.Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
 
         @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
 

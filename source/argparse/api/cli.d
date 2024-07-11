@@ -128,7 +128,7 @@ template CLI(Config config, COMMAND)
 
         auto res = parseArgs(value, args);
         if(!res)
-            return res.resultCode;
+            return res.exitCode;
 
         static if(__traits(compiles, { int a = cast(int) newMain(value); }))
             return cast(int) newMain(value);
@@ -146,7 +146,7 @@ template CLI(Config config, COMMAND)
 
         auto res = parseKnownArgs(value, args);
         if(!res)
-            return res.resultCode;
+            return res.exitCode;
 
         static if(__traits(compiles, { int a = cast(int) newMain(value, args); }))
             return cast(int) newMain(value, args);

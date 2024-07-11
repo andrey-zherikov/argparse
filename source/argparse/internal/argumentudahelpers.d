@@ -49,7 +49,7 @@ private template defaultValuesCount(T)
             // ... function(string[] value)
         else static if(__traits(compiles, T([string.init])))
         {
-            enum min = 0;
+            enum min = 1;
             enum max = size_t.max;
         }
             // ... function(RawParam param)
