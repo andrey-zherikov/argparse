@@ -81,10 +81,12 @@ unittest
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-struct Unknown {
+
+private struct Unknown {
     string value;
 }
-struct Argument {
+
+private struct Argument {
     size_t index;
     const(ArgumentInfo)* info;
     Result delegate() parse;
@@ -99,11 +101,12 @@ struct Argument {
         complete = () => r.arg.complete(r.cmdStack, name, values);
     }
 }
-struct SubCommand {
+
+private struct SubCommand {
     Command delegate() cmdInit;
 }
 
-alias Entry = SumType!(Unknown, Argument, SubCommand);
+private alias Entry = SumType!(Unknown, Argument, SubCommand);
 
 private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                                           FindResult delegate(bool) findPositionalArg,
