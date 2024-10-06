@@ -92,7 +92,11 @@ package auto getMemberArgumentUDA(TYPE, string symbol)(const Config config)
     else
         enum initUDA = memberUDA;
 
-    auto result = initUDA;
+    static if(is(MemberType == function) || is(MemberType == delegate))
+        auto result = initUDA.addDefaultsForType!(typeof(&__traits(getMember, TYPE.init, symbol)));
+    else
+        auto result = initUDA.addDefaultsForType!MemberType;
+
     result.info = result.info.finalize!MemberType(config, symbol);
 
     static if(initUDA.info.minValuesCount.isNull) result.info.minValuesCount = defaultValuesCount!MemberType.min;

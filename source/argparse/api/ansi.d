@@ -3,7 +3,6 @@ module argparse.api.ansi;
 import argparse.config;
 import argparse.param;
 import argparse.api.argument: NamedArgument, Description, NumberOfValues, AllowedValues, Parse, Action, ActionNoValue;
-import argparse.internal.parsehelpers: PassThrough;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Public API for ANSI coloring
@@ -13,9 +12,9 @@ import argparse.internal.parsehelpers: PassThrough;
 .Description("Colorize the output. If value is omitted then 'always' is used.")
 .AllowedValues!(["always","auto","never"])
 .NumberOfValues(0, 1)
-.Parse!(PassThrough)
-.Action!(AnsiStylingArgument.action)
-.ActionNoValue!(AnsiStylingArgument.action)
+.Parse((string _) => _)
+.Action(AnsiStylingArgument.action)
+.ActionNoValue(AnsiStylingArgument.actionNoValue)
 )
 private struct AnsiStylingArgument
 {
@@ -26,39 +25,40 @@ private struct AnsiStylingArgument
         return isEnabled;
     }
 
-    private static void action(ref AnsiStylingArgument receiver, RawParam param)
+    private enum action = (ref AnsiStylingArgument receiver, Param!string param)
     {
-        switch(param.value[0])
+        switch(param.value)
         {
             case "auto":    isEnabled = param.config.stylingMode == Config.StylingMode.on; return;
             case "always":  isEnabled = true;  return;
             case "never":   isEnabled = false; return;
             default:
         }
-    }
-    private static void action(ref AnsiStylingArgument receiver, Param!void param)
+    };
+
+    private enum actionNoValue = (ref AnsiStylingArgument receiver, Param!void param)
     {
         isEnabled = true;
-    }
+    };
 }
 
 unittest
 {
     AnsiStylingArgument arg;
-    AnsiStylingArgument.action(arg, Param!void.init);
+    AnsiStylingArgument.actionNoValue(arg, Param!void.init);
     assert(arg);
 
-    AnsiStylingArgument.action(arg, RawParam(null, "", [""]));
+    AnsiStylingArgument.action(arg, Param!string(null, "", ""));
 }
 
 unittest
 {
     AnsiStylingArgument arg;
 
-    AnsiStylingArgument.action(arg, RawParam(null, "", ["always"]));
+    AnsiStylingArgument.action(arg, Param!string(null, "", "always"));
     assert(arg);
 
-    AnsiStylingArgument.action(arg, RawParam(null, "", ["never"]));
+    AnsiStylingArgument.action(arg, Param!string(null, "", "never"));
     assert(!arg);
 }
 
@@ -68,11 +68,11 @@ unittest
     AnsiStylingArgument arg;
 
     config.stylingMode = Config.StylingMode.on;
-    AnsiStylingArgument.action(arg, RawParam(&config, "", ["auto"]));
+    AnsiStylingArgument.action(arg, Param!string(&config, "", "auto"));
     assert(arg);
 
     config.stylingMode = Config.StylingMode.off;
-    AnsiStylingArgument.action(arg, RawParam(&config, "", ["auto"]));
+    AnsiStylingArgument.action(arg, Param!string(&config, "", "auto"));
     assert(!arg);
 }
 

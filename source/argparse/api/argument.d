@@ -4,9 +4,12 @@ import argparse.param;
 import argparse.result;
 
 import argparse.internal.arguments: ArgumentInfo;
-import argparse.internal.argumentuda: ArgumentUDA;
+import argparse.internal.argumentuda: ArgumentUDA, createArgumentUDA;
 import argparse.internal.valueparser: ValueParser;
-import argparse.internal.parsehelpers: ValueInList;
+import argparse.internal.actionfunc;
+import argparse.internal.novalueactionfunc;
+import argparse.internal.parsefunc;
+import argparse.internal.validationfunc;
 import argparse.internal.utils: formatAllowedValues;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,7 +85,7 @@ auto ref MaxNumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t max)
 
 unittest
 {
-    ArgumentUDA!void arg;
+    ArgumentUDA!(ValueParser!(void, void)) arg;
     assert(!arg.info.hideFromHelp);
     assert(!arg.info.required);
     assert(arg.info.minValuesCount.isNull);
@@ -109,22 +112,13 @@ unittest
     arg = arg.MinNumberOfValues(2).MaxNumberOfValues(3);
     assert(arg.info.minValuesCount.get == 2);
     assert(arg.info.maxValuesCount.get == 3);
-
-    // values shouldn't be changed
-    arg.addDefaults(ArgumentUDA!void.init);
-    assert(arg.info.placeholder == "text");
-    assert(arg.info.description.get == "qwer");
-    assert(arg.info.hideFromHelp);
-    assert(!arg.info.required);
-    assert(arg.info.minValuesCount.get == 2);
-    assert(arg.info.maxValuesCount.get == 3);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 auto PositionalArgument(uint position)
 {
-    auto arg = ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo.init).Required();
+    auto arg = ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo.init).Required();
     arg.info.position = position;
     return arg;
 }
@@ -136,7 +130,7 @@ auto PositionalArgument(uint position, string placeholder)
 
 auto NamedArgument(string[] names...)
 {
-    return ArgumentUDA!(ValueParser!(void, void, void, void, void, void))(ArgumentInfo(names.dup)).Optional();
+    return ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo(names.dup)).Optional();
 }
 
 unittest
@@ -176,7 +170,7 @@ unittest
 
 auto AllowNoValue(alias valueToUse, T)(ArgumentUDA!T uda)
 {
-    return uda.ActionNoValue!(() => valueToUse);
+    return ActionNoValue(uda, (ref typeof(valueToUse) _) { _ = valueToUse; });
 }
 
 auto RequireNoValue(alias valueToUse, T)(ArgumentUDA!T uda)
@@ -190,16 +184,14 @@ auto RequireNoValue(alias valueToUse, T)(ArgumentUDA!T uda)
 unittest
 {
     auto uda = NamedArgument.AllowNoValue!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, void, void, FUNC)), alias FUNC));
-    assert(!is(FUNC == void));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, R)), P, R));
     assert(uda.info.minValuesCount == 0);
 }
 
 unittest
 {
     auto uda = NamedArgument.RequireNoValue!"value";
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, void, void, FUNC)), alias FUNC));
-    assert(!is(FUNC == void));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, R)), P, R));
     assert(uda.info.minValuesCount == 0);
     assert(uda.info.maxValuesCount == 0);
 }
@@ -207,16 +199,22 @@ unittest
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Parsing customization
 
-auto PreValidation(alias func, T)(ArgumentUDA!T uda)
+auto PreValidation(T, RETURN, VALUE)(ArgumentUDA!T uda, RETURN function(VALUE value) func)
+if((is(VALUE == string) || is(VALUE == string[]) || is(VALUE == RawParam)) &&
+    (is(RETURN == bool) || is(RETURN == Result)))
 {
-    return ArgumentUDA!(uda.parsingFunc.changePreValidation!func)(uda.tupleof);
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changePreValidation(ValidationFunc!(string[])(func)));
+
+    return desc;
 }
 
-auto Parse(alias func, T)(ArgumentUDA!T uda)
-{
-    auto desc = ArgumentUDA!(uda.parsingFunc.changeParse!func)(uda.tupleof);
+///////////////////////////
 
-    static if(__traits(compiles, { func(string.init); }))
+private auto ParseImpl(T, RECEIVER)(ArgumentUDA!T uda, ParseFunc!RECEIVER func)
+{
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeParse(func));
+
+    static if(is(RECEIVER == string))
         desc.info.minValuesCount = desc.info.maxValuesCount = 1;
     else
     {
@@ -227,68 +225,98 @@ auto Parse(alias func, T)(ArgumentUDA!T uda)
     return desc;
 }
 
-auto Validation(alias func, T)(ArgumentUDA!T uda)
+auto Parse(T, RECEIVER, VALUE)(ArgumentUDA!T uda, RECEIVER function(VALUE value) func)
+if((is(VALUE == string) || is(VALUE == string[]) || is(VALUE == RawParam)))
 {
-    return ArgumentUDA!(uda.parsingFunc.changeValidation!func)(uda.tupleof);
+    return ParseImpl(uda, ParseFunc!RECEIVER(func));
 }
 
-auto Action(alias func, T)(ArgumentUDA!T uda)
+auto Parse(T, RETURN, RECEIVER)(ArgumentUDA!T uda, RETURN function(ref RECEIVER receiver, RawParam param) func)
+if(is(RETURN == void) || is(RETURN == bool) || is(RETURN == Result))
 {
-    return ArgumentUDA!(uda.parsingFunc.changeAction!func)(uda.tupleof);
+    return ParseImpl(uda, ParseFunc!RECEIVER(func));
 }
 
-package auto ActionNoValue(alias func, T)(ArgumentUDA!T uda)
+///////////////////////////
+
+auto Validation(T, RETURN, VALUE)(ArgumentUDA!T uda, RETURN function(VALUE value) func)
+if(is(RETURN == bool) || is(RETURN == Result))
 {
-    auto desc = ArgumentUDA!(uda.parsingFunc.changeNoValueAction!func)(uda.tupleof);
+    static if(!is(VALUE == Param!TYPE, TYPE))
+        alias TYPE = VALUE;
+
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeValidation(ValidationFunc!TYPE(func)));
+
+    return desc;
+}
+
+///////////////////////////
+
+auto Action(T, RETURN, RECEIVER, VALUE)(ArgumentUDA!T uda, RETURN function(ref RECEIVER receiver, VALUE value) func)
+if(is(RETURN == void) || is(RETURN == bool) || is(RETURN == Result))
+{
+    static if(!is(VALUE == Param!TYPE, TYPE))
+        alias TYPE = VALUE;
+
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeAction(ActionFunc!(RECEIVER, TYPE)(func)));
+
+    return desc;
+}
+
+///////////////////////////
+private auto ActionNoValueImpl(T, RECEIVER)(ArgumentUDA!T uda, NoValueActionFunc!RECEIVER func)
+{
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeNoValueAction(func));
     desc.info.minValuesCount = 0;
     return desc;
 }
 
+package auto ActionNoValue(T, RETURN, RECEIVER)(ArgumentUDA!T uda, RETURN function(ref RECEIVER receiver) func)
+if(is(RETURN == void) || is(RETURN == bool) || is(RETURN == Result))
+{
+    return ActionNoValueImpl(uda, NoValueActionFunc!RECEIVER(func));
+}
+
+package auto ActionNoValue(T, RETURN, RECEIVER)(ArgumentUDA!T uda, RETURN function(ref RECEIVER receiver, Param!void param) func)
+if(is(RETURN == void) || is(RETURN == bool) || is(RETURN == Result))
+{
+    return ActionNoValueImpl(uda, NoValueActionFunc!RECEIVER(func));
+}
+
+///////////////////////////
 
 unittest
 {
-    auto uda = NamedArgument.PreValidation!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, FUNC, void, void, void, void)), alias FUNC));
-    assert(!is(FUNC == void));
+    auto uda = NamedArgument.PreValidation((RawParam _) => true);
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void))));
 }
 
 unittest
 {
-    auto uda = NamedArgument.Parse!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, FUNC, void, void, void)), alias FUNC));
-    assert(!is(FUNC == void));
-}
-
-unittest
-{
-    auto uda = NamedArgument.Parse!((string _) => _);
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, FUNC, void, void, void)), alias FUNC));
-    assert(!is(FUNC == void));
+    auto uda = NamedArgument.Parse((string _) => _);
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, void)), alias P));
     assert(uda.info.minValuesCount == 1);
     assert(uda.info.maxValuesCount == 1);
 }
 
 unittest
 {
-    auto uda = NamedArgument.Parse!((string[] _) => _);
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, FUNC, void, void, void)), alias FUNC));
-    assert(!is(FUNC == void));
+    auto uda = NamedArgument.Parse((string[] _) => _);
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, void)), alias P));
     assert(uda.info.minValuesCount == 0);
     assert(uda.info.maxValuesCount == size_t.max);
 }
 
 unittest
 {
-    auto uda = NamedArgument.Validation!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, FUNC, void, void)), alias FUNC));
-    assert(!is(FUNC == void));
+    auto uda = NamedArgument.Validation((RawParam _) => true);
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, void)), alias P));
 }
 
 unittest
 {
-    auto uda = NamedArgument.Action!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void, void, void, FUNC, void)), alias FUNC));
-    assert(!is(FUNC == void));
+    auto uda = NamedArgument.Action((ref string _1, RawParam _2) {});
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, R)), alias P, alias R));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -296,13 +324,7 @@ unittest
 
 auto AllowedValues(alias values, T)(ArgumentUDA!T uda)
 {
-    import std.array : assocArray;
-    import std.range : repeat;
-    import std.traits: KeyType;
-
-    enum valuesAA = assocArray(values, false.repeat);
-
-    auto desc = uda.Validation!(ValueInList!(values, KeyType!(typeof(valuesAA))));
+    auto desc = uda.Validation((Param!(typeof(values[0])) _) => ValueInList(values)(_));
     if(desc.info.placeholder.length == 0)
         desc.info.placeholder = formatAllowedValues(values);
 
@@ -318,11 +340,11 @@ unittest
 
 private struct CounterParsingFunction
 {
-    static Result parse(T)(ref T receiver, const ref RawParam param)
+    static Result parseParameter(T)(T* receiver, RawParam param)
     {
         assert(param.value.length == 0);
 
-        ++receiver;
+        ++(*receiver);
 
         return Result.Success;
     }
@@ -330,7 +352,7 @@ private struct CounterParsingFunction
 
 auto Counter(T)(ArgumentUDA!T uda)
 {
-    auto desc = ArgumentUDA!CounterParsingFunction(uda.tupleof);
+    auto desc = ArgumentUDA!CounterParsingFunction(uda.info);
     desc.info.minValuesCount = 0;
     desc.info.maxValuesCount = 0;
     return desc;
