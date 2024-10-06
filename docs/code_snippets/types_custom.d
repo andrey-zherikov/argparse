@@ -6,7 +6,7 @@ struct Value
 }
 struct T
 {
-    @(NamedArgument.Parse!((string s) { return Value(s); }))
+    @(NamedArgument.Parse((string s) { return Value(s); }))
     Value s;
 }
 

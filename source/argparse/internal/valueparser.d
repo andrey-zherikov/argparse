@@ -3,99 +3,147 @@ module argparse.internal.valueparser;
 import argparse.config;
 import argparse.param;
 import argparse.result;
-import argparse.internal.parsehelpers;
+import argparse.internal.errorhelpers;
 import argparse.internal.enumhelpers: getEnumValues, getEnumValue;
+import argparse.internal.actionfunc;
+import argparse.internal.novalueactionfunc;
+import argparse.internal.parsefunc;
+import argparse.internal.validationfunc;
 
 import std.traits;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private Result processingError(T)(Param!T param, string prefix = "Can't process value")
+package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
 {
-    import std.conv: to;
-    import std.array: appender;
+    //////////////////////////
+    /// pre process
+    void function(ref RawParam param) preProcess;
 
-    auto a = appender!string(prefix);
-
-    static if(is(typeof(param.value)))
+    auto changePreProcess(void function(ref RawParam param) func)
     {
-        a ~= " '";
-        a ~= param.config.styling.positionalArgumentValue(param.value.to!string);
-        a ~= "'";
+        preProcess = func;
+        return this;
     }
 
-    if(param.name.length > 0 && param.name[0] == param.config.namedArgPrefix)
+    //////////////////////////
+    /// pre validation
+    ValidationFunc!(string[]) preValidate;
+
+    auto changePreValidation(ValidationFunc!(string[]) func)
     {
-        a ~= " for argument '";
-        a ~= param.config.styling.argumentName(param.name);
-        a ~= "'";
+        preValidate = func;
+        return this;
     }
 
-    return Result.Error(a[]);
-}
+    //////////////////////////
+    /// parse
+    static if(!is(PARSE_TYPE == void))
+        ParseFunc!PARSE_TYPE parse;
 
-private Result invalidValueError(T)(Param!T param)
-{
-    return processingError(param, "Invalid value");
-}
-
-
-unittest
-{
-    Config config;
-    assert(processingError(Param!void(&config, "")).isError("Can't process value"));
-    assert(processingError(Param!void(&config, "--abc")).isError("Can't process value for argument","--abc"));
-    assert(processingError(Param!(int[])(&config, "", [1,2])).isError("Can't process value '","[1, 2]"));
-    assert(processingError(Param!(int[])(&config, "--abc", [1,2])).isError("Can't process value '","[1, 2]","' for argument '","--abc"));
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package(argparse) struct ValueParser(alias PreProcess,
-                                     alias PreValidation,
-                                     alias Parse,
-                                     alias Validation,
-                                     alias Action,
-                                     alias NoValueAction)
-{
-    alias PreProcessArg = PreProcess;
-    alias PreValidationArg = PreValidation;
-    alias ParseArg = Parse;
-    alias ValidationArg = Validation;
-    alias ActionArg = Action;
-    alias NoValueActionArg = NoValueAction;
-
-    alias changePreProcess   (alias func) = ValueParser!(      func, PreValidation, Parse, Validation, Action, NoValueAction);
-    alias changePreValidation(alias func) = ValueParser!(PreProcess,          func, Parse, Validation, Action, NoValueAction);
-    alias changeParse        (alias func) = ValueParser!(PreProcess, PreValidation,  func, Validation, Action, NoValueAction);
-    alias changeValidation   (alias func) = ValueParser!(PreProcess, PreValidation, Parse,       func, Action, NoValueAction);
-    alias changeAction       (alias func) = ValueParser!(PreProcess, PreValidation, Parse, Validation,   func, NoValueAction);
-    alias changeNoValueAction(alias func) = ValueParser!(PreProcess, PreValidation, Parse, Validation, Action,          func);
-
-    template addDefaults(DefaultParseFunctions)
+    auto changeParse(P)(ParseFunc!P func) const
+    if(is(PARSE_TYPE == void) || is(PARSE_TYPE == P))
     {
-        template Get(string symbol)
+        return ValueParser!(P, RECEIVER_TYPE)( parse: func ).addDefaults(this);
+    }
+
+    //////////////////////////
+    /// validation
+    static if(!is(PARSE_TYPE == void))
+        ValidationFunc!PARSE_TYPE validate;
+
+    auto changeValidation(P)(ValidationFunc!P func) const
+    if(is(PARSE_TYPE == void) || is(PARSE_TYPE == P))
+    {
+        return ValueParser!(P, RECEIVER_TYPE)( validate: func ).addDefaults(this);
+    }
+
+    //////////////////////////
+    /// action
+    static if(!is(PARSE_TYPE == void) && !is(RECEIVER_TYPE == void))
+        ActionFunc!(RECEIVER_TYPE, PARSE_TYPE) action;
+
+    auto changeAction(P, R)(ActionFunc!(R, P) func) const
+    if((is(PARSE_TYPE == void) || is(PARSE_TYPE == P)) &&
+        (is(RECEIVER_TYPE == void) || is(RECEIVER_TYPE == R)))
+    {
+        return ValueParser!(P, R)( action: func ).addDefaults(this);
+    }
+
+    //////////////////////////
+    /// noValueAction
+    static if(!is(RECEIVER_TYPE == void))
+        NoValueActionFunc!RECEIVER_TYPE noValueAction;
+
+    auto changeNoValueAction(R)(NoValueActionFunc!R func) const
+    if(is(RECEIVER_TYPE == void) || is(RECEIVER_TYPE == R))
+    {
+        return ValueParser!(PARSE_TYPE, R)( noValueAction: func ).addDefaults(this);
+    }
+
+    //////////////////////////
+    auto addDefaults(P, R)(ValueParser!(P, R) other) const
+    {
+        static if(is(PARSE_TYPE == void))
+            alias RES_P = P;
+        else
+            alias RES_P = PARSE_TYPE;
+
+        static if(is(RECEIVER_TYPE == void))
+            alias RES_R = R;
+        else
+            alias RES_R = RECEIVER_TYPE;
+
+        ValueParser!(RES_P, RES_R) res;
+        res.preProcess = preProcess ? preProcess : other.preProcess;
+        res.preValidate = preValidate ? preValidate : other.preValidate;
+
+        static if(!is(PARSE_TYPE == void))
         {
-            alias M = mixin(symbol);
-            static if(is(M == void))
-                alias Get = __traits(getMember, DefaultParseFunctions, symbol);
-            else
-                alias Get = M;
+            res.parse = parse;
+            res.validate = validate;
         }
 
-        alias addDefaults = ValueParser!(
-            Get!"PreProcessArg",
-            Get!"PreValidationArg",
-            Get!"ParseArg",
-            Get!"ValidationArg",
-            Get!"ActionArg",
-            Get!"NoValueActionArg",
-        );
+        static if(!is(PARSE_TYPE == void) && !is(RECEIVER_TYPE == void))
+            res.action = action;
+
+        static if(!is(RECEIVER_TYPE == void))
+            res.noValueAction = noValueAction;
+
+        static if(!is(RES_P == void) && is(RES_P == P))
+        {
+            if(!res.parse)
+                res.parse = other.parse;
+            if(!res.validate)
+                res.validate = other.validate;
+        }
+
+        static if(!is(RES_P == void) && !is(RES_R == void))
+        {
+            static if(is(RES_P == P) && is(RES_R == R))
+                if(!res.action)
+                    res.action = other.action;
+        }
+
+        static if(!is(RES_R == void) && is(RES_R == R))
+        {
+            if(!res.noValueAction)
+                res.noValueAction = other.noValueAction;
+        }
+
+        return res;
     }
 
+    auto addTypeDefaults(TYPE)()
+    {
+        static if(!is(typeof(TypedValueParser!TYPE) == void))
+            return addDefaults(TypedValueParser!TYPE);
+        else
+            return this;
+    }
 
-    // Procedure to process (parse) the values to an argument of type T
+    // Procedure to process (parse) the values to an argument of type RECEIVER
     //  - if there is a value(s):
     //      - pre validate raw strings
     //      - parse raw strings
@@ -104,46 +152,75 @@ package(argparse) struct ValueParser(alias PreProcess,
     //  - if there is no value:
     //      - action if no value
     // Requirement: rawValues.length must be correct
-    static Result parse(T)(ref T receiver, RawParam param)
+    Result parseParameter(RECEIVER)(ref RECEIVER receiver, RawParam param)
     {
-        return addDefaults!(TypedValueParser!T).addDefaults!DefaultValueParser.parseImpl(receiver, param);
+        static assert(!is(PARSE_TYPE == void) && !is(RECEIVER_TYPE == void));
+        return addTypeDefaults!RECEIVER.addDefaults.parseImpl(receiver, param);
     }
-    static Result parseImpl(T)(ref T receiver, ref RawParam rawParam)
+
+    static if(!is(PARSE_TYPE == void) && !is(RECEIVER_TYPE == void))
     {
-        alias preValidation = ValidateFunc!(PreValidation, "Pre validation");
-        alias parse         = ParseFunc!Parse;
-        alias ParseType     = parse.ReturnType;
-        alias validation    = ValidateFunc!Validation;
-        alias action        = ActionFunc!Action;
-        alias noValueAction = NoValueActionFunc!NoValueAction;
-
-        if(rawParam.value.length == 0)
+        auto addDefaults()
         {
-            return noValueAction(receiver, Param!void(rawParam.config, rawParam.name));
+            if(!preProcess)
+                preProcess = (ref _) {};
+            if(!preValidate)
+                preValidate = (string[] _) => true;
+            if(!validate)
+                validate = (PARSE_TYPE _) => true;
+            static if(__traits(compiles, { RECEIVER_TYPE receiver; receiver = PARSE_TYPE.init; }))
+            {
+                if (!action)
+                    action = (ref RECEIVER_TYPE receiver, Param!PARSE_TYPE param) { receiver = param.value; };
+            }
+            if(!noValueAction)
+                noValueAction = (ref RECEIVER_TYPE _, param) => processingError(param);
+
+            return this;
         }
-        else
+
+
+        Result parseImpl(RECEIVER_TYPE* receiver, ref RawParam rawParam) const
         {
-            PreProcess(rawParam);
+            return parseImpl(*receiver, rawParam);
+        }
+        Result parseImpl(ref RECEIVER_TYPE receiver, ref RawParam rawParam) const
+        {
+            assert(preProcess);
+            assert(preValidate);
+            assert(parse);
+            assert(validate);
+            assert(action);
+            assert(noValueAction);
 
-            Result res = preValidation(rawParam);
-            if(!res)
-                return res;
+            if (rawParam.value.length == 0)
+            {
+                return noValueAction(receiver, Param!void(rawParam.config, rawParam.name));
+            }
+            else
+            {
+                preProcess(rawParam);
 
-            auto parsedParam = Param!ParseType(rawParam.config, rawParam.name);
+                Result res = preValidate(rawParam);
+                if (!res)
+                    return res;
 
-            res = parse(parsedParam.value, rawParam);
-            if(!res)
-                return res;
+                auto parsedParam = Param!PARSE_TYPE(rawParam.config, rawParam.name);
 
-            res = validation(parsedParam);
-            if(!res)
-                return res;
+                res = parse(parsedParam.value, rawParam);
+                if (!res)
+                    return res;
 
-            res = action(receiver, parsedParam);
-            if(!res)
-                return res;
+                res = validate(parsedParam);
+                if (!res)
+                    return res;
 
-            return Result.Success;
+                res = action(receiver, parsedParam);
+                if (!res)
+                    return res;
+
+                return Result.Success;
+            }
         }
     }
 }
@@ -152,19 +229,10 @@ package(argparse) struct ValueParser(alias PreProcess,
 unittest
 {
     int receiver;
-    assert(ValueParser!(void, void, (ref int i, RawParam p) => Result.Error("test error"), void, Assign, void).parse(receiver, RawParam(null,"",[""])).isError("test error"));
+    auto vp = ValueParser!(void, void)()
+        .changeParse(ParseFunc!int((ref int i, RawParam p) => Result.Error("test error")));
+    assert(vp.parse(receiver, RawParam(null,"",[""])).isError("test error"));
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private alias DefaultValueParser = ValueParser!(
-    (_) {},                 // pre process
-    _ => Result.Success,    // pre validate
-    void,                   // parse
-    _ => Result.Success,    // validate
-    (ref receiver, value) => Assign(receiver, value),           // action
-    (ref receiver, Param!void param) => processingError(param)  // no-value action
-);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -175,30 +243,19 @@ if(!is(T == void))
 
     static if(is(T == enum))
     {
-        alias TypedValueParser = ValueParser!(
-            void,   // pre process
-            ValueInList!(getEnumValues!T, typeof(RawParam.value)),   // pre validate
-            getEnumValue!T,   // parse
-            void,   // validate
-            void,   // action
-            void    // no-value action
-        );
+        enum TypedValueParser = ValueParser!(T, T).init
+            .changePreValidation(ValidationFunc!(string[])((RawParam _) => ValueInList(getEnumValues!T)(_)))
+            .changeParse(ParseFunc!T((string _) => getEnumValue!T(_)));
     }
     else static if(isSomeString!T || isNumeric!T)
     {
-        alias TypedValueParser = ValueParser!(
-            void,       // pre process
-            void,       // pre validate
-            Convert!T,  // parse
-            void,       // validate
-            void,       // action
-            void        // no-value action
-        );
+        enum TypedValueParser = ValueParser!(T, T).init
+            .changeParse(Convert!T);
     }
     else static if(isBoolean!T)
     {
-        alias TypedValueParser = ValueParser!(
-            (ref RawParam param)                // pre process
+        enum TypedValueParser = ValueParser!(T, T).init
+            .changePreProcess((ref RawParam param)
             {
                 import std.algorithm.iteration: map;
                 import std.array: array;
@@ -208,75 +265,70 @@ if(!is(T == void))
                 // convert values to lower case and replace "" with "y"
                 foreach(ref value; param.value)
                     value = value.length == 0 ? "y" : value.representation.map!(_ => immutable char(_.toLower)).array;
-            },
-            ValueInList!(["true","yes","y","false","no","n"], typeof(RawParam.value)),   // pre validate
-            (string value)                      // parse
+            })
+            .changePreValidation(ValidationFunc!(string[])((RawParam _) => ValueInList("true","yes","y","false","no","n")(_)))
+            .changeParse(ParseFunc!T((string value)
             {
                 switch(value)
                 {
                     case "true", "yes", "y": return true;
                     default:                 return false;
                 }
-            },
-            void,                               // validate
-            void,                               // action
-            (ref T result) { result = true; }   // no-value action
-        );
+            }))
+            .changeNoValueAction(NoValueActionFunc!T((ref T receiver) { receiver = true; }));
     }
     else static if(isSomeChar!T)
     {
-        alias TypedValueParser = ValueParser!(
-            void,                         // pre process
-            void,                         // pre validate
-            (string value)                // parse
+        enum TypedValueParser = ValueParser!(T, T).init
+            .changeParse(ParseFunc!T((string value)
             {
+                import std.conv: to;
                 return value.length > 0 ? value[0].to!T : T.init;
-            },
-            void,                         // validate
-            void,                         // action
-            void                          // no-value action
-        );
+            }));
     }
     else static if(isArray!T)
     {
+        enum parseValue(TYPE) = ParseFunc!TYPE((ref TYPE receiver, RawParam param)
+            {
+                static if(!isStaticArray!TYPE)
+                {
+                    if(receiver.length < param.value.length)
+                        receiver.length = param.value.length;
+                }
+
+                foreach(i, value; param.value)
+                {
+                    Result res = TypedValueParser!(ForeachType!TYPE).parseParameter(receiver[i], RawParam(param.config, param.name, [value]));
+                    if(!res)
+                        return res;
+                }
+
+                return Result.Success;
+            });
+
+
         alias TElement = ForeachType!T;
 
         static if(!isArray!TElement || isSomeString!TElement)  // 1D array
         {
             static if(!isStaticArray!T)
-                alias action = Append;
+                enum action = Append!T;
             else
-                alias action = Assign;
+                enum action = Assign!T;
 
-            alias TypedValueParser =
-                TypedValueParser!TElement
-                .changePreProcess!splitValues
-                .changeParse!((ref T receiver, RawParam param)
-                {
-                    static if(!isStaticArray!T)
-                    {
-                        if(receiver.length < param.value.length)
-                            receiver.length = param.value.length;
-                    }
-
-                    foreach(i, value; param.value)
-                    {
-                        Result res = TypedValueParser!TElement.parse(receiver[i], RawParam(param.config, param.name, [value]));
-                        if(!res)
-                            return res;
-                    }
-
-                    return Result.Success;
-                })
-                .changeAction!(action)
-                .changeNoValueAction!((ref T param) {});
+            enum TypedValueParser = ValueParser!(T, T).init
+                .changePreProcess((ref _) => splitValues(_))
+                .changeParse(parseValue!T)
+                .changeAction(action)
+                .changeNoValueAction(NoValueActionFunc!T((ref T receiver) => Result.Success));
         }
         else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
         {
-            alias TypedValueParser =
-                TypedValueParser!TElement
-                .changeAction!Extend
-                .changeNoValueAction!((ref T param) { param ~= TElement.init; });
+            enum TypedValueParser = ValueParser!(TElement, T).init
+                .changePreProcess((ref _) => splitValues(_))
+                .changeParse(parseValue!TElement)
+                .changeAction(Extend!T)
+                .changeNoValueAction(NoValueActionFunc!T((ref T receiver) { receiver ~= TElement.init; }));
         }
         else
             static assert(false, "Multi-dimentional arrays are not supported: " ~ T.stringof);
@@ -284,12 +336,10 @@ if(!is(T == void))
     else static if(isAssociativeArray!T)
     {
         import std.string : indexOf;
-        alias TypedValueParser = ValueParser!(
-            splitValues,                               // pre process
-            void,                                      // pre validate
-            PassThrough,                               // parse
-            void,                                      // validate
-            (ref T recepient, Param!(string[]) param)  // action
+        enum TypedValueParser = ValueParser!(string[], T).init
+            .changePreProcess((ref _) => splitValues(_))
+            .changeParse(PassThrough)
+            .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
             {
                 alias K = KeyType!T;
                 alias V = ValueType!T;
@@ -301,43 +351,32 @@ if(!is(T == void))
                         return invalidValueError(param);
 
                     K key;
-                    Result res = TypedValueParser!K.parse(key, RawParam(param.config, param.name, [input[0 .. j]]));
+                    Result res = TypedValueParser!K.parseParameter(key, RawParam(param.config, param.name, [input[0 .. j]]));
                     if(!res)
                         return res;
 
                     V value;
-                    res = TypedValueParser!V.parse(value, RawParam(param.config, param.name, [input[j + 1 .. $]]));
+                    res = TypedValueParser!V.parseParameter(value, RawParam(param.config, param.name, [input[j + 1 .. $]]));
                     if(!res)
                         return res;
 
-                    recepient[key] = value;
+                    receiver[key] = value;
                 }
                 return Result.Success;
-            },
-            (ref T param) {}    // no-value action
-        );
+            }))
+            .changeNoValueAction(NoValueActionFunc!T((ref T receiver) => Result.Success));
     }
     else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
-        alias TypedValueParser = ValueParser!(
-            void,                   // pre process
-            void,                   // pre validate
-            PassThrough,            // parse
-            void,                   // validate
-            CallFunction!T,         // action
-            CallFunctionNoParam!T   // no-value action
-        );
+        enum TypedValueParser = ValueParser!(string[], T).init
+            .changeParse(PassThrough)
+            .changeAction(CallFunction!T)
+            .changeNoValueAction(CallFunctionNoParam!T);
     }
     else
     {
-        alias TypedValueParser = ValueParser!(
-            void,   // pre process
-            void,   // pre validate
-            void,   // parse
-            void,   // validate
-            void,   // action
-            void    // no-value action
-        );
+        enum TypedValueParser = ValueParser!(T, T).init
+            .changeAction(Assign!T);
     }
 }
 
@@ -352,7 +391,8 @@ unittest
             // ensure that this compiles
             R receiver;
             Config config;
-            TypedValueParser!R.parse(receiver, RawParam(&config, "", [""]));
+            auto rawParam = RawParam(&config, "", [""]);
+            TypedValueParser!R.parseParameter(receiver, rawParam);
         }}
 }
 
@@ -364,21 +404,22 @@ unittest
         R receiver;
         foreach(value; values)
         {
-            assert(TypedValueParser!R.parse(receiver, RawParam(&config, "", value)));
+            auto rawParam = RawParam(&config, "", value);
+            assert(TypedValueParser!R.parseParameter(receiver, rawParam));
         }
         return receiver;
     };
 
-    static assert(test!(string[])([["1","2","3"], [], ["4"]]) == ["1","2","3","4"]);
-    static assert(test!(string[][])([["1","2","3"], [], ["4"]]) == [["1","2","3"],[],["4"]]);
+    assert(test!(string[])([["1","2","3"], [], ["4"]]) == ["1","2","3","4"]);
+    assert(test!(string[][])([["1","2","3"], [], ["4"]]) == [["1","2","3"],[],["4"]]);
 
-    static assert(test!(string[string])([["a=bar","b=foo"], [], ["b=baz","c=boo"]]) == ["a":"bar", "b":"baz", "c":"boo"]);
+    assert(test!(string[string])([["a=bar","b=foo"], [], ["b=baz","c=boo"]]) == ["a":"bar", "b":"baz", "c":"boo"]);
 
-    static assert(test!(string[])([["1,2,3"], [], ["4"]]) == ["1","2","3","4"]);
-    static assert(test!(string[string])([["a=bar,b=foo"], [], ["b=baz,c=boo"]]) == ["a":"bar", "b":"baz", "c":"boo"]);
+    assert(test!(string[])([["1,2,3"], [], ["4"]]) == ["1","2","3","4"]);
+    assert(test!(string[string])([["a=bar,b=foo"], [], ["b=baz,c=boo"]]) == ["a":"bar", "b":"baz", "c":"boo"]);
 
-    static assert(test!(int[])([["1","2","3"], [], ["4"]]) == [1,2,3,4]);
-    static assert(test!(int[][])([["1","2","3"], [], ["4"]]) == [[1,2,3],[],[4]]);
+    assert(test!(int[])([["1","2","3"], [], ["4"]]) == [1,2,3,4]);
+    assert(test!(int[][])([["1","2","3"], [], ["4"]]) == [[1,2,3],[],[4]]);
 
 }
 
@@ -391,7 +432,7 @@ unittest
     {
         T receiver;
         Config config;
-        assert(TypedValueParser!T.parse(receiver, RawParam(&config, "", values)));
+        assert(TypedValueParser!T.parseParameter(receiver, RawParam(&config, "", values)));
         return receiver;
     };
 
@@ -434,7 +475,7 @@ unittest
     {
         T receiver;
         Config config;
-        return TypedValueParser!T.parse(receiver, RawParam(&config, "", values));
+        return TypedValueParser!T.parseParameter(receiver, RawParam(&config, "", values));
     };
 
     assert(testErr!string([]).isError("Can't process value"));
@@ -443,455 +484,6 @@ unittest
     assert(testErr!(int[int])(["123=1","unknown"]).isError("Invalid value","unknown"));
     assert(testErr!(int[int])(["123=1","unknown=2"]).isError());
     assert(testErr!(int[int])(["123=1","2=unknown"]).isError());
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// bool validate(T value)
-// bool validate(T[] value)
-// bool validate(Param!T param)
-// Result validate(T value)
-// Result validate(T[] value)
-// Result validate(Param!T param)
-private struct ValidateFunc(alias F, string funcName="Validation")
-{
-    static Result opCall(T)(Param!T param)
-    {
-        // Result validate(Param!T param)
-        static if(__traits(compiles, { Result res = F(param); }))
-        {
-            return F(param);
-        }
-        // bool validate(Param!T param)
-        else static if(__traits(compiles, { F(param); }))
-        {
-            return F(param) ? Result.Success : invalidValueError(param);
-        }
-        // Result validate(T value)
-        else static if(__traits(compiles, { Result res = F(param.value); }))
-        {
-            return F(param.value);
-        }
-        // bool validate(T value)
-        else static if(__traits(compiles, { F(param.value); }))
-        {
-            return F(param.value) ? Result.Success : invalidValueError(param);
-        }
-        // Result validate(T[] value)
-        else static if(__traits(compiles, { Result res = F(param.value[0]); }))
-        {
-            foreach(value; param.value)
-            {
-                Result res = F(value);
-                if(!res)
-                    return res;
-            }
-            return Result.Success;
-        }
-        // bool validate(T[] value)
-        else static if(__traits(compiles, { F(param.value[0]); }))
-        {
-            foreach(value; param.value)
-                if(!F(value))
-                    return invalidValueError(param);
-            return Result.Success;
-        }
-        else
-            static assert(false, funcName~" function is not supported for type "~T.stringof~": "~typeof(F).stringof);
-    }
-}
-
-unittest
-{
-    auto test(alias F, T)(T[] values)
-    {
-        Config config;
-        return ValidateFunc!F(Param!(T[])(&config, "", values));
-    }
-
-    // Result validate(Param!T param)
-    assert(test!((RawParam _) => Result.Success)(["1","2","3"]));
-    assert(test!((RawParam _) => Result.Error("error text"))(["1","2","3"]).isError("error text"));
-
-    // bool validate(Param!T param)
-    assert(test!((RawParam _) => true)(["1","2","3"]));
-    assert(test!((RawParam _) => false)(["1","2","3"]).isError("Invalid value"));
-
-    // Result validate(T value)
-    assert(test!((string _) => Result.Success)(["1","2","3"]));
-    assert(test!((string _) => Result.Error("error text"))(["1","2","3"]).isError("error text"));
-
-    // bool validate(T value)
-    assert(test!((string _) => true)(["1","2","3"]));
-    assert(test!((string _) => false)(["1","2","3"]).isError("Invalid value"));
-
-    // Result validate(T[] value)
-    assert(test!((string[] _) => Result.Success)(["1","2","3"]));
-    assert(test!((string[] _) => Result.Error("error text"))(["1","2","3"]).isError("error text"));
-
-    // bool validate(T[] value)
-    assert(test!((string[] _) => true)(["1","2","3"]));
-    assert(test!((string[] _) => false)(["1","2","3"]).isError("Invalid value"));
-}
-
-unittest
-{
-    auto test(alias F, T)(T[] values)
-    {
-        Config config;
-        return ValidateFunc!F(Param!(T[])(&config, "--argname", values));
-    }
-
-    // Result validate(Param!T param)
-    assert(test!((RawParam _) => Result.Success)(["1","2","3"]));
-    assert(test!((RawParam _) => Result.Error("error text"))(["1","2","3"]).isError("error text"));
-
-    // bool validate(Param!T param)
-    assert(test!((RawParam _) => true)(["1","2","3"]));
-    assert(test!((RawParam _) => false)(["1","2","3"]).isError("Invalid value","for argument","--argname"));
-
-    // Result validate(T value)
-    assert(test!((string _) => Result.Success)(["1","2","3"]));
-    assert(test!((string _) => Result.Error("error text"))(["1","2","3"]).isError("error text"));
-
-    // bool validate(T value)
-    assert(test!((string _) => true)(["1","2","3"]));
-    assert(test!((string _) => false)(["1","2","3"]).isError("Invalid value","for argument","--argname"));
-
-    // Result validate(T[] value)
-    assert(test!((string[] _) => Result.Success)(["1","2","3"]));
-    assert(test!((string[] _) => Result.Error("error text"))(["1","2","3"]).isError("error text"));
-
-    // bool validate(T[] value)
-    assert(test!((string[] _) => true)(["1","2","3"]));
-    assert(test!((string[] _) => false)(["1","2","3"]).isError("Invalid value","for argument","--argname"));
-}
-
-unittest
-{
-    auto test(alias F, T)()
-    {
-        Config config;
-        return ValidateFunc!F(RawParam(&config, "", ["1","2","3"]));
-    }
-
-    static assert(!__traits(compiles, { test!(() {}, string[]); }));
-    static assert(!__traits(compiles, { test!((int,int) {}, string[]); }));
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// DEST action()
-// bool action(ref DEST receiver)
-// void action(ref DEST receiver)
-// Result action(ref DEST receiver)
-// bool action(ref DEST receiver, Param!void param)
-// void action(ref DEST receiver, Param!void param)
-// Result action(ref DEST receiver, Param!void param)
-package struct NoValueActionFunc(alias F)
-{
-    static Result opCall(T)(ref T receiver, Param!void param)
-    {
-        // DEST action()
-        static if(__traits(compiles, { receiver = cast(T) F(); }))
-        {
-            receiver = cast(T) F();
-            return Result.Success;
-        }
-        // Result action(ref DEST receiver)
-        else static if(__traits(compiles, { Result res = F(receiver); }))
-        {
-            return F(receiver);
-        }
-        // bool action(ref DEST receiver)
-        else static if(__traits(compiles, { auto res = cast(bool) F(receiver); }))
-        {
-            return cast(bool) F(receiver) ? Result.Success : processingError(param);
-        }
-        // void action(ref DEST receiver)
-        else static if(__traits(compiles, { F(receiver); }))
-        {
-            F(receiver);
-            return Result.Success;
-        }
-        // Result action(ref DEST receiver, Param!void param)
-        else static if(__traits(compiles, { Result res = F(receiver, param); }))
-        {
-            return F(receiver, param);
-        }
-        // bool action(ref DEST receiver, Param!void param)
-        else static if(__traits(compiles, { auto res = cast(bool) F(receiver, param); }))
-        {
-            return cast(bool) F(receiver, param) ? Result.Success : processingError(param);
-        }
-        // void action(ref DEST receiver, Param!void param)
-        else static if(__traits(compiles, { F(receiver, param); }))
-        {
-            F(receiver, param);
-            return Result.Success;
-        }
-        else
-            static assert(false, "No-value action function has too many parameters: "~Parameters!F.stringof);
-    }
-}
-
-unittest
-{
-    auto test(alias F, T)()
-    {
-        T receiver;
-        assert(NoValueActionFunc!F(receiver, Param!void.init));
-        return receiver;
-    }
-    auto testErr(alias F, T)()
-    {
-        T receiver;
-        return NoValueActionFunc!F(receiver, Param!void.init);
-    }
-
-    // DEST action()
-    assert(test!(() => 7, int) == 7);
-
-    // Result action(ref DEST receiver)
-    assert(test!((ref int r) { r=7; return Result.Success; }, int) == 7);
-    assert(testErr!((ref int r) => Result.Error("error text"), int).isError("error text"));
-
-    // bool action(ref DEST receiver)
-    assert(test!((ref int p) { p=7; return true; }, int) == 7);
-    assert(testErr!((ref int p) => false, int).isError("Can't process value"));
-
-    // void action(ref DEST receiver)
-    assert(test!((ref int p) { p=7; }, int) == 7);
-
-    // Result action(ref DEST receiver, Param!void param)
-    assert(test!((ref int r, Param!void p) { r=7; return Result.Success; }, int) == 7);
-    assert(testErr!((ref int r, Param!void p) => Result.Error("error text"), int).isError("error text"));
-
-    // bool action(ref DEST receiver, Param!void param)
-    assert(test!((ref int r, Param!void p) { r=7; return true; }, int) == 7);
-    assert(testErr!((ref int r, Param!void p) => false, int).isError("Can't process value"));
-
-    // void action(ref DEST receiver, Param!void param)
-    assert(test!((ref int r, Param!void p) { r=7; }, int) == 7);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// T parse(string[] value)
-// T parse(string value)
-// T parse(RawParam param)
-// Result parse(ref T receiver, RawParam param)
-// bool parse(ref T receiver, RawParam param)
-// void parse(ref T receiver, RawParam param)
-private struct ParseFunc(alias F)
-{
-    // T parse(string[] value)
-    static if(__traits(compiles, { F(RawParam.init.value); }))
-    {
-        alias ReturnType = Unqual!(typeof(F(RawParam.init.value)));
-
-        static Result opCall(ref ReturnType receiver, RawParam param)
-        {
-            receiver = cast(ReturnType) F(param.value);
-            return Result.Success;
-        }
-    }
-    // T parse(string value)
-    else static if(__traits(compiles, { F(RawParam.init.value[0]); }))
-    {
-        alias ReturnType = Unqual!(typeof(F(RawParam.init.value[0])));
-
-        static Result opCall(ref ReturnType receiver, RawParam param)
-        {
-            foreach (value; param.value)
-                receiver = cast(ReturnType) F(value);
-            return Result.Success;
-        }
-    }
-    // T parse(RawParam param)
-    else static if(__traits(compiles, { F(RawParam.init); }))
-    {
-        alias ReturnType = Unqual!(typeof(F(RawParam.init)));
-
-        static Result opCall(ref ReturnType receiver, RawParam param)
-        {
-            receiver = cast(ReturnType) F(param);
-            return Result.Success;
-        }
-    }
-    // ... parse(..., ...)
-    else static if(isCallable!F && Parameters!F.length == 2)
-    {
-        alias ReturnType = Parameters!F[0];
-
-        static Result opCall(ref ReturnType receiver, RawParam param)
-        {
-            // Result parse(ref T receiver, RawParam param)
-            static if(__traits(compiles, { Result res = F(receiver, param); }))
-            {
-                return F(receiver, param);
-            }
-            // bool parse(ref T receiver, RawParam param)
-            else static if(__traits(compiles, { auto res = cast(bool) F(receiver, param); }))
-            {
-                return (cast(bool) F(receiver, param)) ? Result.Success : processingError(param);
-            }
-            // void parse(ref T receiver, RawParam param)
-            else static if(__traits(compiles, { F(receiver, param); }))
-            {
-                F(receiver, param);
-                return Result.Success;
-            }
-            else
-                static assert(false, "Parse function is not supported");
-        }
-    }
-    else
-        static assert(false, "Parse function is not supported");
-}
-
-unittest
-{
-    auto test(alias F, T)(string[] values)
-    {
-        T receiver;
-        Config config;
-        assert(ParseFunc!F(receiver, RawParam(&config, "", values)));
-        return receiver;
-    }
-    auto testErr(alias F, T)(string[] values)
-    {
-        T receiver;
-        Config config;
-        return ParseFunc!F(receiver, RawParam(&config, "", values));
-    }
-
-    // T parse(string value)
-    assert(test!((string a) => a, string)(["1","2","3"]) == "3");
-
-    // T parse(string[] value)
-    assert(test!((string[] a) => a, string[])(["1","2","3"]) == ["1","2","3"]);
-
-    // T parse(RawParam param)
-    assert(test!((RawParam p) => p.value[0], string)(["1","2","3"]) == "1");
-
-    // Result parse(ref T receiver, RawParam param)
-    assert(test!((ref string[] r, RawParam p) { r = p.value; return Result.Success; }, string[])(["1","2","3"]) == ["1","2","3"]);
-    assert(testErr!((ref string[] r, RawParam p) => Result.Error("error text"), string[])(["1","2","3"]).isError("error text"));
-
-    // bool parse(ref T receiver, RawParam param)
-    assert(test!((ref string[] r, RawParam p) { r = p.value; return true; }, string[])(["1","2","3"]) == ["1","2","3"]);
-    assert(testErr!((ref string[] r, RawParam p) => false, string[])(["1","2","3"]).isError("Can't process value"));
-
-    // void parse(ref T receiver, RawParam param)
-    assert(test!((ref string[] r, RawParam p) { r = p.value; }, string[])(["1","2","3"]) == ["1","2","3"]);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// bool action(ref T receiver, ParseType value)
-// void action(ref T receiver, ParseType value)
-// Result action(ref T receiver, ParseType value)
-// bool action(ref T receiver, Param!ParseType param)
-// void action(ref T receiver, Param!ParseType param)
-// Result action(ref T receiver, Param!ParseType param)
-private struct ActionFunc(alias F)
-{
-    static Result opCall(T, ParseType)(ref T receiver, Param!ParseType param)
-    {
-        // Result action(ref T receiver, Param!ParseType param)
-        static if(__traits(compiles, { Result res = F(receiver, param.value); }))
-        {
-            return F(receiver, param.value);
-        }
-        // bool action(ref T receiver, ParseType value)
-        else static if(__traits(compiles, { auto res = cast(bool) F(receiver, param.value); }))
-        {
-            return cast(bool) F(receiver, param.value) ? Result.Success : processingError(param);
-        }
-        // void action(ref T receiver, ParseType value)
-        else static if(__traits(compiles, { F(receiver, param.value); }))
-        {
-            F(receiver, param.value);
-            return Result.Success;
-        }
-        // Result action(ref T receiver, Param!ParseType param)
-        else static if(__traits(compiles, { Result res = F(receiver, param); }))
-        {
-            return F(receiver, param);
-        }
-        // bool action(ref T receiver, Param!ParseType param)
-        else static if(__traits(compiles, { auto res = cast(bool) F(receiver, param); }))
-        {
-            return cast(bool) F(receiver, param) ? Result.Success : processingError(param);
-        }
-        // void action(ref T receiver, Param!ParseType param)
-        else static if(__traits(compiles, { F(receiver, param); }))
-        {
-            F(receiver, param);
-            return Result.Success;
-        }
-        else
-            static assert(false, "Action function is not supported");
-    }
-}
-
-unittest
-{
-    auto test(alias F, T)(T values)
-    {
-        T receiver;
-        Config config;
-        assert(ActionFunc!F(receiver, Param!T(&config, "", values)));
-        return receiver;
-    }
-    auto testErr(alias F, T)(T values)
-    {
-        T receiver;
-        Config config;
-        return ActionFunc!F(receiver, Param!T(&config, "", values));
-    }
-
-    static assert(!__traits(compiles, { test!(() {})(["1","2","3"]); }));
-    static assert(!__traits(compiles, { test!((int,int) {})(["1","2","3"]); }));
-
-    // Result action(ref T receiver, ParseType value)
-    assert(test!((ref string[] p, string[] a) { p=a; return Result.Success; })(["1","2","3"]) == ["1","2","3"]);
-    assert(testErr!((ref string[] p, string[] a) => Result.Error("error text"))(["1","2","3"]).isError("error text"));
-
-    // bool action(ref T receiver, ParseType value)
-    assert(test!((ref string[] p, string[] a) { p=a; return true; })(["1","2","3"]) == ["1","2","3"]);
-    assert(testErr!((ref string[] p, string[] a) => false)(["1","2","3"]).isError("Can't process value"));
-
-    // void action(ref T receiver, ParseType value)
-    assert(test!((ref string[] p, string[] a) { p=a; })(["1","2","3"]) == ["1","2","3"]);
-
-    // Result action(ref T receiver, Param!ParseType param)
-    assert(test!((ref string[] p, Param!(string[]) a) { p=a.value; return Result.Success; }) (["1","2","3"]) == ["1","2","3"]);
-    assert(testErr!((ref string[] p, Param!(string[]) a) => Result.Error("error text"))(["1","2","3"]).isError("error text"));
-
-    // bool action(ref T receiver, Param!ParseType param)
-    assert(test!((ref string[] p, Param!(string[]) a) { p=a.value; return true; }) (["1","2","3"]) == ["1","2","3"]);
-    assert(testErr!((ref string[] p, Param!(string[]) a) => false)(["1","2","3"]).isError("Can't process value"));
-
-    // void action(ref T receiver, Param!ParseType param)
-    assert(test!((ref string[] p, Param!(string[]) a) { p=a.value; })(["1","2","3"]) == ["1","2","3"]);
-}
-
-unittest
-{
-    alias test = (int[] v1, int[] v2) {
-        int[] res;
-
-        Param!(int[]) param;
-
-        param.value = v1;   ActionFunc!Append(res, param);
-
-        param.value = v2;   ActionFunc!Append(res, param);
-
-        return res;
-    };
-    assert(test([1,2,3],[7,8,9]) == [1,2,3,7,8,9]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

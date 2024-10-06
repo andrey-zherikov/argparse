@@ -46,29 +46,12 @@ private Result ArgumentParsingFunction(Config config, alias uda, RECEIVER)(const
                                                                            string argName,
                                                                            string[] rawValues)
 {
-    static if(is(typeof(uda.parse)))
-        return uda.parse!config(cmdStack, receiver, argName, rawValues);
+    static if(uda.info.memberSymbol)
+        auto target = &__traits(getMember, receiver, uda.info.memberSymbol);
     else
-        try
-        {
-            auto res = uda.info.checkValuesCount(config, argName, rawValues.length);
-            if(!res)
-                return res;
+        auto target = null;
 
-            const cfg = config;
-            auto param = RawParam(&cfg, argName, rawValues);
-
-            auto target = &__traits(getMember, receiver, uda.info.memberSymbol);
-
-            static if(is(typeof(target) == function) || is(typeof(target) == delegate))
-                return uda.parsingFunc.parse(target, param);
-            else
-                return uda.parsingFunc.parse(*target, param);
-        }
-        catch(Exception e)
-        {
-            return Result.Error("Argument '", config.styling.argumentName(argName), ": ", e.msg);
-        }
+    return uda.parse(config, cmdStack, target, argName, rawValues);
 }
 
 private Result ArgumentCompleteFunction(Config config, alias uda, RECEIVER)(const Command[] cmdStack,
