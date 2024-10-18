@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        dc: [dmd-2.099.1, dmd-latest, ldc-latest]
+        dc: [dmd-latest, ldc-latest]
         include:
           - { os: macOS-latest, dc: ldc-latest }
 
