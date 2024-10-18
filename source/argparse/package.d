@@ -137,9 +137,8 @@ unittest
 
         @(PositionalArgument(0, "a")
         .Description("Argument 'a'")
-        .Validation!((int a) { return a > 3;})
-        .PreValidation!((string s) { return s.length > 0;})
-        .Validation!((int a) { return a > 0;})
+        .PreValidation((string s) { return s.length > 0;})
+        .Validation((int a) { return a > 0;})
         )
         int a;
 
@@ -710,10 +709,10 @@ unittest
     struct T
     {
         @(NamedArgument
-         .PreValidation!((string s) { return s.length > 1 && s[0] == '!'; })
-         .Parse        !((string s) { return s[1]; })
-         .Validation   !((char v) { return v >= '0' && v <= '9'; })
-         .Action       !((ref int a, char v) { a = v - '0'; })
+         .PreValidation((string s) { return s.length > 1 && s[0] == '!'; })
+         .Parse        ((string s) { return cast(char) s[1]; })
+         .Validation   ((char v) { return v >= '0' && v <= '9'; })
+         .Action       ((ref int a, char v) { a = v - '0'; })
         )
         int a;
     }
@@ -738,7 +737,7 @@ unittest
     struct Value { string a; }
     struct T
     {
-        @(NamedArgument.Parse!((string s) { return Value(s); }))
+        @(NamedArgument.Parse((string _) => Value(_)))
         Value s;
     }
 
