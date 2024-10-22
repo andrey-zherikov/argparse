@@ -5,8 +5,91 @@
 
 `argparse` is a flexible utility for [D programming language](https://dlang.org/) to parse command line arguments.
 
-> [!IMPORTANT]
-> Please be aware that current HEAD contains breaking changes comparing to 1.* version.
+> [!WARNING]
+> :warning: Please be aware that current HEAD contains breaking changes comparing to 1.* 
+> 
+> :warning: This includes changes in documentation - documentation for 1.* version is [here](https://github.com/andrey-zherikov/argparse/blob/v1.3.0/README.md)
+
+## Changes since 1.* version
+
+<details>
+<summary>Changelog</summary>
+
+### Breaking changes
+
+* Custom error handler function (`Config.errorHandler`) now receives message text with ANSI styling if styling is enabled. One can use `argparse.ansi.getUnstyledText` function to remove any styling - this function returns a range of unstyled `string` objects which can be used as is or `join`'ed into a string if  needed: `message.getUnstyledText.join`.
+
+* `Config.namedArgChar` is renamed to `Config.namedArgPrefix`.
+
+* `Config.endOfArgs` is renamed to `Config.endOfNamedArgs`.
+
+* `Config.helpStyle` is renamed to `Config.styling`.
+
+* `Config.addHelp` is renamed to `Config.addHelpArgument`.
+
+* `Style.namedArgumentName` is renamed to `Style.argumentName`.
+
+* Underlying type of `ansiStylingArgument` argument is changed. It can now be directly cast to boolean instead comparing against `Config.StylingMode`.
+
+  So if you use it:
+  ```d
+    static auto color = ansiStylingArgument;
+  ```
+  then you should replace
+  ```d
+    if(args.color == Config.StylingMode.on)
+  ```
+  with
+  ```d
+    if(args.color)
+  ```
+
+* `@SubCommands` UDA is removed. One should use `SubCommand` template instead of `SumType`
+
+  Simply replace
+  ```d
+    @SubCommands SumType!(CMD1, CMD2, Default!CMD3) cmd;
+  ```
+  with
+  ```d
+    SubCommand!(CMD1, CMD2, Default!CMD3) cmd;
+  ```
+
+* `@TrailingArguments` UDA is removed: all command line parameters that appear after double-dash `--` are considered as positional arguments. So if those parameters are to be parsed, use `@PositionalArgument` instead of `@TrailingArguments`.
+
+
+### Enhancements and bug fixes
+
+* Boolean values (`yes`,`y`,`true`,`no`,`n` and `false`) are now parsed case-insensitively.
+* Fix for `Command()` UDA: `ArrayIndexError` is not thrown anymore.
+* Error messages are printed with `Config.styling` and now have the same styling as help text.
+* New `errorMessagePrefix` member in `Config.styling` that determines the style of "Error:" prefix in error messages. This prefix is printed in red by default.
+* New checks:
+  * Argument is not allowed to be in multiple argument groups.
+  * Subcommand name can't start with `Config.namedArgPrefix` (dash `-` by default).
+  * For positional arguments within a command:
+    * There should be no gaps in indexes, e.g. `0,1,3,4` indexes are not allowed because `2` is missed.
+    * Indexes should be unique, e.g. `0,1,2,3,2` indexes are not allowed because `2` is repeated.
+    * Number of values should be fixed (i.e. minimum number of values should be the same as maximum number of values) unless it's the last positional argument.
+    * Required positional arguments must go before optional positional arguments.
+    * Optional positional arguments are now allowed if command has default subcommand.
+* Functions for parsing customization (`PreValidation`, `Parse`, `Validation` and `Action`) can now return `Result` through `Result.Success` or `Result.Error` and provide error message if needed.
+* Fixes for bundling of single-letter arguments.
+  For example, the following cases are supported for `bool b; string s;` arguments:
+  * `./prog -b -s=abc`
+  * `./prog -b -s abc`
+  * `./prog -b -sabc`
+  * `./prog -bsabc`
+  * `./prog -bs=abc`
+* Removed support for delegate in `Config.errorHandler`, `Description`, `ShortDescription`, `Usage` and `Epilog` because of compiler's `closures are not yet supported in CTFE`.
+
+### Other changes
+
+* Removed dependency on `std.regex`.
+* New code base: library implementation is almost fully rewritten (public API was not changed in this effort). Unnecessary templates were replaced with regular functions. As a result, compilation time and memory usage were improved: 2x better for `dub build` and 4x better for `dub test`.
+* [New documentation](https://andrey-zherikov.github.io/argparse/)
+</details>
+
 
 ## Features
 
