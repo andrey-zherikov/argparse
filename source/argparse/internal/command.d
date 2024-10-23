@@ -206,6 +206,7 @@ private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUD
                                             getSymbolsByUDA!(COMMAND, NamedArgument ).length == 0;
 
 private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
+private enum isConstructor(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem) == "__ctor";
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -213,13 +214,21 @@ private template iterateArguments(TYPE)
 {
     import std.meta: Filter, anySatisfy;
 
+    // In case if TYPE is no members with ArgumentUDA, we filter out "op..." functions and ctors
+    // Otherwise, we pick members with ArgumentUDA
+    static if(hasNoMembersWithUDA!TYPE)
+        enum isValidArgumentMember(alias mem) = !isOpFunction!mem && !isConstructor!mem;
+    else
+        enum isValidArgumentMember(alias mem) = anySatisfy!(isArgumentUDA, __traits(getAttributes, mem));
+
     template filter(string sym)
     {
         alias mem = __traits(getMember, TYPE, sym);
 
-        enum filter = !is(mem) && !isSubCommand!(typeof(mem)) && (
-            anySatisfy!(isArgumentUDA, __traits(getAttributes, mem)) ||
-            hasNoMembersWithUDA!TYPE && !isOpFunction!mem);
+        enum filter =
+            !is(mem) &&                     // not a type       -- and --
+            !isSubCommand!(typeof(mem)) &&  // not subcommand   -- and --
+            isValidArgumentMember!mem;      // is valid argument member
     }
 
     alias iterateArguments = Filter!(filter, __traits(allMembers, TYPE));
