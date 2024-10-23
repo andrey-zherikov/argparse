@@ -62,8 +62,8 @@ template CLI(Config config, COMMAND)
         return res;
     }
 
-    static int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)
-    if(__traits(compiles, { newMain(COMMAND.init); }))
+    static int parseArgs(alias newMain)(string[] args, auto ref COMMAND initialValue = COMMAND.init)
+    if(__traits(compiles, { newMain(initialValue); }))
     {
         alias value = initialValue;
 
@@ -80,8 +80,8 @@ template CLI(Config config, COMMAND)
         }
     }
 
-    static int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)
-    if(__traits(compiles, { newMain(COMMAND.init, string[].init); }))
+    static int parseArgs(alias newMain)(string[] args, auto ref COMMAND initialValue = COMMAND.init)
+    if(__traits(compiles, { newMain(initialValue, string[].init); }))
     {
         alias value = initialValue;
 
@@ -154,3 +154,60 @@ template CLI(Config config, COMMAND)
 }
 
 alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    static struct Args {}
+
+    Args initValue;
+
+    enum cfg = Config.init;
+
+    assert(CLI!(cfg, Args).parseArgs!((_                  ){})([]) == 0);
+    assert(CLI!(cfg, Args).parseArgs!((_, string[] unknown){})([]) == 0);
+    assert(CLI!(cfg, Args).parseArgs!((_                  ){ return 123; })([]) == 123);
+    assert(CLI!(cfg, Args).parseArgs!((_, string[] unknown){ return 123; })([]) == 123);
+
+    assert(CLI!(cfg, Args).parseArgs!((_                  ){})([], initValue) == 0);
+    assert(CLI!(cfg, Args).parseArgs!((_, string[] unknown){})([], initValue) == 0);
+    assert(CLI!(cfg, Args).parseArgs!((_                  ){ return 123; })([], initValue) == 123);
+    assert(CLI!(cfg, Args).parseArgs!((_, string[] unknown){ return 123; })([], initValue) == 123);
+
+    // Ensure that CLI.main is compilable
+    { mixin CLI!(cfg, Args).main!((_                  ){}); }
+    { mixin CLI!(cfg, Args).main!((_, string[] unknown){}); }
+    { mixin CLI!(cfg, Args).main!((_                  ){ return 123; }); }
+    { mixin CLI!(cfg, Args).main!((_, string[] unknown){ return 123; }); }
+}
+
+// Ensure that CLI works with non-copyable structs
+unittest
+{
+    static struct Args {
+        @disable this(ref Args);
+        this(int) {}
+    }
+
+    //Args initValue;
+    auto initValue = Args(0);
+
+    enum cfg = Config.init;
+
+    assert(CLI!(cfg, Args).parseArgs!((ref _                  ){})([]) == 0);
+    assert(CLI!(cfg, Args).parseArgs!((ref _, string[] unknown){})([]) == 0);
+    assert(CLI!(cfg, Args).parseArgs!((ref _                  ){ return 123; })([]) == 123);
+    assert(CLI!(cfg, Args).parseArgs!((ref _, string[] unknown){ return 123; })([]) == 123);
+
+    assert(CLI!(cfg, Args).parseArgs!((ref _                  ){})([], initValue) == 0);
+    assert(CLI!(cfg, Args).parseArgs!((ref _, string[] unknown){})([], initValue) == 0);
+    assert(CLI!(cfg, Args).parseArgs!((ref _                  ){ return 123; })([], initValue) == 123);
+    assert(CLI!(cfg, Args).parseArgs!((ref _, string[] unknown){ return 123; })([], initValue) == 123);
+
+    // Ensure that CLI.main is compilable
+    { mixin CLI!(cfg, Args).main!((ref _                  ){}); }
+    { mixin CLI!(cfg, Args).main!((ref _, string[] unknown){}); }
+    { mixin CLI!(cfg, Args).main!((ref _                  ){ return 123; }); }
+    { mixin CLI!(cfg, Args).main!((ref _, string[] unknown){ return 123; }); }
+}
