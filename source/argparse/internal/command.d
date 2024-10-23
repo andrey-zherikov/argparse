@@ -107,6 +107,7 @@ private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUD
                                             getSymbolsByUDA!(COMMAND, SubCommands  ).length == 0;
 
 private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
+private enum isConstructor(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem) == "__ctor";
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -122,7 +123,7 @@ private template iterateArguments(TYPE)
         enum filter = !is(mem) && (
             hasUDA!(mem, ArgumentUDA) ||
             hasUDA!(mem, NamedArgument) ||
-            hasNoMembersWithUDA!TYPE && !isOpFunction!mem && !isSumType!(typeof(mem)));
+            hasNoMembersWithUDA!TYPE && !isOpFunction!mem && !isConstructor!mem && !isSumType!(typeof(mem)));
     }
 
     alias iterateArguments = Filter!(filter, __traits(allMembers, TYPE));
