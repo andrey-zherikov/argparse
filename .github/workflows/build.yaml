@@ -14,10 +14,8 @@ jobs:
     name: Matrix Build
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        dc: [dmd-latest, ldc-latest]
-        include:
-          - { os: macOS-latest, dc: ldc-latest }
+        os: [macOS-latest, macOS-13]
+        dc: [ldc-1.39.0, ldc-1.38.0]
 
     runs-on: ${{ matrix.os }}
     steps:
