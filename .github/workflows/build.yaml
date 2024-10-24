@@ -49,6 +49,20 @@ jobs:
       - name: Build examples
         run: dub --root examples build --parallel --verbose
 
+      - name: Run examples
+        run: |
+          dub run --root examples --verbose all:completion-separate_main-app
+          dub run --root examples --verbose all:completion-separate_main-completer
+          dub run --root examples --verbose all:completion-single_main-app
+          dub run --root examples --verbose all:completion-single_main-completer
+          dub run --root examples --verbose all:getting_started-advanced -- foo
+          dub run --root examples --verbose all:getting_started-basic
+          dub run --root examples --verbose all:sub_commands-advanced
+          dub run --root examples --verbose all:sub_commands-advanced
+          dub run --root examples --verbose all:sub_commands-basic
+          dub run --root examples --verbose all:sub_commands-common_args
+          dub run --root examples --verbose all:sub_commands-default
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
