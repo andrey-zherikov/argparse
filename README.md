@@ -59,11 +59,11 @@
 
 * `@TrailingArguments` UDA is removed: all command line parameters that appear after double-dash `--` are considered as positional arguments. So if those parameters are to be parsed, use `@PositionalArgument` instead of `@TrailingArguments`.
 
-* Changes in parsing customization: all customizers (`PreValidation`, `Parse`, `Validation`, `Action`, `ActionNoValue`) now accept functions as runtime parameters instead of template arguments
+* Functions for parsing customization (`PreValidation`, `Parse`, `Validation` and `Action`) now accept functions as runtime parameters instead of template arguments
 
   For example, replace this
   ```d
-    .Parse     !((string s) { return s[1]; })
+    .Parse     !((string s) { return cast(char) s[1]; })
     .Validation!((char v) { return v >= '0' && v <= '9'; })
   ```
   with
@@ -71,7 +71,6 @@
     .Parse     ((string s) { return cast(char) s[1]; })
     .Validation((char v) { return v >= '0' && v <= '9'; })
   ```
-
 
 * Dropped support for DMD-2.099.
 
