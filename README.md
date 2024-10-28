@@ -17,15 +17,17 @@
 
 ### Breaking changes
 
-* Custom error handler function (`Config.errorHandler`) now receives message text with ANSI styling if styling is enabled. One can use `argparse.ansi.getUnstyledText` function to remove any styling - this function returns a range of unstyled `string` objects which can be used as is or `join`'ed into a string if  needed: `message.getUnstyledText.join`.
+* Changes in `Config`:
 
-* `Config.namedArgChar` is renamed to `Config.namedArgPrefix`.
+  * Custom error handler function (`Config.errorHandler`) now receives message text with ANSI styling if styling is enabled. One can use `argparse.ansi.getUnstyledText` function to remove any styling - this function returns a range of unstyled `string` objects which can be used as is or `join`'ed into a string if  needed: `message.getUnstyledText.join`.
 
-* `Config.endOfArgs` is renamed to `Config.endOfNamedArgs`.
+  * `Config.namedArgChar` is renamed to `Config.namedArgPrefix`.
 
-* `Config.helpStyle` is renamed to `Config.styling`.
+  * `Config.endOfArgs` is renamed to `Config.endOfNamedArgs`.
 
-* `Config.addHelp` is renamed to `Config.addHelpArgument`.
+  * `Config.helpStyle` is renamed to `Config.styling`.
+
+  * `Config.addHelp` is renamed to `Config.addHelpArgument`.
 
 * `Style.namedArgumentName` is renamed to `Style.argumentName`.
 
@@ -57,6 +59,21 @@
 
 * `@TrailingArguments` UDA is removed: all command line parameters that appear after double-dash `--` are considered as positional arguments. So if those parameters are to be parsed, use `@PositionalArgument` instead of `@TrailingArguments`.
 
+* Changes in parsing customization: all customizers (`PreValidation`, `Parse`, `Validation`, `Action`, `ActionNoValue`) now accept functions as runtime parameters instead of template arguments
+
+  For example, replace this
+  ```d
+    .Parse     !((string s) { return s[1]; })
+    .Validation!((char v) { return v >= '0' && v <= '9'; })
+  ```
+  with
+  ```d
+    .Parse     ((string s) { return cast(char) s[1]; })
+    .Validation((char v) { return v >= '0' && v <= '9'; })
+  ```
+
+
+* Dropped support for DMD-2.099.
 
 ### Enhancements and bug fixes
 
