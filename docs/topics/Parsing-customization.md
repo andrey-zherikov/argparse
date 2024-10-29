@@ -55,16 +55,24 @@ Return value:
 the following signatures:
 
 - `ParseType parse(string value)`
-- `ParseType parse(string[] value)`
-- `ParseType parse(RawParam param)`
-- `bool   parse(ref ParseType receiver, RawParam param)`
-- `void   parse(ref ParseType receiver, RawParam param)`
-- `Result parse(ref ParseType receiver, RawParam param)`
 
-> `ParseType` is a type that a string value is supposed to be parsed to and it is not required be the same as
-a type of destination - `argparse` tries to detect this type from provided function.
->
-{title="ParseType"}
+  `ParseType parse(string[] value)`
+
+  `ParseType parse(RawParam param)`
+
+  > `ParseType` is a type that a string value is supposed to be parsed to and it is not required be the same as
+  a type of destination - `argparse` tries to detect this type from provided function.
+  >
+  > `ParseType` must not be immutable or const.
+  >
+  {title="ParseType"}
+
+- `void   parse(ref ParseType receiver, RawParam param)`
+
+  `bool   parse(ref ParseType receiver, RawParam param)`
+
+  `Result parse(ref ParseType receiver, RawParam param)`
+
 
 Parameters:
 
@@ -84,13 +92,13 @@ signatures:
 
   `Result validate(ParseType value)`
 
-- `bool   validate(ParseType[] value)`
-
-  `Result validate(ParseType[] value)`
-
 - `bool   validate(Param!ParseType param)`
 
   `Result validate(Param!ParseType param)`
+
+> `ParseType` is a type that is used in `Parse` modifier or `string` if the latter is omitted.
+>
+{title="ParseType"}
 
 Parameters:
 
@@ -106,17 +114,21 @@ Return value:
 `Action` modifier allows customizing a logic of how "destination" should be changed when argument has a value in
 command line. It accepts a function with one of the following signatures:
 
-- `bool   action(ref T receiver, ParseType value)`
+- `void   action(ref T receiver, ParseType value)`
 
-  `void   action(ref T receiver, ParseType value)`
+  `bool   action(ref T receiver, ParseType value)`
 
-- `Result action(ref T receiver, ParseType value)`
-
-  `bool   action(ref T receiver, Param!ParseType param)`
+  `Result action(ref T receiver, ParseType value)`
 
 - `void   action(ref T receiver, Param!ParseType param)`
 
+  `bool   action(ref T receiver, Param!ParseType param)`
+
   `Result action(ref T receiver, Param!ParseType param)`
+
+> `ParseType` is a type that is used in `Parse` modifier or `string` if the latter is omitted.
+>
+{title="ParseType"}
 
 Parameters:
 
