@@ -1062,7 +1062,7 @@ void printText(bool enableStyle)
   auto myStyle = enableStyle ? bold.italic.cyan.onRed : noStyle;
   
   // "Hello" is always printed in green;
-  // "world!" is printed in bold, italic, cyan and on red when `enableStyle` is true, "as is" otherwise
+  // "world!" is printed in bold, italic, cyan and on red when `enableStyle` is true, or "as is" otherwise
   writeln(green("Hello "), myStyle("world!"));
 }
 ```
@@ -1110,7 +1110,7 @@ struct Arguments
 mixin CLI!Arguments.main!((args)
 {
     // 'autodetect' is converted to either 'on' or 'off' 
-    if(args.color == Config.StylingMode.on)
+    if(args.color)
       writeln("Colors are enabled");
     else
       writeln("Colors are disabled");
@@ -1131,7 +1131,7 @@ This parameter has the following members that can be tuned:
 
 ### Heuristics for enabling styling
 
-Below is the exact sequence of steps argparse uses to determine whether or not to emit ANSI escape codes
+Below is the exact sequence of steps `argparse` uses to determine whether or not to emit ANSI escape codes
 (see detectSupport() function [here](https://github.com/andrey-zherikov/argparse/blob/master/source/argparse/ansi.d) for details):
 
 1. If environment variable `NO_COLOR != ""` then styling is **disabled**. See [here](https://no-color.org/) for details.
@@ -1526,7 +1526,7 @@ assert(CLI!T.parseArgs!((T t) { assert(t == T(4)); })(["-a","!4"]) == 0);
 
 ## Parser customization
 
-`argparser` provides decent amount of settings to customize the parser. All customizations can be done by creating
+`argparse` provides decent amount of settings to customize the parser. All customizations can be done by creating
 `Config` object with required settings (see below).
 
 ### Assign character
