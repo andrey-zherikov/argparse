@@ -55,11 +55,6 @@ private struct AnsiStylingArgument
     }
 }
 
-auto ansiStylingArgument()
-{
-    return AnsiStylingArgument.init;
-}
-
 unittest
 {
     import std.conv: to;
@@ -93,4 +88,16 @@ unittest
     assert(test("auto")   == Config.StylingMode.autodetect);
     assert(test("never")  == Config.StylingMode.off);
     assert(test("")       == Config.StylingMode.autodetect);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+auto ansiStylingArgument()
+{
+    return AnsiStylingArgument.init;
+}
+
+unittest
+{
+    assert(ansiStylingArgument == AnsiStylingArgument.init);
 }
