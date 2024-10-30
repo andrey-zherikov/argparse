@@ -349,7 +349,7 @@ struct my_command
 **Signature**
 
 ```C++
-PreValidation(alias func)(auto ref ... argument)
+PreValidation(auto ref ... argument, RETURN function(VALUE value) func)
 ```
 
 **Parameters**
@@ -363,7 +363,7 @@ PreValidation(alias func)(auto ref ... argument)
 ```C++
 struct my_command
 {
-  @(NamedArgument.PreValidation!((string s) { return s.length > 0;}))
+  @(NamedArgument.PreValidation((string s) { return s.length > 0;}))
   int a;
 }
 ```
@@ -375,7 +375,8 @@ struct my_command
 **Signature**
 
 ```C++
-Parse(alias func)(auto ref ... argument)
+Parse(auto ref ... argument, RECEIVER function(VALUE value) func)
+Parse(auto ref ... argument, RETURN function(ref RECEIVER receiver, RawParam param) func)
 ```
 
 **Parameters**
@@ -389,7 +390,7 @@ Parse(alias func)(auto ref ... argument)
 ```C++
 struct my_command
 {
-  @(NamedArgument.Parse!((string s) { return s[1]; }))
+  @(NamedArgument.Parse((string s) { return s[1]; }))
   char a;
 }
 ```
@@ -401,7 +402,7 @@ struct my_command
 **Signature**
 
 ```C++
-Validation(alias func)(auto ref ... argument)
+Validation(auto ref ... argument, RETURN function(VALUE value) func)
 ```
 
 **Parameters**
@@ -415,7 +416,7 @@ Validation(alias func)(auto ref ... argument)
 ```C++
 struct my_command
 {
-  @(NamedArgument.Validation!((int a) { return a >= 0 && a <= 9; }))
+  @(NamedArgument.Validation((int a) { return a >= 0 && a <= 9; }))
   int a;
 }
 ```
@@ -427,7 +428,7 @@ struct my_command
 **Signature**
 
 ```C++
-Action(alias func)(auto ref ... argument)
+Action(auto ref ... argument, RETURN function(ref RECEIVER receiver, VALUE value) func)
 ```
 
 **Parameters**
@@ -441,7 +442,7 @@ Action(alias func)(auto ref ... argument)
 ```C++
 struct my_command
 {
-  @(NamedArgument.Action!((ref int a, int v) { a += v; })
+  @(NamedArgument.Action((ref int a, int v) { a += v; })
   int a;
 }
 ```
