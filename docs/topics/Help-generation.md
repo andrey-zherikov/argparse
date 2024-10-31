@@ -27,7 +27,7 @@ There are some customizations supported on argument level for both `PositionalAr
 - `Description` – provides brief description of the argument. This text is printed next to the argument
   in the argument-list section of a help message. `Description` takes either `string` or `string function()`
   value – the latter can be used to return a value that is not known at compile time.
-- `HideFromHelp` – can be used to indicate that the argument shouldn’t be printed in help message.
+- `Hidden` – can be used to indicate that the argument shouldn’t be printed in help message.
 - `Placeholder` – provides custom text that is used to indicate the value of the argument in help message.
 
 ## Help text styling

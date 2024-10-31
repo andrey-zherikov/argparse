@@ -461,7 +461,7 @@ private void createUsage(void delegate(string) sink, const ref Style style, stri
     import std.algorithm: filter, each;
 
     alias print = (r) => r
-    .filter!((ref _) => !_.hideFromHelp)
+    .filter!((ref _) => !_.hidden)
     .each!((ref _)
     {
         sink(" ");
@@ -510,7 +510,7 @@ private auto getSections(const ref Style style, const(Arguments*)[] arguments)
 
     alias showArg = (ref _)
     {
-        if(_.hideFromHelp)
+        if(_.hidden)
             return false;
 
         if(_.shortNames.length > 0 && isHelpArgument(_.shortNames[0]) ||
@@ -573,7 +573,7 @@ private auto getSection(const ref Style style, in CommandInfo[] commands)
 
     alias showArg = (ref _)
     {
-        //if(_.hideFromHelp)
+        //if(_.hidden)
         //    return false;
 
         return _.displayNames.length > 0 && _.displayNames[0].length > 0;

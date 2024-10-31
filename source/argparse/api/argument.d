@@ -40,9 +40,9 @@ auto ref Optional(T)(auto ref ArgumentUDA!T uda)
     return uda;
 }
 
-auto ref HideFromHelp(T)(auto ref ArgumentUDA!T uda, bool hide = true)
+auto ref Hidden(T)(auto ref ArgumentUDA!T uda, bool hide = true)
 {
-    uda.info.hideFromHelp = hide;
+    uda.info.hidden = hide;
     return uda;
 }
 
@@ -86,7 +86,7 @@ auto ref MaxNumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t max)
 unittest
 {
     ArgumentUDA!(ValueParser!(void, void)) arg;
-    assert(!arg.info.hideFromHelp);
+    assert(!arg.info.hidden);
     assert(!arg.info.required);
     assert(arg.info.minValuesCount.isNull);
     assert(arg.info.maxValuesCount.isNull);
@@ -98,8 +98,8 @@ unittest
     arg = arg.Description(() => "qwer").Placeholder("text");
     assert(arg.info.description.get == "qwer");
 
-    arg = arg.HideFromHelp.Required.NumberOfValues(10);
-    assert(arg.info.hideFromHelp);
+    arg = arg.Hidden.Required.NumberOfValues(10);
+    assert(arg.info.hidden);
     assert(arg.info.required);
     assert(arg.info.minValuesCount.get == 10);
     assert(arg.info.maxValuesCount.get == 10);

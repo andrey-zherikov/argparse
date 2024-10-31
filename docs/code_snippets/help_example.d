@@ -9,7 +9,7 @@ struct T
     @NamedArgument  string s;
     @(NamedArgument.Placeholder("VALUE"))  string p;
 
-    @(NamedArgument.HideFromHelp)  string hidden;
+    @(NamedArgument.Hidden)  string hidden;
 
     enum Fruit { apple, pear };
     @(NamedArgument("f","fruit").Required.Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
