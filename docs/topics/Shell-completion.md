@@ -3,6 +3,11 @@
 `argparse` supports tab completion of last argument for certain shells (see below). However, this support is limited
 to the names of arguments and subcommands.
 
+> Note that hidden arguments are not shown in shell completion. See [Hidden()](PositionalNamedArgument.md#hidden) for details.
+>
+{style="note"}
+or returned in shell completion
+
 ## Wrappers for main function
 
 If you are using `CLI!(...).main(alias newMain)` mixin template in your code then you can easily build a completer

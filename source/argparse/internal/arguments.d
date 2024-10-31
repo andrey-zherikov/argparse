@@ -25,7 +25,7 @@ package(argparse) struct ArgumentInfo
 
     string memberSymbol;
 
-    bool hideFromHelp = false;      // if true then this argument is not printed on help page
+    bool hidden = false;      // if true then this argument is not printed on help page
 
     bool required;
 

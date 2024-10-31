@@ -72,6 +72,8 @@
     .Validation((char v) { return v >= '0' && v <= '9'; })
   ```
 
+* `HideFromHelp` is renamed to `Hidden` and now also hides an argument from shell completion.
+
 * Dropped support for DMD-2.099.
 
 ### Enhancements and bug fixes

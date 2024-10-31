@@ -432,6 +432,9 @@ unittest
         @NamedArgument
         string b = "dummyB";
 
+        @(NamedArgument.Hidden)
+        string hidden;
+
         SubCommand!(cmd1, cmd2) cmd;
     }
 
@@ -751,7 +754,7 @@ unittest
     @Command("MYPROG")
     struct T
     {
-        @(NamedArgument.HideFromHelp)  string s;
+        @(NamedArgument.Hidden)  string s;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(false); })(["-h","-s","asd"]) == 0);
@@ -871,7 +874,7 @@ unittest
         @NamedArgument  string s;
         @(NamedArgument.Placeholder("VALUE"))  string p;
 
-        @(NamedArgument.HideFromHelp)  string hidden;
+        @(NamedArgument.Hidden)  string hidden;
 
         enum Fruit { apple, pear };
         @(NamedArgument(["f","fruit"]).Required.Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;

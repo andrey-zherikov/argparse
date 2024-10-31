@@ -57,14 +57,14 @@ struct my_command
 }
 ```
 
-### HideFromHelp
+### Hidden
 
-`HideFromHelp` can be used to indicate that the argument should not be printed in help message.
+`Hidden` can be used to indicate that the argument should not be printed in help message or returned in shell completion.
 
 **Signature**
 
 ```C++
-HideFromHelp(auto ref ... argument, bool hide = true)
+Hidden(auto ref ... argument, bool hide = true)
 ```
 
 **Parameters**
@@ -78,7 +78,7 @@ HideFromHelp(auto ref ... argument, bool hide = true)
 ```C++
 struct my_command
 {
-  @(NamedArgument.HideFromHelp)
+  @(NamedArgument.Hidden)
   int a;
 }
 ```
