@@ -7,7 +7,7 @@ import argparse.config;
 struct Param(VALUE_TYPE)
 {
     const(Config)* config;
-    string name;
+    immutable string name;
 
     static if(!is(VALUE_TYPE == void))
         VALUE_TYPE value;
@@ -21,5 +21,4 @@ unittest
 {
     RawParam p1;
     auto p2 = p1;
-    p1 = p2;
 }
