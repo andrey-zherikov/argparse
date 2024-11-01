@@ -4,6 +4,7 @@ import std.typecons: Nullable, nullable;
 import std.sumtype: SumType;
 
 import argparse.config;
+import argparse.param;
 import argparse.result;
 import argparse.api.ansi: ansiStylingArgument;
 import argparse.internal.arguments: ArgumentInfo;
@@ -92,13 +93,13 @@ private struct Argument {
     Result delegate() parse;
     Result delegate() complete;
 
-    this(string name, FindResult r, string[] values)
+    this(RawParam param, FindResult r)
     {
         index = r.arg.index;
         info = r.arg.info;
 
-        parse = () => r.arg.parse(r.cmdStack, name, values);
-        complete = () => r.arg.complete(r.cmdStack, name, values);
+        parse = () => r.arg.parse(r.cmdStack, param);
+        complete = () => r.arg.complete(r.cmdStack, param);
     }
 }
 
@@ -108,7 +109,7 @@ private struct SubCommand {
 
 private alias Entry = SumType!(Unknown, Argument, SubCommand);
 
-private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
+private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] args,
                                           FindResult delegate(bool) findPositionalArg,
                                           FindResult delegate(string) findNamedArg,
                                           Command delegate() delegate(string) findCommand)
@@ -132,6 +133,8 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                str[0] != config.namedArgPrefix &&   // `-...` is not a value
                findCommand(str) is null;            // command is not a value
     };
+
+    auto createParam = (string name, string[] value) => RawParam(&config, name, value);
 
     // Is it named argument (starting with '-' and longer than 1 character)?
     if(arg0[0] == config.namedArgPrefix && arg0.length > 1)
@@ -160,7 +163,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                 if(res.arg)
                 {
                     args.popFront;
-                    return Entry(Argument(usedName, res, [value]));
+                    return Entry(Argument(createParam(usedName, [value]), res));
                 }
             }
             else
@@ -174,7 +177,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                     {
                         args.popFront;
                         auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-                        return Entry(Argument(arg0, res, values));
+                        return Entry(Argument(createParam(arg0, values), res));
                     }
                 }
 
@@ -185,7 +188,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                     if(res.arg && res.arg.info.isBooleanFlag)
                     {
                         args.popFront;
-                        return Entry(Argument(arg0, res, ["false"]));
+                        return Entry(Argument(createParam(arg0, ["false"]), res));
                     }
                 }
             }
@@ -218,7 +221,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                     if (res.arg)
                     {
                         args.popFront;
-                        return Entry(Argument(usedName, res, [value]));
+                        return Entry(Argument(createParam(usedName, [value]), res));
                     }
                 }
             }
@@ -233,7 +236,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                     {
                         args.popFront;
                         auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-                        return Entry(Argument(arg0, res, values));
+                        return Entry(Argument(createParam(arg0, values), res));
                     }
                 }
 
@@ -249,7 +252,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                         {
                             auto value = arg0[2..$];
                             args.popFront;
-                            return Entry(Argument(arg0[0..2], res, [value]));
+                            return Entry(Argument(createParam(arg0[0..2], [value]), res));
                         }
                     }
                 }
@@ -271,7 +274,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
                         args[0] = rest;
 
                         // Due to bundling argument has no value
-                        return Entry(Argument(arg0[0..2], res, []));
+                        return Entry(Argument(createParam(arg0[0..2], []), res));
                     }
                 }
         }
@@ -283,7 +286,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         if(res.arg && res.arg.info.required)
         {
             auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-            return Entry(Argument(res.arg.info.placeholder, res, values));
+            return Entry(Argument(createParam(res.arg.info.placeholder, values), res));
         }
 
         // Is it sub command?
@@ -298,7 +301,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         if(res.arg)
         {
             auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-            return Entry(Argument(res.arg.info.placeholder, res, values));
+            return Entry(Argument(createParam(res.arg.info.placeholder, values), res));
         }
 
         // Check for positional argument in sub commands
@@ -306,7 +309,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
         if(res.arg)
         {
             auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-            return Entry(Argument(res.arg.info.placeholder, res, values));
+            return Entry(Argument(createParam(res.arg.info.placeholder, values), res));
         }
     }
 
@@ -314,7 +317,7 @@ private Entry getNextEntry(bool bundling)(Config config, ref string[] args,
     return Entry(Unknown(arg0));
 }
 
-private Entry getNextPositionalArgument(ref string[] args,
+private Entry getNextPositionalArgument(const ref Config config, ref string[] args,
                                         FindResult delegate(bool) findPositionalArg)
 {
     import std.range : popFront;
@@ -334,7 +337,7 @@ private Entry getNextPositionalArgument(ref string[] args,
     if(res.arg)
     {
         auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, _ => true);
-        return Entry(Argument(res.arg.info.placeholder, res, values));
+        return Entry(Argument(RawParam(&config, res.arg.info.placeholder, values), res));
     }
 
     args.popFront;
@@ -343,9 +346,10 @@ private Entry getNextPositionalArgument(ref string[] args,
 
 unittest
 {
-    auto test(string[] args) { return getNextEntry!false(Config.init, args, null, null, null); }
+    Config config;
+    auto args = [""];
 
-    assert(test([""]) == Entry(Unknown("")));
+    assert(getNextEntry!false(config, args, null, null, null) == Entry(Unknown("")));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -539,7 +543,7 @@ private struct Parser
                 if(args.length > 1)
                 {
                     auto res = (forcePositionalOnly ?
-                        getNextPositionalArgument(args, &findPositionalArgument) :
+                        getNextPositionalArgument(config, args, &findPositionalArgument) :
                         getNextEntry!bundling(
                             config, args,
                             &findPositionalArgument,
@@ -563,7 +567,7 @@ private struct Parser
             else
             {
                 auto res = (forcePositionalOnly ?
-                    getNextPositionalArgument(args, &findPositionalArgument) :
+                    getNextPositionalArgument(config, args, &findPositionalArgument) :
                     getNextEntry!bundling(
                         config, args,
                         &findPositionalArgument,
