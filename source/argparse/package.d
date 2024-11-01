@@ -610,7 +610,7 @@ unittest
 
     enum cfg = {
         Config cfg;
-        cfg.arraySep = ',';
+        cfg.valueSep = ',';
         return cfg;
     }();
 
@@ -636,7 +636,7 @@ unittest
 
     enum cfg = {
         Config cfg;
-        cfg.arraySep = ',';
+        cfg.valueSep = ',';
         return cfg;
     }();
 
@@ -686,7 +686,7 @@ unittest
 
     enum cfg = {
         Config cfg;
-        cfg.arraySep = ',';
+        cfg.valueSep = ',';
         return cfg;
     }();
 

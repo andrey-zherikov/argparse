@@ -29,6 +29,8 @@
 
   * `Config.addHelp` is renamed to `Config.addHelpArgument`.
 
+  * `Config.arraySep` is renamed to `Config.valueSep`.
+
 * `Style.namedArgumentName` is renamed to `Style.argumentName`.
 
 * Underlying type of `ansiStylingArgument` argument is changed. It can now be directly cast to boolean instead comparing against `Config.StylingMode`.

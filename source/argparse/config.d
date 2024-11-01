@@ -14,13 +14,13 @@ struct Config
     /**
        When set to char.init, parameters to array and associative array receivers are
        treated as an individual argument. That is, only one argument is appended or
-       inserted per appearance of the option switch. If `arraySep` is set to
+       inserted per appearance of the option switch. If `valueSep` is set to
        something else, then each parameter is first split by the separator, and the
        individual pieces are treated as arguments to the same option.
 
        Defaults to char.init
      */
-    char arraySep = char.init;
+    char valueSep = char.init;
 
     /**
        The prefix for argument name.

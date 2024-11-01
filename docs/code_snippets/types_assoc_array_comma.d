@@ -5,7 +5,7 @@ struct T
     int[string] a;
 }
 
-enum Config cfg = { arraySep: ',' };
+enum Config cfg = { valueSep: ',' };
 
 T t;
 assert(CLI!(cfg, T).parseArgs(t, ["-a=foo=3,boo=7","-a","bar=4,baz=9"]));
