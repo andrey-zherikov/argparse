@@ -2,6 +2,7 @@ module argparse.internal.help;
 
 import argparse.ansi;
 import argparse.config;
+import argparse.param;
 import argparse.result;
 import argparse.api.ansi: ansiStylingArgument;
 import argparse.internal.lazystring;
@@ -154,7 +155,7 @@ package struct HelpArgumentUDA
         return info;
     }();
 
-    Result parse(COMMAND_STACK, RECEIVER)(const Config config, const COMMAND_STACK cmdStack, ref RECEIVER, string argName, string[] rawValues)
+    Result parse(COMMAND_STACK, RECEIVER)(const COMMAND_STACK cmdStack, ref RECEIVER receiver, RawParam param)
     {
         import std.stdio: stdout;
         import std.algorithm: map;
@@ -165,7 +166,7 @@ package struct HelpArgumentUDA
         auto args = cmdStack.map!((ref _) => &_.arguments).array;
 
         auto output = stdout.lockingTextWriter();
-        printHelp(_ => output.put(_), config, cmdStack[$-1], args, progName);
+        printHelp(_ => output.put(_), *param.config, cmdStack[$-1], args, progName);
 
         return Result.Error(0, ""); // hack to force-exit (to be removed)
     }

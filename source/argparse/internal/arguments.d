@@ -3,6 +3,7 @@ module argparse.internal.arguments;
 import argparse.internal.lazystring;
 
 import argparse.config;
+import argparse.param;
 import argparse.result;
 
 import std.typecons: Nullable;
@@ -36,23 +37,23 @@ package(argparse) struct ArgumentInfo
     Nullable!size_t minValuesCount;
     Nullable!size_t maxValuesCount;
 
-    auto checkValuesCount(const Config config, string argName, size_t count) const
+    auto checkValuesCount(const ref RawParam param) const
     {
         immutable min = minValuesCount.get;
         immutable max = maxValuesCount.get;
 
         // override for boolean flags
-        if(isBooleanFlag && count == 1)
+        if(isBooleanFlag && param.value.length == 1)
             return Result.Success;
 
-        if(min == max && count != min)
-            return Result.Error("Argument '",config.styling.argumentName(argName),"': expected ",min,min == 1 ? " value" : " values");
+        if(min == max && param.value.length != min)
+            return Result.Error("Argument '",param.config.styling.argumentName(param.name),"': expected ",min,min == 1 ? " value" : " values");
 
-        if(count < min)
-            return Result.Error("Argument '",config.styling.argumentName(argName),"': expected at least ",min,min == 1 ? " value" : " values");
+        if(param.value.length < min)
+            return Result.Error("Argument '",param.config.styling.argumentName(param.name),"': expected at least ",min,min == 1 ? " value" : " values");
 
-        if(count > max)
-            return Result.Error("Argument '",config.styling.argumentName(argName),"': expected at most ",max,max == 1 ? " value" : " values");
+        if(param.value.length > max)
+            return Result.Error("Argument '",param.config.styling.argumentName(param.name),"': expected at most ",max,max == 1 ? " value" : " values");
 
         return Result.Success;
     }
@@ -70,28 +71,36 @@ unittest
         return info;
     }
 
-    assert(info(2,4).checkValuesCount(Config.init, "", 1).isError("expected at least 2 values"));
-    assert(info(2,4).checkValuesCount(Config.init, "", 2));
-    assert(info(2,4).checkValuesCount(Config.init, "", 3));
-    assert(info(2,4).checkValuesCount(Config.init, "", 4));
-    assert(info(2,4).checkValuesCount(Config.init, "", 5).isError("expected at most 4 values"));
+    Config config;
+    auto p0 = RawParam(&config, "", []);
+    auto p1 = RawParam(&config, "", ["",]);
+    auto p2 = RawParam(&config, "", ["","",]);
+    auto p3 = RawParam(&config, "", ["","","",]);
+    auto p4 = RawParam(&config, "", ["","","","",]);
+    auto p5 = RawParam(&config, "", ["","","","","",]);
 
-    assert(info(2,2).checkValuesCount(Config.init, "", 1).isError("expected 2 values"));
-    assert(info(2,2).checkValuesCount(Config.init, "", 2));
-    assert(info(2,2).checkValuesCount(Config.init, "", 3).isError("expected 2 values"));
+    assert(info(2,4).checkValuesCount(p1).isError("expected at least 2 values"));
+    assert(info(2,4).checkValuesCount(p2));
+    assert(info(2,4).checkValuesCount(p3));
+    assert(info(2,4).checkValuesCount(p4));
+    assert(info(2,4).checkValuesCount(p5).isError("expected at most 4 values"));
 
-    assert(info(1,1).checkValuesCount(Config.init, "", 0).isError("expected 1 value"));
-    assert(info(1,1).checkValuesCount(Config.init, "", 1));
-    assert(info(1,1).checkValuesCount(Config.init, "", 2).isError("expected 1 value"));
+    assert(info(2,2).checkValuesCount(p1).isError("expected 2 values"));
+    assert(info(2,2).checkValuesCount(p2));
+    assert(info(2,2).checkValuesCount(p3).isError("expected 2 values"));
 
-    assert(info(0,1).checkValuesCount(Config.init, "", 0));
-    assert(info(0,1).checkValuesCount(Config.init, "", 1));
-    assert(info(0,1).checkValuesCount(Config.init, "", 2).isError("expected at most 1 value"));
+    assert(info(1,1).checkValuesCount(p0).isError("expected 1 value"));
+    assert(info(1,1).checkValuesCount(p1));
+    assert(info(1,1).checkValuesCount(p2).isError("expected 1 value"));
 
-    assert(info(1,2).checkValuesCount(Config.init, "", 0).isError("expected at least 1 value"));
-    assert(info(1,2).checkValuesCount(Config.init, "", 1));
-    assert(info(1,2).checkValuesCount(Config.init, "", 2));
-    assert(info(1,2).checkValuesCount(Config.init, "", 3).isError("expected at most 2 values"));
+    assert(info(0,1).checkValuesCount(p0));
+    assert(info(0,1).checkValuesCount(p1));
+    assert(info(0,1).checkValuesCount(p2).isError("expected at most 1 value"));
+
+    assert(info(1,2).checkValuesCount(p0).isError("expected at least 1 value"));
+    assert(info(1,2).checkValuesCount(p1));
+    assert(info(1,2).checkValuesCount(p2));
+    assert(info(1,2).checkValuesCount(p3).isError("expected at most 2 values"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

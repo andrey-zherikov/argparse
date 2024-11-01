@@ -18,19 +18,19 @@ package(argparse) struct ArgumentUDA(ValueParser)
 
     package(argparse) ValueParser valueParser;
 
-    package Result parse(COMMAND_STACK, RECEIVER)(const Config config, const COMMAND_STACK cmdStack, ref RECEIVER receiver, string argName, string[] rawValues)
+    package Result parse(COMMAND_STACK, RECEIVER)(const COMMAND_STACK cmdStack, ref RECEIVER receiver, RawParam param)
     {
         try
         {
-            auto res = info.checkValuesCount(config, argName, rawValues.length);
+            auto res = info.checkValuesCount(param);
             if(!res)
                 return res;
 
-            return valueParser.parseParameter(receiver, RawParam(&config, argName, rawValues));
+            return valueParser.parseParameter(receiver, param);
         }
         catch(Exception e)
         {
-            return Result.Error("Argument '", config.styling.argumentName(argName), ": ", e.msg);
+            return Result.Error("Argument '", param.config.styling.argumentName(param.name), ": ", e.msg);
         }
     }
 

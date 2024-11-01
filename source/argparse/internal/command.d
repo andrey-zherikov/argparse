@@ -41,23 +41,24 @@ package struct SubCommands
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private Result ArgumentParsingFunction(Config config, alias uda, RECEIVER)(const Command[] cmdStack,
-                                                                           ref RECEIVER receiver,
-                                                                           string argName,
-                                                                           string[] rawValues)
+private Result ArgumentParsingFunction(alias uda, RECEIVER)(const Command[] cmdStack,
+                                                            ref RECEIVER receiver,
+                                                            ref RawParam param)
 {
     static if(uda.info.memberSymbol)
         auto target = &__traits(getMember, receiver, uda.info.memberSymbol);
     else
         auto target = null;
 
-    return uda.parse(config, cmdStack, target, argName, rawValues);
+    return uda.parse(cmdStack, target, param);
 }
 
-private Result ArgumentCompleteFunction(Config config, alias uda, RECEIVER)(const Command[] cmdStack,
-                                                                              ref RECEIVER receiver,
-                                                                              string argName,
-                                                                              string[] rawValues)
+private alias getArgumentParsingFunction1(alias uda) =
+    (const Command[] cmdStack, ref RawParam param) => ArgumentParsingFunction!uda(cmdStack, receiver, param);
+
+private Result ArgumentCompleteFunction(alias uda, RECEIVER)(const Command[] cmdStack,
+                                                             ref RECEIVER receiver,
+                                                             ref RawParam param)
 {
     return Result.Success;
 }
@@ -70,10 +71,12 @@ unittest
     auto test(string[] values)
     {
         T t;
+        Config cfg;
+        auto param = RawParam(&cfg, "a", values);
 
         enum uda = getMemberArgumentUDA!(T, "a")(Config.init);
 
-        return ArgumentParsingFunction!(Config.init, uda)([], t, "a", values);
+        return ArgumentParsingFunction!uda([], t, param);
     }
 
     assert(test(["raw-value"]));
@@ -88,19 +91,21 @@ unittest
     }
 
     T t;
+    Config cfg;
+    auto param = RawParam(&cfg, "func", []);
 
     enum uda = getMemberArgumentUDA!(T, "func")(Config.init);
 
-    auto res = ArgumentParsingFunction!(Config.init, uda)([], t, "func", []);
+    auto res = ArgumentParsingFunction!uda([], t, param);
 
-    assert(res.isError(Config.init.styling.argumentName("func")~": My Message."));
+    assert(res.isError("func",": My Message."));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package struct Command
 {
-    alias Parse = Result delegate(const Command[] cmdStack, string argName, string[] argValue);
+    alias Parse = Result delegate(const Command[] cmdStack,ref RawParam param);
 
     struct Argument
     {
@@ -351,14 +356,12 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE)(ref COMMAND
     res.restrictions.add!(COMMAND_TYPE, [typeTraits.argumentInfos])(config);
 
     enum getArgumentParsingFunction(alias uda) =
-         (const Command[] cmdStack, string argName, string[] argValue)
-         => ArgumentParsingFunction!(config, uda)(cmdStack, receiver, argName, argValue);
+         (const Command[] cmdStack, ref RawParam param) => ArgumentParsingFunction!uda(cmdStack, receiver, param);
 
     res.parseFuncs = [staticMap!(getArgumentParsingFunction, typeTraits.argumentUDAs)];
 
     enum getArgumentCompleteFunction(alias uda) =
-        (const Command[] cmdStack, string argName, string[] argValue)
-        => ArgumentCompleteFunction!(config, uda)(cmdStack, receiver, argName, argValue);
+        (const Command[] cmdStack, ref RawParam param) => ArgumentCompleteFunction!uda(cmdStack, receiver, param);
 
     res.completeFuncs = [staticMap!(getArgumentCompleteFunction, typeTraits.argumentUDAs)];
 
