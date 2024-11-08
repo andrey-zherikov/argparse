@@ -490,21 +490,21 @@ unittest
 
 private void splitValues(ref RawParam param)
 {
-    if(param.config.arraySep == char.init)
+    if(param.config.valueSep == char.init)
         return;
 
     import std.array : array, split;
     import std.algorithm : map, joiner;
 
-    param.value = param.value.map!((string s) => s.split(param.config.arraySep)).joiner.array;
+    param.value = param.value.map!((string s) => s.split(param.config.valueSep)).joiner.array;
 }
 
 unittest
 {
-    alias test = (char arraySep, string[] values)
+    alias test = (char valueSep, string[] values)
     {
         Config config;
-        config.arraySep = arraySep;
+        config.valueSep = valueSep;
 
         auto param = RawParam(&config, "", values);
 

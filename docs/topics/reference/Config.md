@@ -13,10 +13,10 @@ Example:
 
 <code-block src="code_snippets/config_assignChar.d" lang="c++"/>
 
-## Array separator {id="arraySep"}
+## Value separator {id="valueSep"}
 
-When `Config.arraySep` is set to `char.init`, values to array and associative-array receivers are treated as an individual
-value. That is, only one argument is appended/inserted per appearance of the argument. If `arraySep` is set to something
+When `Config.valueSep` is set to `char.init`, values to array and associative-array receivers are treated as an individual
+value. That is, only one argument is appended/inserted per appearance of the argument. If `valueSep` is set to something
 else, then each value is first split by the separator, and the individual pieces are treated as values to the same
 argument.
 
