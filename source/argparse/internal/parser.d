@@ -48,6 +48,37 @@ private string[] consumeValuesFromCLI(ref string[] args,
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package string[] splitValues(string value, char valueSep, const(ArgumentInfo)* info)
+{
+    import std.array: split;
+
+    return value.length > 0 && info.maxValuesCount.get > 1 ? value.split(valueSep) : [value];
+}
+
+unittest
+{
+    ArgumentInfo info = { maxValuesCount: 2 };
+    assert(splitValues("", ',', &info) == [""]);
+    assert(splitValues("abc", ',', &info) == ["abc"]);
+    assert(splitValues("a,b,c", ',', &info) == ["a","b","c"]);
+    assert(splitValues("a b c", ' ', &info) == ["a","b","c"]);
+    assert(splitValues("a,b,c", ' ', &info) == ["a,b,c"]);
+    assert(splitValues("a,b,c", char.init, &info) == ["a,b,c"]);
+}
+
+unittest
+{
+    ArgumentInfo info = { maxValuesCount: 1 };
+    assert(splitValues("", ',', &info) == [""]);
+    assert(splitValues("abc", ',', &info) == ["abc"]);
+    assert(splitValues("a,b,c", ',', &info) == ["a,b,c"]);
+    assert(splitValues("a b c", ' ', &info) == ["a b c"]);
+    assert(splitValues("a,b,c", ' ', &info) == ["a,b,c"]);
+    assert(splitValues("a,b,c", char.init, &info) == ["a,b,c"]);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 private string[] splitSingleLetterNames(string arg)
 {
     // Split "-ABC" into ["-A","-B","-C"]
@@ -134,7 +165,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                findCommand(str) is null;            // command is not a value
     };
 
-    auto createParam = (string name, string[] value) => RawParam(&config, name, value);
+    auto createArgument = (string name, string[] values, FindResult res) => Entry(Argument(RawParam(&config, name, values), res));
 
     // Is it named argument (starting with '-' and longer than 1 character)?
     if(arg0[0] == config.namedArgPrefix && arg0.length > 1)
@@ -163,7 +194,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                 if(res.arg)
                 {
                     args.popFront;
-                    return Entry(Argument(createParam(usedName, [value]), res));
+                    return createArgument(usedName, splitValues(value, config.valueSep, res.arg.info), res);
                 }
             }
             else
@@ -177,7 +208,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                     {
                         args.popFront;
                         auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-                        return Entry(Argument(createParam(arg0, values), res));
+                        return createArgument(arg0, values, res);
                     }
                 }
 
@@ -188,7 +219,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                     if(res.arg && res.arg.info.isBooleanFlag)
                     {
                         args.popFront;
-                        return Entry(Argument(createParam(arg0, ["false"]), res));
+                        return createArgument(arg0, ["false"], res);
                     }
                 }
             }
@@ -221,7 +252,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                     if (res.arg)
                     {
                         args.popFront;
-                        return Entry(Argument(createParam(usedName, [value]), res));
+                        return createArgument(usedName, splitValues(value, config.valueSep, res.arg.info), res);
                     }
                 }
             }
@@ -236,7 +267,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                     {
                         args.popFront;
                         auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-                        return Entry(Argument(createParam(arg0, values), res));
+                        return createArgument(arg0, values, res);
                     }
                 }
 
@@ -252,7 +283,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                         {
                             auto value = arg0[2..$];
                             args.popFront;
-                            return Entry(Argument(createParam(arg0[0..2], [value]), res));
+                            return createArgument(arg0[0..2], [value], res);
                         }
                     }
                 }
@@ -274,7 +305,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                         args[0] = rest;
 
                         // Due to bundling argument has no value
-                        return Entry(Argument(createParam(arg0[0..2], []), res));
+                        return createArgument(arg0[0..2], [], res);
                     }
                 }
         }
@@ -286,7 +317,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
         if(res.arg && res.arg.info.required)
         {
             auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-            return Entry(Argument(createParam(res.arg.info.placeholder, values), res));
+            return createArgument(res.arg.info.placeholder, values, res);
         }
 
         // Is it sub command?
@@ -301,7 +332,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
         if(res.arg)
         {
             auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-            return Entry(Argument(createParam(res.arg.info.placeholder, values), res));
+            return createArgument(res.arg.info.placeholder, values, res);
         }
 
         // Check for positional argument in sub commands
@@ -309,7 +340,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
         if(res.arg)
         {
             auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-            return Entry(Argument(createParam(res.arg.info.placeholder, values), res));
+            return createArgument(res.arg.info.placeholder, values, res);
         }
     }
 

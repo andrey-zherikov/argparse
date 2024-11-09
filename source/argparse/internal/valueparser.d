@@ -317,7 +317,6 @@ if(!is(T == void))
                 enum action = Assign!T;
 
             enum TypedValueParser = ValueParser!(T, T).init
-                .changePreProcess((ref _) => splitValues(_))
                 .changeParse(parseValue!T)
                 .changeAction(action)
                 .changeNoValueAction(NoValueActionFunc!T((ref T receiver) => Result.Success));
@@ -325,7 +324,6 @@ if(!is(T == void))
         else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
         {
             enum TypedValueParser = ValueParser!(TElement, T).init
-                .changePreProcess((ref _) => splitValues(_))
                 .changeParse(parseValue!TElement)
                 .changeAction(Extend!T)
                 .changeNoValueAction(NoValueActionFunc!T((ref T receiver) { receiver ~= TElement.init; }));
@@ -337,7 +335,6 @@ if(!is(T == void))
     {
         import std.string : indexOf;
         enum TypedValueParser = ValueParser!(string[], T).init
-            .changePreProcess((ref _) => splitValues(_))
             .changeParse(PassThrough)
             .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
             {
@@ -400,7 +397,7 @@ unittest
 {
     alias test(R) = (string[][] values)
     {
-        auto config = Config('=', ',');
+        Config config;
         R receiver;
         foreach(value; values)
         {
@@ -415,8 +412,8 @@ unittest
 
     assert(test!(string[string])([["a=bar","b=foo"], [], ["b=baz","c=boo"]]) == ["a":"bar", "b":"baz", "c":"boo"]);
 
-    assert(test!(string[])([["1,2,3"], [], ["4"]]) == ["1","2","3","4"]);
-    assert(test!(string[string])([["a=bar,b=foo"], [], ["b=baz,c=boo"]]) == ["a":"bar", "b":"baz", "c":"boo"]);
+    assert(test!(string[])([["1","2","3"], [], ["4"]]) == ["1","2","3","4"]);
+    assert(test!(string[string])([["a=bar","b=foo"], [], ["b=baz","c=boo"]]) == ["a":"bar", "b":"baz", "c":"boo"]);
 
     assert(test!(int[])([["1","2","3"], [], ["4"]]) == [1,2,3,4]);
     assert(test!(int[][])([["1","2","3"], [], ["4"]]) == [[1,2,3],[],[4]]);
@@ -484,37 +481,4 @@ unittest
     assert(testErr!(int[int])(["123=1","unknown"]).isError("Invalid value","unknown"));
     assert(testErr!(int[int])(["123=1","unknown=2"]).isError());
     assert(testErr!(int[int])(["123=1","2=unknown"]).isError());
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private void splitValues(ref RawParam param)
-{
-    if(param.config.valueSep == char.init)
-        return;
-
-    import std.array : array, split;
-    import std.algorithm : map, joiner;
-
-    param.value = param.value.map!((string s) => s.split(param.config.valueSep)).joiner.array;
-}
-
-unittest
-{
-    alias test = (char valueSep, string[] values)
-    {
-        Config config;
-        config.valueSep = valueSep;
-
-        auto param = RawParam(&config, "", values);
-
-        splitValues(param);
-
-        return param.value;
-    };
-
-    static assert(test(',', []) == []);
-    static assert(test(',', ["a","b","c"]) == ["a","b","c"]);
-    static assert(test(',', ["a,b","c","d,e,f"]) == ["a","b","c","d","e","f"]);
-    static assert(test(' ', ["a,b","c","d,e,f"]) == ["a,b","c","d,e,f"]);
 }

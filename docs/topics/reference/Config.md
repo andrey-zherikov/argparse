@@ -5,7 +5,7 @@
 
 ## Assign character {id="assignChar"}
 
-`Config.assignChar` is an assignment character used in arguments with value: `-a=5`, `-b=foo`.
+`Config.assignChar` is an assignment character used in arguments with value: `-a=5`, `-boo=foo`.
 
 Default is equal sign `=`.
 
@@ -15,16 +15,13 @@ Example:
 
 ## Value separator {id="valueSep"}
 
-When `Config.valueSep` is set to `char.init`, values to array and associative-array receivers are treated as an individual
-value. That is, only one argument is appended/inserted per appearance of the argument. If `valueSep` is set to something
-else, then each value is first split by the separator, and the individual pieces are treated as values to the same
-argument.
+`Config.valueSep` is a separator that is used to extract argument values: `-a=5,6,7`, `--boo=foo,far,zoo`.
 
-Default is `char.init`.
+Default is `,`.
 
 Example:
 
-<code-block src="code_snippets/config_arraySep.d" lang="c++"/>
+<code-block src="code_snippets/config_valueSep.d" lang="c++"/>
 
 ## Named argument prefix {id="namedArgPrefix"}
 

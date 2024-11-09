@@ -257,3 +257,341 @@ unittest
     { mixin CLI!(cfg, Args).main!((ref _                  ){ return 123; }); }
     { mixin CLI!(cfg, Args).main!((ref _, string[] unknown){ return 123; }); }
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    struct T
+    {
+        string[] a;
+        string[][]  b;
+    }
+
+    assert(CLI!T.parseArgs!((T t) { assert(t.a == ["1","2","3","4","5"]); return 12345; })(["-a","1","2","3","-a","4","5"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t.a == ["1","2","3","4","5"]); return 12345; })(["-a=1,2,3","-a","4","5"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t.a == ["1,2,3","4","5"]); return 12345; })(["-a","1,2,3","-a","4","5"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t.b == [["1","2","3"],["4","5"]]); return 12345; })(["-b","1","2","3","-b","4","5"]) == 12345);
+}
+
+unittest
+{
+    struct T
+    {
+        int[string] a;
+    }
+
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); return 12345; })(["-a=foo=3","-a","boo=7"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); return 12345; })(["-a=foo=3,boo=7"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); return 12345; })(["-a","foo=3","boo=7"]) == 12345);
+}
+
+unittest
+{
+    struct T
+    {
+        enum Fruit { apple, pear };
+
+        Fruit a;
+    }
+
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.apple)); return 12345; })(["-a","apple"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.pear)); return 12345; })(["-a=pear"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a", "kiwi"]) != 0);    // "kiwi" is not allowed
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    struct T
+    {
+        string x;
+        string foo;
+    }
+
+    enum Config config = { caseSensitive: false };
+
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T("X", "FOO")); return 12345; })(["--Foo","FOO","-X","X"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T("X", "FOO")); return 12345; })(["--FOo=FOO","-X=X"]) == 12345);
+}
+
+unittest
+{
+    struct T
+    {
+        bool a;
+        bool b;
+        string c;
+    }
+    enum Config config = { bundling: true };
+
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-a","-b"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-ab"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-abc=foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-bc=foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-bcfoo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-cfoo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-c=foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-c","foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","--c=foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","--c","foo"]) == 12345);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    struct T
+    {
+        string a;
+        static auto color = ansiStylingArgument;
+    }
+
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-g"]) != 0);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T.init); return 12345; })([]) == 12345);
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T.init);
+        assert(args.length == 0);
+        return 12345;
+    })([]) == 12345);
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T("aa"));
+        assert(args == ["-g"]);
+        return 12345;
+    })(["-a","aa","-g"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) {
+        assert(t.color);
+        return 12345;
+    })(["--color"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) {
+        assert(!t.color);
+        return 12345;
+    })(["--color","never"]) == 12345);
+}
+
+unittest
+{
+    struct T
+    {
+        string a;
+        string b;
+    }
+
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T("A"));
+        assert(args == []);
+        return 12345;
+    })(["-a","A","--"]) == 12345);
+
+    {
+        T args;
+
+        assert(CLI!T.parseArgs(args, [ "-a", "A"]));
+        assert(CLI!T.parseArgs(args, [ "-b", "B"]));
+
+        assert(args == T("A","B"));
+    }
+}
+
+unittest
+{
+    struct T
+    {
+        string a;
+    }
+
+    import std.exception;
+
+    assert(collectExceptionMsg(
+        CLI!T.parseArgs!((T t, string[] args) {
+            assert(t == T.init);
+            assert(args.length == 0);
+            throw new Exception("My Message.");
+        })([]))
+    == "My Message.");
+    assert(collectExceptionMsg(
+        CLI!T.parseArgs!((T t, string[] args) {
+            assert(t == T("aa"));
+            assert(args == ["-g"]);
+            throw new Exception("My Message.");
+        })(["-a","aa","-g"]))
+    == "My Message.");
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T.init);
+        assert(args.length == 0);
+    })([]) == 0);
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T("aa"));
+        assert(args == ["-g"]);
+    })(["-a","aa","-g"]) == 0);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    struct T
+    {
+        string[] a;
+        string[][]  b;
+    }
+
+    assert(CLI!T.parseArgs!((T t) { assert(t.a == ["1","2","3","4","5"]); return 12345; })(["-a","1","2","3","-a","4","5"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t.a == ["1","2","3","4","5"]); return 12345; })(["-a=1,2,3","-a","4","5"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t.a == ["1,2,3","4","5"]); return 12345; })(["-a","1,2,3","-a","4","5"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t.b == [["1","2","3"],["4","5"]]); return 12345; })(["-b","1","2","3","-b","4","5"]) == 12345);
+}
+
+unittest
+{
+    struct T
+    {
+        int[string] a;
+    }
+
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); return 12345; })(["-a=foo=3","-a","boo=7"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); return 12345; })(["-a=foo=3,boo=7"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); return 12345; })(["-a","foo=3","boo=7"]) == 12345);
+}
+
+unittest
+{
+    struct T
+    {
+        enum Fruit { apple, pear };
+
+        Fruit a;
+    }
+
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.apple)); return 12345; })(["-a","apple"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.pear)); return 12345; })(["-a=pear"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a", "kiwi"]) != 0);    // "kiwi" is not allowed
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    struct T
+    {
+        string x;
+        string foo;
+    }
+
+    enum Config config = { caseSensitive: false };
+
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T("X", "FOO")); return 12345; })(["--Foo","FOO","-X","X"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T("X", "FOO")); return 12345; })(["--FOo=FOO","-X=X"]) == 12345);
+}
+
+unittest
+{
+    struct T
+    {
+        bool a;
+        bool b;
+        string c;
+    }
+    enum Config config = { bundling: true };
+
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-a","-b"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true)); return 12345; })(["-ab"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-abc=foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-bc=foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-bcfoo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-cfoo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-c=foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","-c","foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","--c=foo"]) == 12345);
+    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T(true, true, "foo")); return 12345; })(["-a","-b","--c","foo"]) == 12345);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    struct T
+    {
+        string a;
+        static auto color = ansiStylingArgument;
+    }
+
+    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-g"]) != 0);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T.init); return 12345; })([]) == 12345);
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T.init);
+        assert(args.length == 0);
+        return 12345;
+    })([]) == 12345);
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T("aa"));
+        assert(args == ["-g"]);
+        return 12345;
+    })(["-a","aa","-g"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) {
+        assert(t.color);
+        return 12345;
+    })(["--color"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) {
+        assert(!t.color);
+        return 12345;
+    })(["--color","never"]) == 12345);
+}
+
+unittest
+{
+    struct T
+    {
+        string a;
+        string b;
+    }
+
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T("A"));
+        assert(args == []);
+        return 12345;
+    })(["-a","A","--"]) == 12345);
+
+    {
+        T args;
+
+        assert(CLI!T.parseArgs(args, [ "-a", "A"]));
+        assert(CLI!T.parseArgs(args, [ "-b", "B"]));
+
+        assert(args == T("A","B"));
+    }
+}
+
+unittest
+{
+    struct T
+    {
+        string a;
+    }
+
+    import std.exception;
+
+    assert(collectExceptionMsg(
+        CLI!T.parseArgs!((T t, string[] args) {
+            assert(t == T.init);
+            assert(args.length == 0);
+            throw new Exception("My Message.");
+        })([]))
+    == "My Message.");
+    assert(collectExceptionMsg(
+        CLI!T.parseArgs!((T t, string[] args) {
+            assert(t == T("aa"));
+            assert(args == ["-g"]);
+            throw new Exception("My Message.");
+        })(["-a","aa","-g"]))
+    == "My Message.");
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T.init);
+        assert(args.length == 0);
+    })([]) == 0);
+    assert(CLI!T.parseArgs!((T t, string[] args) {
+        assert(t == T("aa"));
+        assert(args == ["-g"]);
+    })(["-a","aa","-g"]) == 0);
+}
