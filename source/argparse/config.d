@@ -12,15 +12,10 @@ struct Config
     char assignChar = '=';
 
     /**
-       When set to char.init, parameters to array and associative array receivers are
-       treated as an individual argument. That is, only one argument is appended or
-       inserted per appearance of the option switch. If `valueSep` is set to
-       something else, then each parameter is first split by the separator, and the
-       individual pieces are treated as arguments to the same option.
-
-       Defaults to char.init
+       Value separator for "--arg=value1,value2,value3" syntax
+       Defaults to ','
      */
-    char valueSep = char.init;
+    char valueSep = ',';
 
     /**
        The prefix for argument name.

@@ -94,6 +94,9 @@
   * `./prog -b -sabc`
   * `./prog -bsabc`
   * `./prog -bs=abc`
+* Fixes for parsing of multiple values. Only these formats are supported:
+  * `./prog --arg value1 value2 value3`
+  * `./prog --arg=value1,value2,value3`
 * Removed support for delegate in `Config.errorHandler`, `Description`, `ShortDescription`, `Usage` and `Epilog` because of compiler's `closures are not yet supported in CTFE`.
 
 ### Other changes

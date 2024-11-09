@@ -1,8 +1,15 @@
 # Arity
 
-Sometimes an argument might accept more than one value. This is especially a case when a data member is an array.
+Sometimes an argument might accept more than one value. This is especially a case when a data member is an array or associative array.
+In this case `argparse` supports two ways of specifying multiple values for an argument:
+- `--arg value1 value2 ...`
+- `--arg=value1,value2,...`
+  > Note that `=` is a value of [`Config.assignChar`](Config.md#assignChar) and `,` is a value of [`Config.valueSep`](Config.md#valueSep)
+  >
+  {style="note"}
 
-`argparse` supports these use cases:
+
+`argparse` supports these use cases for arity:
 - Exact number of values.
 - Limited range of minimum-maximum number of values.
 - Unlimited range where only minimum number of values is provided (e.g. argument accepts _any number_ of values).
