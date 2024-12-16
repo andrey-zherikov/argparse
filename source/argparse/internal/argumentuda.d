@@ -20,6 +20,7 @@ package(argparse) struct ArgumentUDA(ValueParser)
 
     package Result parse(COMMAND_STACK, RECEIVER)(const COMMAND_STACK cmdStack, ref RECEIVER receiver, RawParam param)
     {
+        static assert(!is(RECEIVER == T*, T));
         try
         {
             auto res = info.checkValuesCount(param);
@@ -51,11 +52,13 @@ package(argparse) struct ArgumentUDA(ValueParser)
         return createArgumentUDA(newInfo, newValueParser);
     }
 
-    auto addDefaultsForType(T)()
+    auto addReceiverTypeDefaults(T)()
     {
-        static if(is(typeof(valueParser.addTypeDefaults!T)))
+        static assert(!is(T == P*, P));
+
+        static if(__traits(hasMember, valueParser, "typeDefaults"))
         {
-            auto newValueParser = valueParser.addTypeDefaults!T;
+            auto newValueParser = valueParser.addDefaults(valueParser.typeDefaults!T);
 
             return createArgumentUDA(info, newValueParser);
         }

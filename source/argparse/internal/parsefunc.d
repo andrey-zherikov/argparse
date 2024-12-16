@@ -169,7 +169,7 @@ unittest
 
 // has to do this way otherwise DMD compiler chokes - linker reports unresolved symbol for lambda:
 // Error: undefined reference to `pure nothrow @nogc @safe immutable(char)[][] argparse.internal.parsefunc.__lambda12(immutable(char)[][])`
-//       referenced from `pure nothrow @nogc @safe argparse.internal.valueparser.ValueParser!(immutable(char)[][], void delegate()).ValueParser argparse.internal.valueparser.ValueParser!(void, void).ValueParser.addTypeDefaults!(void delegate()).addTypeDefaults()`
+//       referenced from `pure nothrow @nogc @safe argparse.internal.valueparser.ValueParser!(immutable(char)[][], void delegate()).ValueParser argparse.internal.valueparser.ValueParser!(void, void).ValueParser.addReceiverTypeDefaults!(void delegate()).addReceiverTypeDefaults()`
 private enum PassThroughImpl(TYPE) = ParseFunc!TYPE
     ((TYPE value)
     {

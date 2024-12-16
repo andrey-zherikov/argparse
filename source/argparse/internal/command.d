@@ -50,7 +50,10 @@ private Result ArgumentParsingFunction(alias uda, RECEIVER)(const Command[] cmdS
     else
         auto target = null;
 
-    return uda.parse(cmdStack, target, param);
+    static if(is(typeof(target) == typeof(null)) || is(typeof(target) == function) || is(typeof(target) == delegate))
+        return uda.parse(cmdStack, target, param);
+    else
+        return uda.parse(cmdStack, *target, param);
 }
 
 private alias getArgumentParsingFunction1(alias uda) =
