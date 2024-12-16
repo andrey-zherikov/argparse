@@ -13,7 +13,7 @@ package Result processingError(T)(Param!T param, string prefix = "Can't process 
 
     auto a = appender!string(prefix);
 
-    static if(is(typeof(param.value)))
+    static if(__traits(hasMember, param, "value"))
     {
         a ~= " '";
         a ~= param.config.styling.positionalArgumentValue(param.value.to!string);

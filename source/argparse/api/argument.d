@@ -340,11 +340,11 @@ unittest
 
 private struct CounterParsingFunction
 {
-    static Result parseParameter(T)(T* receiver, RawParam param)
+    static Result parseParameter(T)(ref T receiver, RawParam param)
     {
         assert(param.value.length == 0);
 
-        ++(*receiver);
+        ++receiver;
 
         return Result.Success;
     }

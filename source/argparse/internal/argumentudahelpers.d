@@ -32,7 +32,7 @@ private template defaultValuesCount(T)
         enum min = 1;
         enum max = size_t.max;
     }
-    else static if(is(T == function))
+    else static if(is(T == function) || is(T == delegate))
     {
         // ... function()
         static if(__traits(compiles, T()))
@@ -47,7 +47,7 @@ private template defaultValuesCount(T)
             enum max = 1;
         }
             // ... function(string[] value)
-        else static if(__traits(compiles, T([string.init])))
+        else static if(__traits(compiles, T(string[].init)))
         {
             enum min = 1;
             enum max = size_t.max;
@@ -71,7 +71,11 @@ package auto getMemberArgumentUDA(TYPE, string symbol)(const Config config)
     import std.meta: AliasSeq, Filter;
 
     alias member = __traits(getMember, TYPE, symbol);
-    alias MemberType = typeof(member);
+
+    static if(is(typeof(member) == function) || is(typeof(member) == delegate))
+        alias MemberType = typeof(&__traits(getMember, TYPE.init, symbol));
+    else
+        alias MemberType = typeof(member);
 
     alias udas = Filter!(isArgumentUDA, __traits(getAttributes, member));
     static if(__traits(compiles, __traits(getAttributes, MemberType)))
@@ -92,10 +96,7 @@ package auto getMemberArgumentUDA(TYPE, string symbol)(const Config config)
     else
         enum initUDA = memberUDA;
 
-    static if(is(MemberType == function) || is(MemberType == delegate))
-        auto result = initUDA.addDefaultsForType!(typeof(&__traits(getMember, TYPE.init, symbol)));
-    else
-        auto result = initUDA.addDefaultsForType!MemberType;
+    auto result = initUDA.addReceiverTypeDefaults!MemberType;
 
     result.info = result.info.finalize!MemberType(config, symbol);
 

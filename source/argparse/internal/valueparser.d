@@ -135,56 +135,37 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
         return res;
     }
 
-    auto addTypeDefaults(TYPE)()
-    {
-        static if(!is(typeof(TypedValueParser!TYPE) == void))
-            return addDefaults(TypedValueParser!TYPE);
-        else
-            return this;
-    }
-
-    // Procedure to process (parse) the values to an argument of type RECEIVER
-    //  - if there is a value(s):
-    //      - pre validate raw strings
-    //      - parse raw strings
-    //      - validate parsed values
-    //      - action with values
-    //  - if there is no value:
-    //      - action if no value
-    // Requirement: rawValues.length must be correct
-    Result parseParameter(RECEIVER)(ref RECEIVER receiver, RawParam param)
-    {
-        static assert(!is(PARSE_TYPE == void) && !is(RECEIVER_TYPE == void));
-        return addTypeDefaults!RECEIVER.addDefaults.parseImpl(receiver, param);
-    }
+    enum typeDefaults(TYPE) = TypedValueParser!TYPE;
 
     static if(!is(PARSE_TYPE == void) && !is(RECEIVER_TYPE == void))
     {
-        auto addDefaults()
+        static auto defaults()
         {
-            if(!preProcess)
-                preProcess = (ref _) {};
-            if(!preValidate)
-                preValidate = (string[] _) => true;
-            if(!validate)
-                validate = (PARSE_TYPE _) => true;
-            static if(__traits(compiles, { RECEIVER_TYPE receiver; receiver = PARSE_TYPE.init; }))
-            {
-                if (!action)
-                    action = (ref RECEIVER_TYPE receiver, Param!PARSE_TYPE param) { receiver = param.value; };
-            }
-            if(!noValueAction)
-                noValueAction = (ref RECEIVER_TYPE _, param) => processingError(param);
+            ValueParser!(PARSE_TYPE, RECEIVER_TYPE) res;
 
-            return this;
+            res.preProcess = (ref _) {};
+            res.preValidate = (string[] _) => true;
+            res.validate = (PARSE_TYPE _) => true;
+
+            static if(is(RECEIVER_TYPE == PARSE_TYPE))
+                res.action = (ref RECEIVER_TYPE receiver, Param!PARSE_TYPE param) { receiver = param.value; };
+
+            if(!res.noValueAction)
+                res.noValueAction = (ref RECEIVER_TYPE _, param) => processingError(param);
+
+            return res;
         }
 
-
-        Result parseImpl(RECEIVER_TYPE* receiver, ref RawParam rawParam) const
-        {
-            return parseImpl(*receiver, rawParam);
-        }
-        Result parseImpl(ref RECEIVER_TYPE receiver, ref RawParam rawParam) const
+        // Procedure to process (parse) the values to an argument of type RECEIVER
+        //  - if there is a value(s):
+        //      - pre validate raw strings
+        //      - parse raw strings
+        //      - validate parsed values
+        //      - action with values
+        //  - if there is no value:
+        //      - action if no value
+        // Requirement: rawValues.length must be correct
+        Result parseParameter(ref RECEIVER_TYPE receiver, RawParam rawParam) const
         {
             assert(preProcess);
             assert(preValidate);
@@ -243,18 +224,18 @@ if(!is(T == void))
 
     static if(is(T == enum))
     {
-        enum TypedValueParser = ValueParser!(T, T).init
+        enum TypedValueParser = ValueParser!(T, T).defaults
             .changePreValidation(ValidationFunc!(string[])((RawParam _) => ValueInList(getEnumValues!T)(_)))
             .changeParse(ParseFunc!T((string _) => getEnumValue!T(_)));
     }
     else static if(isSomeString!T || isNumeric!T)
     {
-        enum TypedValueParser = ValueParser!(T, T).init
+        enum TypedValueParser = ValueParser!(T, T).defaults
             .changeParse(Convert!T);
     }
     else static if(isBoolean!T)
     {
-        enum TypedValueParser = ValueParser!(T, T).init
+        enum TypedValueParser = ValueParser!(T, T).defaults
             .changePreProcess((ref RawParam param)
             {
                 import std.algorithm.iteration: map;
@@ -279,10 +260,9 @@ if(!is(T == void))
     }
     else static if(isSomeChar!T)
     {
-        enum TypedValueParser = ValueParser!(T, T).init
+        enum TypedValueParser = ValueParser!(T, T).defaults
             .changeParse(ParseFunc!T((string value)
             {
-                import std.conv: to;
                 return value.length > 0 ? value[0].to!T : T.init;
             }));
     }
@@ -316,14 +296,14 @@ if(!is(T == void))
             else
                 enum action = Assign!T;
 
-            enum TypedValueParser = ValueParser!(T, T).init
+            enum TypedValueParser = ValueParser!(T, T).defaults
                 .changeParse(parseValue!T)
                 .changeAction(action)
                 .changeNoValueAction(NoValueActionFunc!T((ref T receiver) => Result.Success));
         }
         else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
         {
-            enum TypedValueParser = ValueParser!(TElement, T).init
+            enum TypedValueParser = ValueParser!(TElement, T).defaults
                 .changeParse(parseValue!TElement)
                 .changeAction(Extend!T)
                 .changeNoValueAction(NoValueActionFunc!T((ref T receiver) { receiver ~= TElement.init; }));
@@ -334,7 +314,7 @@ if(!is(T == void))
     else static if(isAssociativeArray!T)
     {
         import std.string : indexOf;
-        enum TypedValueParser = ValueParser!(string[], T).init
+        enum TypedValueParser = ValueParser!(string[], T).defaults
             .changeParse(PassThrough)
             .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
             {
@@ -365,14 +345,14 @@ if(!is(T == void))
     }
     else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
-        enum TypedValueParser = ValueParser!(string[], T).init
+        enum TypedValueParser = ValueParser!(string[], T).defaults
             .changeParse(PassThrough)
             .changeAction(CallFunction!T)
             .changeNoValueAction(CallFunctionNoParam!T);
     }
     else
     {
-        enum TypedValueParser = ValueParser!(T, T).init
+        enum TypedValueParser = ValueParser!(T, T).defaults
             .changeAction(Assign!T);
     }
 }
