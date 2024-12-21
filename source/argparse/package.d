@@ -144,7 +144,7 @@ unittest
         int no_b;
 
         @(NamedArgument(["b", "boo"]).Description("Flag boo")
-        .AllowNoValue!55
+        .AllowNoValue(55)
         )
         int b;
 
@@ -457,7 +457,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument.AllowNoValue  !10) int a;
+        @(NamedArgument.AllowNoValue(10)) int a;
         @(NamedArgument.RequireNoValue!20) int b;
     }
 
