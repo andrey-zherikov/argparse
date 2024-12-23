@@ -2,7 +2,7 @@ import argparse;
 
 struct T
 {
-    @(NamedArgument.AllowNoValue  !10) int a;
+    @(NamedArgument.AllowNoValue(10)) int a;
     @(NamedArgument.RequireNoValue!20) int b;
 }
 

@@ -44,9 +44,9 @@ Example:
 
 ## Named arguments with no values
 
-Sometimes named arguments are can have no values in command line. Here are two cases that arise in this situation:
+Sometimes named arguments can have no values in command line. Here are two cases that arise in this situation:
 
-- Argument should get specific value if there is no value provided in command line. Use `AllowNoValue` in this case.
+- If value is optional and argument should get specific value in this case then use `AllowNoValue`.
 
 - Argument must not have any values in command line. Use `RequireNoValue` in this case.
 

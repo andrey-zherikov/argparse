@@ -76,6 +76,17 @@
 
 * `HideFromHelp` is renamed to `Hidden` and now also hides an argument from shell completion.
 
+* `AllowNoValue` now accepts a value as run-time parameter, not as template parameter.
+
+  For example, replace this
+  ```d
+    .AllowNoValue!"myvalue"
+  ```
+  with
+  ```d
+    .AllowNoValue("myvalue")
+  ```
+
 * Dropped support for DMD-2.099.
 
 ### Enhancements and bug fixes

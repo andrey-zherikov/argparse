@@ -2,6 +2,7 @@ module argparse.api.ansi;
 
 import argparse.config;
 import argparse.param;
+import argparse.result;
 import argparse.api.argument: NamedArgument, Description, NumberOfValues, AllowedValues, Parse, Action, ActionNoValue;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,22 +30,25 @@ private struct AnsiStylingArgument
     {
         switch(param.value)
         {
-            case "auto":    isEnabled = param.config.stylingMode == Config.StylingMode.on; return;
-            case "always":  isEnabled = true;  return;
-            case "never":   isEnabled = false; return;
+            case "auto":    receiver.isEnabled = param.config.stylingMode == Config.StylingMode.on; return Result.Success;
+            case "always":  receiver.isEnabled = true;  return Result.Success;
+            case "never":   receiver.isEnabled = false; return Result.Success;
             default:
         }
+        return Result.Success;
     };
 
-    private enum actionNoValue = (ref AnsiStylingArgument receiver, Param!void param)
+    private enum actionNoValue = (ref AnsiStylingArgument receiver, Param!void _)
     {
-        isEnabled = true;
+        receiver.isEnabled = true;
+        return Result.Success;
     };
 }
 
 unittest
 {
     AnsiStylingArgument arg;
+    assert(!arg);
     AnsiStylingArgument.actionNoValue(arg, Param!void.init);
     assert(arg);
 

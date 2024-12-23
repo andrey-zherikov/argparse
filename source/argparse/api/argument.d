@@ -168,14 +168,14 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-auto AllowNoValue(alias valueToUse, T)(ArgumentUDA!T uda)
+auto AllowNoValue(VALUE, T)(ArgumentUDA!T uda, VALUE valueToUse)
 {
-    return ActionNoValue(uda, (ref typeof(valueToUse) _) { _ = valueToUse; });
+    return ActionNoValueImpl(uda,SetValue(valueToUse));
 }
 
 auto RequireNoValue(alias valueToUse, T)(ArgumentUDA!T uda)
 {
-    auto desc = uda.AllowNoValue!valueToUse;
+    auto desc = uda.AllowNoValue(valueToUse);
     desc.info.minValuesCount = 0;
     desc.info.maxValuesCount = 0;
     return desc;
@@ -183,8 +183,8 @@ auto RequireNoValue(alias valueToUse, T)(ArgumentUDA!T uda)
 
 unittest
 {
-    auto uda = NamedArgument.AllowNoValue!({});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, R)), P, R));
+    auto uda = NamedArgument.AllowNoValue("value");
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, string))));
     assert(uda.info.minValuesCount == 0);
 }
 
@@ -271,14 +271,7 @@ private auto ActionNoValueImpl(T, RECEIVER)(ArgumentUDA!T uda, NoValueActionFunc
     return desc;
 }
 
-package auto ActionNoValue(T, RETURN, RECEIVER)(ArgumentUDA!T uda, RETURN function(ref RECEIVER receiver) func)
-if(is(RETURN == void) || is(RETURN == bool) || is(RETURN == Result))
-{
-    return ActionNoValueImpl(uda, NoValueActionFunc!RECEIVER(func));
-}
-
-package auto ActionNoValue(T, RETURN, RECEIVER)(ArgumentUDA!T uda, RETURN function(ref RECEIVER receiver, Param!void param) func)
-if(is(RETURN == void) || is(RETURN == bool) || is(RETURN == Result))
+package auto ActionNoValue(T, RECEIVER)(ArgumentUDA!T uda, Result function(ref RECEIVER receiver, Param!void param) func)
 {
     return ActionNoValueImpl(uda, NoValueActionFunc!RECEIVER(func));
 }

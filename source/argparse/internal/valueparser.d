@@ -150,9 +150,6 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
             static if(is(RECEIVER_TYPE == PARSE_TYPE))
                 res.action = (ref RECEIVER_TYPE receiver, Param!PARSE_TYPE param) { receiver = param.value; };
 
-            if(!res.noValueAction)
-                res.noValueAction = (ref RECEIVER_TYPE _, param) => processingError(param);
-
             return res;
         }
 
@@ -172,7 +169,6 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
             assert(parse);
             assert(validate);
             assert(action);
-            assert(noValueAction);
 
             if (rawParam.value.length == 0)
             {
@@ -256,7 +252,7 @@ if(!is(T == void))
                     default:                 return false;
                 }
             }))
-            .changeNoValueAction(NoValueActionFunc!T((ref T receiver) { receiver = true; }));
+            .changeNoValueAction(SetValue(true));
     }
     else static if(isSomeChar!T)
     {
@@ -299,14 +295,14 @@ if(!is(T == void))
             enum TypedValueParser = ValueParser!(T, T).defaults
                 .changeParse(parseValue!T)
                 .changeAction(action)
-                .changeNoValueAction(NoValueActionFunc!T((ref T receiver) => Result.Success));
+                .changeNoValueAction(NoValueActionFunc!T((ref _1, _2) => Result.Success));
         }
         else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
         {
             enum TypedValueParser = ValueParser!(TElement, T).defaults
                 .changeParse(parseValue!TElement)
                 .changeAction(Extend!T)
-                .changeNoValueAction(NoValueActionFunc!T((ref T receiver) { receiver ~= TElement.init; }));
+                .changeNoValueAction(NoValueActionFunc!T((ref T receiver, _) { receiver ~= TElement.init; return Result.Success; }));
         }
         else
             static assert(false, "Multi-dimentional arrays are not supported: " ~ T.stringof);
@@ -341,7 +337,7 @@ if(!is(T == void))
                 }
                 return Result.Success;
             }))
-            .changeNoValueAction(NoValueActionFunc!T((ref T receiver) => Result.Success));
+            .changeNoValueAction(NoValueActionFunc!T((ref _1, _2) => Result.Success));
     }
     else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
