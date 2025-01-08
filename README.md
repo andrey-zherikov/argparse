@@ -87,6 +87,17 @@
     .AllowNoValue("myvalue")
   ```
 
+* `RequireNoValue` is renamed to `ForceNoValue` and now accepts a value as run-time parameter, not as template parameter.
+
+  For example, replace this
+  ```d
+    .RequireNoValue!"myvalue"
+  ```
+  with
+  ```d
+    .ForceNoValue("myvalue")
+  ```
+
 * Dropped support for DMD-2.099.
 
 ### Enhancements and bug fixes

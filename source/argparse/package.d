@@ -458,7 +458,7 @@ unittest
     struct T
     {
         @(NamedArgument.AllowNoValue(10)) int a;
-        @(NamedArgument.RequireNoValue!20) int b;
+        @(NamedArgument.ForceNoValue(20)) int b;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t.a == 10); return 12345; })(["-a"]) == 12345);
