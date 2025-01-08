@@ -250,7 +250,7 @@ struct my_command
 **Signature**
 
 ```C++
-AllowNoValue(alias valueToUse)(auto ref ... argument)
+AllowNoValue(VALUE)(auto ref ... argument, VALUE valueToUse)
 ```
 
 **Parameters**
@@ -269,15 +269,15 @@ struct my_command
 }
 ```
 
-### RequireNoValue
+### ForceNoValue
 
-`RequireNoValue` requires an argument to have no value in the command line. The argument is behaving like a boolean flag
-but instead of `true`/`false` values, there can be either a value provided to this function or a default one (`.init`).
+`ForceNoValue` forces an argument to have no value in the command line. The argument is behaving like a boolean flag
+but instead of `true`/`false` values, there can be either a value provided to `ForceNoValue` or a default one (`.init`).
 
 **Signature**
 
 ```C++
-RequireNoValue(alias valueToUse)(auto ref ... argument)
+ForceNoValue(VALUE)(auto ref ... argument, VALUE valueToUse)
 ```
 
 **Parameters**
@@ -291,7 +291,7 @@ RequireNoValue(alias valueToUse)(auto ref ... argument)
 ```C++
 struct my_command
 {
-  @(NamedArgument.RequireNoValue!10)
+  @(NamedArgument.ForceNoValue!10)
   int a;
 }
 ```

@@ -48,9 +48,9 @@ Sometimes named arguments can have no values in command line. Here are two cases
 
 - If value is optional and argument should get specific value in this case then use `AllowNoValue`.
 
-- Argument must not have any values in command line. Use `RequireNoValue` in this case.
+- If argument must not have any value in command line then use `ForceNoValue` in this case.
 
-Both `AllowNoValue` and `RequireNoValue` accept a value that should be used when no value is provided in the command line.
+Both `AllowNoValue` and `ForceNoValue` accept a value that should be used when no value is provided in the command line.
 The difference between them can be seen in this example:
 
 <code-block src="code_snippets/arity_no_values.d" lang="c++"/>

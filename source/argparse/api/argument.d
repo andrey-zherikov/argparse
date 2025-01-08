@@ -173,9 +173,9 @@ auto AllowNoValue(VALUE, T)(ArgumentUDA!T uda, VALUE valueToUse)
     return ActionNoValueImpl(uda,SetValue(valueToUse));
 }
 
-auto RequireNoValue(alias valueToUse, T)(ArgumentUDA!T uda)
+auto ForceNoValue(VALUE, T)(ArgumentUDA!T uda, VALUE valueToUse)
 {
-    auto desc = uda.AllowNoValue(valueToUse);
+    auto desc = AllowNoValue(uda, valueToUse);
     desc.info.minValuesCount = 0;
     desc.info.maxValuesCount = 0;
     return desc;
@@ -190,8 +190,8 @@ unittest
 
 unittest
 {
-    auto uda = NamedArgument.RequireNoValue!"value";
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, R)), P, R));
+    auto uda = NamedArgument.ForceNoValue("value");
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, string))));
     assert(uda.info.minValuesCount == 0);
     assert(uda.info.maxValuesCount == 0);
 }
