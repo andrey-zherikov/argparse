@@ -264,7 +264,7 @@ AllowNoValue(VALUE)(auto ref ... argument, VALUE valueToUse)
 ```C++
 struct my_command
 {
-  @(NamedArgument.AllowNoValue!10)
+  @(NamedArgument.AllowNoValue(10))
   int a;
 }
 ```
@@ -291,7 +291,7 @@ ForceNoValue(VALUE)(auto ref ... argument, VALUE valueToUse)
 ```C++
 struct my_command
 {
-  @(NamedArgument.ForceNoValue!10)
+  @(NamedArgument.ForceNoValue(10))
   int a;
 }
 ```
