@@ -29,6 +29,14 @@ private struct Handler(TYPE)
     {
         return func(param);
     }
+    static Result opCall(bool function(Param!(TYPE[]) param) func, Param!TYPE param)
+    {
+        return func(Param!(TYPE[])(param.config, param.name, [param.value])) ? Result.Success : invalidValueError(param);
+    }
+    static Result opCall(Result function(Param!(TYPE[]) param) func, Param!TYPE param)
+    {
+        return func(Param!(TYPE[])(param.config, param.name, [param.value]));
+    }
 
     static if(isArray!TYPE)
     {
@@ -86,6 +94,17 @@ package(argparse) struct ValidationFunc(TYPE)
     {
         return F.match!(_ => Handler!TYPE(_, param));
     }
+
+    Result opCall(Param!(TYPE[]) param) const
+    {
+        foreach(ref value; param.value)
+        {
+            auto res = opCall(Param!TYPE(param.config, param.name, value));
+            if(!res)
+                return res;
+        }
+        return Result.Success;
+    }
 }
 
 unittest
@@ -103,6 +122,14 @@ unittest
     // bool validate(Param!T param)
     assert(test((RawParam _) => true, ["1","2","3"]));
     assert(test((RawParam _) => false, ["1","2","3"]).isError("Invalid value"));
+
+    // Result validate(Param!(T[]) param)
+    assert(test((Param!(string[][]) _) => Result.Success, ["1","2","3"]));
+    assert(test((Param!(string[][]) _) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
+
+    // bool validate(Param!(T[]) param)
+    assert(test((Param!(string[][]) _) => true, ["1","2","3"]));
+    assert(test((Param!(string[][]) _) => false, ["1","2","3"]).isError("Invalid value"));
 
     // Result validate(T value)
     assert(test((string _) => Result.Success, ["1","2","3"]));
