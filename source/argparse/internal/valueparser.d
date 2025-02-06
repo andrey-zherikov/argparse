@@ -19,7 +19,7 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
 {
     //////////////////////////
     /// pre process
-    void function(ref RawParam param) preProcess;
+    private void function(ref RawParam param) preProcess;
 
     auto changePreProcess(void function(ref RawParam param) func)
     {
@@ -29,9 +29,9 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
 
     //////////////////////////
     /// pre validation
-    ValidationFunc!(string[]) preValidate;
+    private ValidationFunc!string preValidate;
 
-    auto changePreValidation(ValidationFunc!(string[]) func)
+    auto changePreValidation(ValidationFunc!string func)
     {
         preValidate = func;
         return this;
@@ -40,7 +40,7 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
     //////////////////////////
     /// parse
     static if(!is(PARSE_TYPE == void))
-        ParseFunc!PARSE_TYPE parse;
+        private ParseFunc!PARSE_TYPE parse;
 
     auto changeParse(P)(ParseFunc!P func) const
     if(is(PARSE_TYPE == void) || is(PARSE_TYPE == P))
@@ -51,7 +51,7 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
     //////////////////////////
     /// validation
     static if(!is(PARSE_TYPE == void))
-        ValidationFunc!PARSE_TYPE validate;
+        private ValidationFunc!PARSE_TYPE validate;
 
     auto changeValidation(P)(ValidationFunc!P func) const
     if(is(PARSE_TYPE == void) || is(PARSE_TYPE == P))
@@ -62,7 +62,7 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
     //////////////////////////
     /// action
     static if(!is(PARSE_TYPE == void) && !is(RECEIVER_TYPE == void))
-        ActionFunc!(RECEIVER_TYPE, PARSE_TYPE) action;
+        private ActionFunc!(RECEIVER_TYPE, PARSE_TYPE) action;
 
     auto changeAction(P, R)(ActionFunc!(R, P) func) const
     if((is(PARSE_TYPE == void) || is(PARSE_TYPE == P)) &&
@@ -74,7 +74,7 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
     //////////////////////////
     /// noValueAction
     static if(!is(RECEIVER_TYPE == void))
-        NoValueActionFunc!RECEIVER_TYPE noValueAction;
+        private NoValueActionFunc!RECEIVER_TYPE noValueAction;
 
     auto changeNoValueAction(R)(NoValueActionFunc!R func) const
     if(is(RECEIVER_TYPE == void) || is(RECEIVER_TYPE == R))
@@ -144,7 +144,7 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
             ValueParser!(PARSE_TYPE, RECEIVER_TYPE) res;
 
             res.preProcess = (ref _) {};
-            res.preValidate = (string[] _) => true;
+            res.preValidate = (string _) => true;
             res.validate = (PARSE_TYPE _) => true;
 
             static if(is(RECEIVER_TYPE == PARSE_TYPE))
@@ -221,7 +221,7 @@ if(!is(T == void))
     static if(is(T == enum))
     {
         enum TypedValueParser = ValueParser!(T, T).defaults
-            .changePreValidation(ValidationFunc!(string[])((RawParam _) => ValueInList(getEnumValues!T)(_)))
+            .changePreValidation(ValidationFunc!string((RawParam _) => ValueInList(getEnumValues!T)(_)))
             .changeParse(ParseFunc!T((string _) => getEnumValue!T(_)));
     }
     else static if(isSomeString!T || isNumeric!T)
@@ -243,7 +243,7 @@ if(!is(T == void))
                 foreach(ref value; param.value)
                     value = value.length == 0 ? "y" : value.representation.map!(_ => immutable char(_.toLower)).array;
             })
-            .changePreValidation(ValidationFunc!(string[])((RawParam _) => ValueInList("true","yes","y","false","no","n")(_)))
+            .changePreValidation(ValidationFunc!string((RawParam _) => ValueInList("true","yes","y","false","no","n")(_)))
             .changeParse(ParseFunc!T((string value)
             {
                 switch(value)

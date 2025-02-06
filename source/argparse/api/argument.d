@@ -203,7 +203,7 @@ auto PreValidation(T, RETURN, VALUE)(ArgumentUDA!T uda, RETURN function(VALUE va
 if((is(VALUE == string) || is(VALUE == string[]) || is(VALUE == RawParam)) &&
     (is(RETURN == bool) || is(RETURN == Result)))
 {
-    auto desc = createArgumentUDA(uda.info, uda.valueParser.changePreValidation(ValidationFunc!(string[])(func)));
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changePreValidation(ValidationFunc!string(func)));
 
     return desc;
 }
