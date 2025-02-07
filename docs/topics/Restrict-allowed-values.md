@@ -1,6 +1,6 @@
 # Restrict allowed values
 
-In some cases an argument can receive one of the limited set of values. This can be achieved by adding `.AllowedValues!()`
+In some cases an argument can receive one of the limited set of values. This can be achieved by adding `.AllowedValues()`
 to UDA:
 
 <code-block src="code_snippets/allowed_values.d" lang="c++"/>

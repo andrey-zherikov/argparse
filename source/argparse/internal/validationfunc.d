@@ -5,8 +5,9 @@ import argparse.param;
 import argparse.result;
 import argparse.internal.errorhelpers;
 
-import std.traits;
+import std.conv;
 import std.sumtype;
+import std.traits;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,8 +69,57 @@ private struct Handler(TYPE)
 // Result validate(Param!T param)
 package(argparse) struct ValidationFunc(TYPE)
 {
+    private struct ValueInList
+    {
+        bool[TYPE] values;
+
+        this(TYPE[] values)
+        {
+            foreach(v; values)
+                this.values[v.to!(immutable(TYPE))] = false;
+        }
+
+
+        Result opCall(Param!TYPE param) const
+        {
+            if(!(param.value in values))
+            {
+                import std.algorithm : map;
+                import std.array : join;
+
+                auto valueStyle = param.isNamedArg ? param.config.styling.namedArgumentValue : param.config.styling.positionalArgumentValue;
+
+                string valuesList = values.keys.map!(_ => valueStyle(_.to!string)).join(",");
+
+                return invalidValueError(param,
+                    "\nValid argument values are: " ~ valuesList);
+            }
+
+            return Result.Success;
+        }
+
+        //Result opCall(Param!(TYPE[]) param) const
+        //{
+        //    foreach(ref value; param.value)
+        //    {
+        //        auto res = opCall(Param!TYPE(param.config, param.name, value));
+        //        if(!res)
+        //            return res;
+        //    }
+        //    return Result.Success;
+        //}
+    }
+
+
+
+    import std.meta: AliasSeq;
+
     alias getFirstParameter(T) = Parameters!T[0];
-    alias TYPES = staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!TYPE, "opCall")));
+
+    static if(isArray!TYPE && !isSomeString!TYPE)
+        alias TYPES = staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!TYPE, "opCall")));
+    else
+        alias TYPES = AliasSeq!(staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!TYPE, "opCall"))), ValueInList);
 
     SumType!TYPES F;
 
@@ -92,7 +142,10 @@ package(argparse) struct ValidationFunc(TYPE)
 
     Result opCall(Param!TYPE param) const
     {
-        return F.match!(_ => Handler!TYPE(_, param));
+        static if(isArray!TYPE && !isSomeString!TYPE)
+            return F.match!(_ => Handler!TYPE(_, param));
+        else
+            return F.match!(_ => Handler!TYPE(_, param), (const ref ValueInList _) => _(param));
     }
 
     Result opCall(Param!(TYPE[]) param) const
@@ -197,48 +250,8 @@ unittest
 
 package(argparse) auto ValueInList(TYPE)(TYPE[] values...)
 {
-    struct Impl {
-        bool[TYPE] values;
-
-        this(TYPE[] values)
-        {
-            import std.array : assocArray;
-            import std.range : repeat;
-
-            this.values = assocArray(values, false.repeat);
-        }
-
-        Result opCall(Param!TYPE param) const
-        {
-            if(!(param.value in values))
-            {
-                import std.algorithm : map;
-                import std.array : join;
-                import std.conv: to;
-
-                auto valueStyle = (param.name.length == 0 || param.name[0] != param.config.namedArgPrefix) ?
-                param.config.styling.positionalArgumentValue :
-                param.config.styling.namedArgumentValue;
-
-                return Result.Error("Invalid value '", valueStyle(param.value.to!string), "' for argument '", param.config.styling.argumentName(param.name),
-                "'.\nValid argument values are: ", values.keys.map!(_ => valueStyle(_.to!string)).join(","));
-            }
-
-            return Result.Success;
-        }
-
-        Result opCall(Param!(TYPE[]) param) const
-        {
-            foreach(ref value; param.value)
-            {
-                auto res = opCall(Param!TYPE(param.config, param.name, value));
-                if(!res)
-                return res;
-            }
-            return Result.Success;
-        }
-    }
-    return Impl(values);
+    alias VF = ValidationFunc!TYPE;
+    return VF(VF.ValueInList(values));
 }
 
 unittest

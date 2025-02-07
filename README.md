@@ -76,6 +76,17 @@
 
 * `HideFromHelp` is renamed to `Hidden` and now also hides an argument from shell completion.
 
+* `AllowedValues` now accepts values as run-time parameters, not as template parameters.
+
+  For example, replace this
+  ```d
+    .AllowedValues!(["value1", "value2", value3"])
+  ```
+  with
+  ```d
+    .AllowedValues("value1", "value2", value3")
+  ```
+
 * `AllowNoValue` now accepts a value as run-time parameter, not as template parameter.
 
   For example, replace this

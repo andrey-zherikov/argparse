@@ -376,7 +376,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument.AllowedValues!([1,3,5])) int a;
+        @(NamedArgument.AllowedValues(1,3,5)) int a;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T(3)); return 12345; })(["-a", "3"]) == 12345);
@@ -387,7 +387,7 @@ unittest
 {
     struct T
     {
-        @(PositionalArgument(0).AllowedValues!([1,3,5])) int a;
+        @(PositionalArgument(0).AllowedValues(1,3,5)) int a;
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T(3)); return 12345; })(["3"]) == 12345);
@@ -398,7 +398,7 @@ unittest
 {
     struct T
     {
-        @(NamedArgument.AllowedValues!(["apple","pear","banana"]))
+        @(NamedArgument.AllowedValues("apple","pear","banana"))
         string fruit;
     }
 
@@ -639,10 +639,10 @@ unittest
         enum Fruit { apple, pear };
         @(NamedArgument(["f","fruit"]).Required.Description("This is a help text for fruit. Very very very very very very very very very very very very very very very very very very very long text")) Fruit f;
 
-        @(NamedArgument.AllowedValues!([1,4,16,8])) int i;
+        @(NamedArgument.AllowedValues(1,4,16,8)) int i;
 
         @(PositionalArgument(0, "param0").Description("This is a help text for param0. Very very very very very very very very very very very very very very very very very very very long text")) string _param0;
-        @(PositionalArgument(1).AllowedValues!(["q","a"])) string param1;
+        @(PositionalArgument(1).AllowedValues("q","a")) string param1;
     }
 
     import std.array: appender;

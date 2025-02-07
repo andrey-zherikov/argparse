@@ -11,7 +11,7 @@ import argparse.api.argument: NamedArgument, Description, NumberOfValues, Allowe
 
 @(NamedArgument
 .Description("Colorize the output. If value is omitted then 'always' is used.")
-.AllowedValues!(["always","auto","never"])
+.AllowedValues("always","auto","never")
 .NumberOfValues(0, 1)
 .Parse((string _) => _)
 .Action(AnsiStylingArgument.action)

@@ -221,7 +221,7 @@ if(!is(T == void))
     static if(is(T == enum))
     {
         enum TypedValueParser = ValueParser!(T, T).defaults
-            .changePreValidation(ValidationFunc!string((RawParam _) => ValueInList(getEnumValues!T)(_)))
+            .changePreValidation(ValueInList(getEnumValues!T))
             .changeParse(ParseFunc!T((string _) => getEnumValue!T(_)));
     }
     else static if(isSomeString!T || isNumeric!T)
@@ -243,7 +243,7 @@ if(!is(T == void))
                 foreach(ref value; param.value)
                     value = value.length == 0 ? "y" : value.representation.map!(_ => immutable char(_.toLower)).array;
             })
-            .changePreValidation(ValidationFunc!string((RawParam _) => ValueInList("true","yes","y","false","no","n")(_)))
+            .changePreValidation(ValueInList("true","yes","y","false","no","n"))
             .changeParse(ParseFunc!T((string value)
             {
                 switch(value)
