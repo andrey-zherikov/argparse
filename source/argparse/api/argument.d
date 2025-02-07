@@ -315,9 +315,9 @@ unittest
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-auto AllowedValues(alias values, T)(ArgumentUDA!T uda)
+auto AllowedValues(TYPE, T)(ArgumentUDA!T uda, TYPE[] values...)
 {
-    auto desc = uda.Validation((Param!(typeof(values[0])) _) => ValueInList(values)(_));
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeValidation(ValueInList(values)));
     if(desc.info.placeholder.length == 0)
         desc.info.placeholder = formatAllowedValues(values);
 
@@ -326,7 +326,7 @@ auto AllowedValues(alias values, T)(ArgumentUDA!T uda)
 
 unittest
 {
-    assert(NamedArgument.AllowedValues!([1, 3, 5]).info.placeholder == "{1,3,5}");
+    assert(NamedArgument.AllowedValues(1, 3, 5).info.placeholder == "{1,3,5}");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

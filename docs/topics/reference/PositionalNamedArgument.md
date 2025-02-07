@@ -303,7 +303,7 @@ struct my_command
 **Signature**
 
 ```C++
-AllowedValues(alias values)(auto ref ... argument)
+AllowedValues(TYPE)(auto ref ... argument, TYPE[] values...)
 ```
 
 **Parameters**
@@ -317,7 +317,7 @@ AllowedValues(alias values)(auto ref ... argument)
 ```C++
 struct my_command
 {
-  @(NamedArgument.AllowedValues!([1,4,16,8]))
+  @(NamedArgument.AllowedValues(1,4,16,8))
   int a;
 }
 ```

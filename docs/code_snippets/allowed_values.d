@@ -2,7 +2,7 @@ import argparse;
 
 struct T
 {
-    @(NamedArgument.AllowedValues!(["apple","pear","banana"]))
+    @(NamedArgument.AllowedValues("apple","pear","banana"))
     string fruit;
 }
 
