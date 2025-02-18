@@ -38,6 +38,10 @@ private struct Handler(TYPE)
     {
         return func(Param!(TYPE[])(param.config, param.name, [param.value]));
     }
+    static Result opCall(const ref ValidationFunc!TYPE.ValueInList func, Param!TYPE param)
+    {
+        return func(param);
+    }
 
     static if(isArray!TYPE)
     {
@@ -97,29 +101,15 @@ package(argparse) struct ValidationFunc(TYPE)
 
             return Result.Success;
         }
-
-        //Result opCall(Param!(TYPE[]) param) const
-        //{
-        //    foreach(ref value; param.value)
-        //    {
-        //        auto res = opCall(Param!TYPE(param.config, param.name, value));
-        //        if(!res)
-        //            return res;
-        //    }
-        //    return Result.Success;
-        //}
     }
 
 
 
     import std.meta: AliasSeq;
 
-    alias getFirstParameter(T) = Parameters!T[0];
+    alias getFirstParameter(T) = Unqual!(Parameters!T[0]);
 
-    static if(isArray!TYPE && !isSomeString!TYPE)
-        alias TYPES = staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!TYPE, "opCall")));
-    else
-        alias TYPES = AliasSeq!(staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!TYPE, "opCall"))), ValueInList);
+    alias TYPES = AliasSeq!(staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!TYPE, "opCall"))));
 
     SumType!TYPES F;
 
@@ -142,10 +132,7 @@ package(argparse) struct ValidationFunc(TYPE)
 
     Result opCall(Param!TYPE param) const
     {
-        static if(isArray!TYPE && !isSomeString!TYPE)
-            return F.match!(_ => Handler!TYPE(_, param));
-        else
-            return F.match!(_ => Handler!TYPE(_, param), (const ref ValueInList _) => _(param));
+        return F.match!((const ref _) => Handler!TYPE(_, param));
     }
 
     Result opCall(Param!(TYPE[]) param) const
