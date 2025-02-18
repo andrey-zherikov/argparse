@@ -67,7 +67,7 @@ private struct Parser
     string[] args;
     string[] unrecognizedArgs;
 
-    bool[size_t] idxParsedArgs;
+    bool[size_t][] idxParsedArgs;
     size_t idxNextPositional = 0;
 
 
@@ -100,7 +100,7 @@ private struct Parser
         : Argument(NamedShort(config.convertCase(nameWithDash[1..$]), nameWithDash, value));
     }
 
-    auto parseArgument(bool completionMode, FOUNDARG)(const Command[] cmdStack, const ref Command cmd, FOUNDARG foundArg, string value, string nameWithDash)
+    auto parseArgument(bool completionMode, FOUNDARG)(ref bool[size_t] idxParsedArgs, const Command[] cmdStack, const ref Command cmd, FOUNDARG foundArg, string value, string nameWithDash)
     {
         scope(exit) idxParsedArgs[foundArg.index] = true;
 
@@ -121,16 +121,17 @@ private struct Parser
             return Result.UnknownArgument;
 
         if(cmdStack1.length < cmdStack.length)
-            cmdStack.length = cmdStack1.length;
+            idxParsedArgs.length = cmdStack.length = cmdStack1.length;
 
         addCommand(subcmd.get, false);
+        idxNextPositional = 0;
 
         args.popFront();
 
         return Result.Success;
     }
 
-    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, Unknown)
+    auto parse(bool completionMode)(ref bool[size_t] idxParsedArgs, const Command[] cmdStack, const ref Command cmd, Unknown)
     {
         static if(completionMode)
         {
@@ -141,7 +142,7 @@ private struct Parser
         return Result.UnknownArgument;
     }
 
-    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, EndOfArgs)
+    auto parse(bool completionMode)(ref bool[size_t] idxParsedArgs, const Command[] cmdStack, const ref Command cmd, EndOfArgs)
     {
         static if(!completionMode)
         {
@@ -158,13 +159,13 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, Positional)
+    auto parse(bool completionMode)(ref bool[size_t] idxParsedArgs, const Command[] cmdStack, const ref Command cmd, Positional)
     {
         auto foundArg = cmd.findPositionalArgument(idxNextPositional);
         if(foundArg.arg is null)
             return parseSubCommand(cmdStack, cmd);
 
-        auto res = parseArgument!completionMode(cmdStack, cmd, foundArg, null, foundArg.arg.names[0]);
+        auto res = parseArgument!completionMode(idxParsedArgs, cmdStack, cmd, foundArg, null, foundArg.arg.names[0]);
         if(!res)
             return res;
 
@@ -173,7 +174,7 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, NamedLong arg)
+    auto parse(bool completionMode)(ref bool[size_t] idxParsedArgs, const Command[] cmdStack, const ref Command cmd, NamedLong arg)
     {
         import std.algorithm : startsWith;
         import std.range: popFront;
@@ -196,10 +197,10 @@ private struct Parser
             return Result.UnknownArgument;
 
         args.popFront();
-        return parseArgument!completionMode(cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);
+        return parseArgument!completionMode(idxParsedArgs, cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);
     }
 
-    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, NamedShort arg)
+    auto parse(bool completionMode)(ref bool[size_t] idxParsedArgs, const Command[] cmdStack, const ref Command cmd, NamedShort arg)
     {
         import std.range: popFront;
 
@@ -210,7 +211,7 @@ private struct Parser
                 return Result.UnknownArgument;
 
             args.popFront();
-            return parseArgument!completionMode(cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);
+            return parseArgument!completionMode(idxParsedArgs, cmdStack, cmd, foundArg, arg.value, arg.nameWithDash);
         }
 
         // Try to parse "-ABC..." where "A","B","C" are different single-letter arguments
@@ -240,7 +241,7 @@ private struct Parser
                 arg.name = "";
             }
 
-            auto res = parseArgument!completionMode(cmdStack, cmd, foundArg, value, "-"~name);
+            auto res = parseArgument!completionMode(idxParsedArgs, cmdStack, cmd, foundArg, value, "-"~name);
             if(!res)
                 return res;
         }
@@ -250,11 +251,11 @@ private struct Parser
         return Result.Success;
     }
 
-    auto parse(bool completionMode)(const Command[] cmdStack, const ref Command cmd, Argument arg)
+    auto parse(bool completionMode)(ref bool[size_t] idxParsedArgs, const Command[] cmdStack, const ref Command cmd, Argument arg)
     {
         import std.sumtype: match;
 
-        return arg.match!(_ => parse!completionMode(cmdStack, cmd, _));
+        return arg.match!(_ => parse!completionMode(idxParsedArgs, cmdStack, cmd, _));
     }
 
     auto parse(bool completionMode)(Argument arg)
@@ -271,14 +272,14 @@ private struct Parser
 
             static if(completionMode)
             {
-                auto res = parse!true(cmdStack1, cmdParser, arg);
+                auto res = parse!true(idxParsedArgs[index], cmdStack1, cmdParser, arg);
 
                 if(res)
                     result.suggestions ~= res.suggestions;
             }
             else
             {
-                auto res = parse!false(cmdStack1, cmdParser, arg);
+                auto res = parse!false(idxParsedArgs[index], cmdStack1, cmdParser, arg);
 
                 if(res.status != Result.Status.unknownArgument)
                     return res;
@@ -296,7 +297,7 @@ private struct Parser
 
     auto parseAll(bool completionMode)()
     {
-        import std.range: empty, front, back;
+        import std.range: empty, front, back, lockstep;
 
         while(!args.empty)
         {
@@ -312,12 +313,20 @@ private struct Parser
                     return res; // res contains suggestions
         }
 
-        return cmdStack[0].checkRestrictions(idxParsedArgs, config);
+        foreach(ref cmd, parsedArgs; lockstep(cmdStack, idxParsedArgs))
+        {
+            auto res = cmd.checkRestrictions(parsedArgs, config);
+            if(!res)
+                return res;
+        }
+
+        return Result.Success;
     }
 
     void addCommand(Command cmd, bool addDefaultCommand)
     {
         cmdStack ~= cmd;
+        idxParsedArgs ~= bool[size_t].init;
 
 
         if(addDefaultCommand)
@@ -326,6 +335,7 @@ private struct Parser
             if(!subcmd.isNull)
             {
                 cmdStack ~= subcmd.get;
+                idxParsedArgs ~= bool[size_t].init;
 
                 //import std.stdio : writeln, stderr;stderr.writeln("-- addCommand 1 ", cmd.getSubCommand);
                 //

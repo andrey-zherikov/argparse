@@ -854,6 +854,39 @@ unittest
 
 unittest
 {
+    struct SUB
+    {
+        @(NamedArgument.Required)
+        string req_sub;
+    }
+    struct TOP
+    {
+        @(NamedArgument.Required)
+        string req_top;
+
+        import std.sumtype;
+
+        @SubCommands
+        SumType!SUB cmd;
+    }
+
+    auto test(string[] args)
+    {
+        TOP tl;
+        return CLI!TOP.parseArgs(tl, args);
+    }
+
+    assert(test(["SUB"]).isError("The following argument is required","--req_top"));
+    assert(test(["SUB","--req_sub","v"]).isError("The following argument is required","--req_top"));
+    assert(test(["SUB","--req_top","v"]).isError("The following argument is required","--req_sub"));
+    assert(test(["SUB","--req_sub","v","--req_top","v"]));
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
     static auto epilog() { return "custom epilog"; }
     @(Command("MYPROG")
      .Description("custom description")
