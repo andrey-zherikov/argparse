@@ -234,7 +234,7 @@ unittest
             @NamedArgument
             string b;
 
-            @PositionalArgument(0)
+            @(PositionalArgument(0).Optional)
             string[] args;
         }
 
@@ -619,6 +619,36 @@ unittest
     assert(CLI!T.parseArgs!((T t) { assert(false); })([]) != 0);
 }
 
+
+unittest
+{
+    struct SUB
+    {
+        @(NamedArgument.Required)
+        string req_sub;
+    }
+    struct TOP
+    {
+        @(NamedArgument.Required)
+        string req_top;
+
+        SubCommand!SUB cmd;
+    }
+
+    auto test(string[] args)
+    {
+        TOP t;
+        return CLI!TOP.parseArgs(t, args);
+    }
+
+    assert(test(["SUB"]).isError("The following argument is required","--req_top"));
+    assert(test(["SUB","--req_sub","v"]).isError("The following argument is required","--req_top"));
+    assert(test(["SUB","--req_top","v"]).isError("The following argument is required","--req_sub"));
+    assert(test(["SUB","--req_sub","v","--req_top","v"]));
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

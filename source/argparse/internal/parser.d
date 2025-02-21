@@ -119,14 +119,12 @@ private struct Unknown {
 }
 
 private struct Argument {
-    size_t index;
     const(ArgumentInfo)* info;
     Result delegate() parse;
     Result delegate() complete;
 
     this(RawParam param, FindResult r)
     {
-        index = r.arg.index;
         info = r.arg.info;
 
         parse = () => r.arg.parse(r.cmdStack, param);
@@ -313,34 +311,38 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
     else
     {
         // Check for required positional argument in the current command
-        auto res = findPositionalArg(true);
-        if(res.arg && res.arg.info.required)
         {
-            auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-            return createArgument(res.arg.info.placeholder, values, res);
-        }
+            auto res = findPositionalArg(true);
+            if (res.arg && res.arg.info.required)
+            {
+                auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
+                return createArgument(res.arg.info.placeholder, values, res);
+            }
 
-        // Is it sub command?
-        auto cmdInit = findCommand(arg0);
-        if(cmdInit !is null)
-        {
-            args.popFront;
-            return Entry(SubCommand(cmdInit));
-        }
+            // Is it sub command?
+            auto cmdInit = findCommand(arg0);
+            if (cmdInit !is null)
+            {
+                args.popFront;
+                return Entry(SubCommand(cmdInit));
+            }
 
-        // Check for optional positional argument in the current command
-        if(res.arg)
-        {
-            auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-            return createArgument(res.arg.info.placeholder, values, res);
+            // Check for optional positional argument in the current command
+            if (res.arg)
+            {
+                auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
+                return createArgument(res.arg.info.placeholder, values, res);
+            }
         }
 
         // Check for positional argument in sub commands
-        res = findPositionalArg(false);
-        if(res.arg)
         {
-            auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-            return createArgument(res.arg.info.placeholder, values, res);
+            auto res = findPositionalArg(false);
+            if (res.arg)
+            {
+                auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
+                return createArgument(res.arg.info.placeholder, values, res);
+            }
         }
     }
 
@@ -355,22 +357,27 @@ private Entry getNextPositionalArgument(const ref Config config, ref string[] ar
 
     assert(args.length > 0);
 
-    const arg0 = args[0];
-
-    // Check for positional argument in the current command
-    auto res = findPositionalArg(true);
-    if(!res.arg)
-    {
-        // Check for positional argument in sub commands
-        res = findPositionalArg(false);
-    }
-
-    if(res.arg)
+    auto createEntry(FindResult res)
     {
         auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, _ => true);
         return Entry(Argument(RawParam(&config, res.arg.info.placeholder, values), res));
     }
 
+    // Check for positional argument in the current command
+    {
+        auto res = findPositionalArg(true);
+        if(res.arg)
+            return createEntry(res);
+    }
+
+    // Check for positional argument in sub commands
+    {
+        auto res = findPositionalArg(false);
+        if(res.arg)
+            return createEntry(res);
+    }
+
+    const arg0 = args[0];
     args.popFront;
     return Entry(Unknown(arg0));
 }
@@ -417,7 +424,7 @@ private struct FindResult
 {
     Command.Argument arg;
 
-    const(Command)[] cmdStack;
+    Command[] cmdStack;
 }
 
 private FindResult findArgument(ref Command[] cmdStack, string name)
@@ -499,9 +506,6 @@ private struct Parser
     Config config;
     string[] unrecognizedArgs;
 
-    bool[size_t] idxParsedArgs;
-
-
     size_t idxNextPositional = 0;
 
     size_t[] idxPositionalStack;
@@ -515,8 +519,6 @@ private struct Parser
     {
         if(!res)
             return res;
-
-        idxParsedArgs[a.index] = true;
 
         if(a.info.positional)
             idxNextPositional++;
@@ -613,8 +615,14 @@ private struct Parser
                     return res;
             }
         }
+        foreach(ref cmd; cmdStack)
+        {
+            auto res = cmd.checkRestrictions();
+            if(!res)
+                return res;
+        }
 
-        return cmdStack[0].checkRestrictions(idxParsedArgs);
+        return Result.Success;
     }
 
     void addCommand(Command cmd)
@@ -837,13 +845,13 @@ unittest
 
 unittest
 {
-    import argparse.api.argument: PositionalArgument;
+    import argparse.api.argument;
     import argparse.api.subcommand: SubCommand;
 
     struct c1 {
         @PositionalArgument(0)
         string foo;
-        @PositionalArgument(1)
+        @(PositionalArgument(1).Optional)
         string boo;
     }
     struct cmd {
@@ -928,13 +936,13 @@ unittest
 
 unittest
 {
-    import argparse.api.argument: PositionalArgument;
+    import argparse.api.argument;
     import argparse.api.subcommand: Default, SubCommand;
 
     struct c1 {
         @PositionalArgument(0)
         string foo;
-        @PositionalArgument(1)
+        @(PositionalArgument(1).Optional)
         string boo;
     }
     struct cmd {
