@@ -1,12 +1,12 @@
-# ArgumentValue
+# AllowedValues
 
-`ArgumentValue` UDA is used to list all values that an argument can accept. This is very useful in the cases when an argument
+`AllowedValues` UDA is used to list all values that an argument can accept. This is very useful in the cases when an argument
 must have a value from a specific list, for example, when argument type is `enum`.
 
 **Signature**
 
 ```C++
-ArgumentValue(string[] values...)
+AllowedValues(string[] values...)
 ```
 
 **Parameters**
@@ -20,7 +20,7 @@ ArgumentValue(string[] values...)
 ```C++
 enum Fruit {
     apple,
-    @ArgumentValue("no-apple","noapple")
+    @AllowedValues("no-apple","noapple")
     noapple
 };
 ```

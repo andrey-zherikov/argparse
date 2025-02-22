@@ -4,7 +4,7 @@ struct T
 {
     enum Fruit {
         apple,
-        @ArgumentValue("no-apple","noapple")
+        @AllowedValues("no-apple","noapple")
         noapple
     };
 
