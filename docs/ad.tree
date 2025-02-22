@@ -33,7 +33,7 @@
         <toc-element topic="Result.md"/>
         <toc-element toc-title="UDAs">
             <toc-element topic="ArgumentGroup.md"/>
-            <toc-element topic="ArgumentValue.md"/>
+            <toc-element topic="AllowedValues.md"/>
             <toc-element topic="Command.md"/>
             <toc-element topic="MutuallyExclusive.md"/>
             <toc-element topic="PositionalNamedArgument.md"/>

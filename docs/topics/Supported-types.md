@@ -69,11 +69,11 @@ validates that the value specified in command line matches one of enum identifie
 <code-block src="code_snippets/types_enum.d" lang="c++"/>
 
 In some cases the value for command line argument might have characters that are not allowed in enum identifiers.
-Actual values that are allowed in command line can be adjusted with `ArgumentValue` UDA:
+Actual values that are allowed in command line can be adjusted with `AllowedValues` UDA:
 
 <code-block src="code_snippets/types_enum_custom_values.d" lang="c++"/>
 
-> When `ArgumentValue` UDA is used, enum identifier is ignored so if argument is supposed to accept it, identifier
+> When `AllowedValues` UDA is used, enum identifier is ignored so if argument is supposed to accept it, identifier
 > must be listed in the UDA as well - see `"noapple"` in the example above.
 >
 {style="note"}
