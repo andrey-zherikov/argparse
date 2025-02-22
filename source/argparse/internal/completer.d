@@ -1,7 +1,7 @@
 module argparse.internal.completer;
 
 import argparse.config;
-import argparse.api.argument: NamedArgument, PositionalArgument, Description;
+import argparse.api.argument: NamedArgument, PositionalArgument, Description, Optional;
 import argparse.api.command: Command, Description, ShortDescription;
 import argparse.api.restriction: MutuallyExclusive;
 import argparse.api.subcommand: SubCommand, Default;
@@ -77,7 +77,7 @@ private struct CompleteCmd
         bool fish;
     }
 
-    @PositionalArgument(0)
+    @(PositionalArgument(0).Optional)
     string[] args;
 
     void execute(Config config, COMMAND)()

@@ -56,9 +56,6 @@ private Result ArgumentParsingFunction(alias uda, RECEIVER)(const Command[] cmdS
         return uda.parse(cmdStack, *target, param);
 }
 
-private alias getArgumentParsingFunction1(alias uda) =
-    (const Command[] cmdStack, ref RawParam param) => ArgumentParsingFunction!uda(cmdStack, receiver, param);
-
 private Result ArgumentCompleteFunction(alias uda, RECEIVER)(const Command[] cmdStack,
                                                              ref RECEIVER receiver,
                                                              ref RawParam param)
@@ -112,13 +109,10 @@ package struct Command
 
     struct Argument
     {
-        size_t index = size_t.max;
-
         const(ArgumentInfo)* info;
 
         Parse parse;
         Parse complete;
-
 
         bool opCast(T : bool)() const
         {
@@ -129,22 +123,32 @@ package struct Command
     private Parse[] parseFuncs;
     private Parse[] completeFuncs;
 
-    auto findNamedArgument(string name) const
+    private Parse getParseFunc(Parse[] funcs, size_t index)
+    {
+        return (stack, ref param)
+        {
+            idxParsedArgs[index] = true;
+            return funcs[index](stack, param);
+        };
+    }
+
+
+    auto findNamedArgument(string name)
     {
         auto res = arguments.findNamedArgument(name);
         if(!res.arg)
             return Argument.init;
 
-        return Argument(res.index, res.arg, parseFuncs[res.index], completeFuncs[res.index]);
+        return Argument(res.arg, getParseFunc(parseFuncs, res.index), getParseFunc(completeFuncs, res.index));
     }
 
-    auto findPositionalArgument(size_t position) const
+    auto findPositionalArgument(size_t position)
     {
         auto res = arguments.findPositionalArgument(position);
         if(!res.arg)
             return Argument.init;
 
-        return Argument(res.index, res.arg, parseFuncs[res.index], completeFuncs[res.index]);
+        return Argument(res.arg, getParseFunc(parseFuncs, res.index), getParseFunc(completeFuncs, res.index));
     }
 
 
@@ -166,6 +170,8 @@ package struct Command
 
     Arguments arguments;
 
+    bool[size_t] idxParsedArgs;
+
     Restrictions restrictions;
 
     CommandInfo info;
@@ -185,9 +191,9 @@ package struct Command
         return subCommandCreate[*pIndex];
     }
 
-    Result checkRestrictions(in bool[size_t] cliArgs) const
+    Result checkRestrictions() const
     {
-        return restrictions.check(cliArgs);
+        return restrictions.check(idxParsedArgs);
     }
 }
 
