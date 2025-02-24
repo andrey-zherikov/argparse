@@ -109,6 +109,17 @@
     .ForceNoValue("myvalue")
   ```
 
+* `ArgumentValue` is renamed to `AllowedValues`.
+
+  For example, replace this
+  ```d
+    .ArgumentValue("value1", "value2")
+  ```
+  with
+  ```d
+    .AllowedValues("value1", "value2")
+  ```
+
 * Dropped support for DMD-2.099.
 
 ### Enhancements and bug fixes

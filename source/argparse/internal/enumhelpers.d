@@ -18,7 +18,7 @@ private E[string] getEnumValuesMap(E)()
     static foreach(i, mem; members)
     {{
         enum valueUDAs = getUDAs!(mem, EnumValue);
-        static assert(valueUDAs.length <= 1, E.stringof~"."~mem.stringof~" has multiple 'ArgumentValue' UDAs");
+        static assert(valueUDAs.length <= 1, E.stringof~"."~mem.stringof~" has multiple 'AllowedValues' UDAs");
 
         static if(valueUDAs.length > 0)
         {

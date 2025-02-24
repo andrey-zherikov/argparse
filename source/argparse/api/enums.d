@@ -6,12 +6,12 @@ import argparse.internal.enumhelpers: EnumValue;
 /// Public API for enums
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-auto ArgumentValue(string[] values...)
+auto AllowedValues(string[] values...)
 {
     return EnumValue(values.dup);
 }
 
 unittest
 {
-    assert(ArgumentValue("a","b").values == ["a","b"]);
+    assert(AllowedValues("a","b").values == ["a","b"]);
 }
