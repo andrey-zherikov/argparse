@@ -16,6 +16,8 @@ package(argparse) struct ArgumentInfo
     string[] longNames;
     string[] displayNames;    // names prefixed with Config.namedArgPrefix
 
+    string[] namesToSplit;
+
     string displayName() const
     {
         return displayNames[0];
@@ -115,7 +117,15 @@ package ArgumentInfo finalize(MEMBERTYPE)(ArgumentInfo info, const Config config
 
     info.isBooleanFlag = isBoolean!MEMBERTYPE;
 
-    if(info.shortNames.length == 0 && info.longNames.length == 0)
+    if(info.namesToSplit.length > 0)
+    {
+        foreach(n; info.namesToSplit)
+        {
+            if(n.length == 1) info.shortNames ~= n;
+            if(n.length > 1)  info.longNames ~= n;
+        }
+    }
+    else if(info.shortNames.length == 0 && info.longNames.length == 0)
     {
         if(symbol.length == 1)
             info.shortNames = [ symbol ];
@@ -221,6 +231,15 @@ unittest
 
 unittest
 {
+    ArgumentInfo info = { namesToSplit: ["a","foo","b","bar"] };
+
+    auto res = info.finalize!string(Config.init, "default_name");
+    assert(res.shortNames == ["a","b"]);
+    assert(res.longNames == ["foo","bar"]);
+}
+
+unittest
+{
     enum Config config = { caseSensitive: false };
 
     auto createInfo(string placeholder = "")
@@ -308,7 +327,8 @@ package struct Arguments
     ArgumentInfo[] info;
 
     // named arguments
-    size_t[string] argsNamed;
+    size_t[string] argsNamedShort;
+    size_t[string] argsNamedLong;
 
     // positional arguments
     size_t[] argsPositional;
@@ -379,12 +399,15 @@ package struct Arguments
         }
         else
         {
-            import std.range: chain;
-
-            foreach(name; chain(info.shortNames, info.longNames))
+            foreach(name; info.shortNames)
             {
-                assert(!(name in argsNamed), "Duplicated argument name: "~name);
-                argsNamed[name] = argIndex;
+                assert(!(name in argsNamedShort) && !(name in argsNamedLong), "Duplicated argument name: "~name);
+                argsNamedShort[name] = argIndex;
+            }
+            foreach(name; info.longNames)
+            {
+                assert(!(name in argsNamedShort) && !(name in argsNamedLong), "Duplicated argument name: "~name);
+                argsNamedLong[name] = argIndex;
             }
         }
 
@@ -409,9 +432,13 @@ package struct Arguments
         return findArgumentImpl(position < argsPositional.length ? &argsPositional[position] : null);
     }
 
-    auto findNamedArgument(string name) const
+    auto findShortNamedArgument(string name) const
     {
-        return findArgumentImpl(name in argsNamed);
+        return findArgumentImpl(name in argsNamedShort);
+    }
+    auto findLongNamedArgument(string name) const
+    {
+        return findArgumentImpl(name in argsNamedLong);
     }
 }
 

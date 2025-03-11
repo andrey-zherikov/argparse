@@ -140,7 +140,8 @@ private alias Entry = SumType!(Unknown, Argument, SubCommand);
 
 private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] args,
                                           FindResult delegate(bool) findPositionalArg,
-                                          FindResult delegate(string) findNamedArg,
+                                          FindResult delegate(string) findShortNamedArg,
+                                          FindResult delegate(string) findLongNamedArg,
                                           Command delegate() delegate(string) findCommand)
 {
     import std.range: popFront;
@@ -188,7 +189,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                 immutable value    = arg0[idxAssignChar + 1 .. $];
                 immutable argName  = config.convertCase(usedName[2..$]);     // 2 to remove "--" prefix
 
-                auto res = findNamedArg(argName);
+                auto res = findLongNamedArg(argName);
                 if(res.arg)
                 {
                     args.popFront;
@@ -201,7 +202,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                 immutable argName = config.convertCase(arg0[2..$]);     // 2 to remove "--" prefix
 
                 {
-                    auto res = findNamedArg(argName);
+                    auto res = findLongNamedArg(argName);
                     if (res.arg)
                     {
                         args.popFront;
@@ -213,7 +214,11 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                 if(argName.startsWith(config.convertCase("no-")))
                 {
                     // It is a boolean flag specified as "--no-<arg>"
-                    auto res = findNamedArg(argName[3..$]);    // remove "no-" prefix
+                    auto res = findShortNamedArg(argName[3..$]);    // remove "no-" prefix
+
+                    if(!res.arg || !res.arg.info.isBooleanFlag)
+                        res = findLongNamedArg(argName[3..$]);    // remove "no-" prefix
+
                     if(res.arg && res.arg.info.isBooleanFlag)
                     {
                         args.popFront;
@@ -246,7 +251,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                 auto argName  = config.convertCase(usedName[1..$]);     // 1 to remove "-" prefix
 
                 {
-                    auto res = findNamedArg(argName);
+                    auto res = findShortNamedArg(argName);
                     if (res.arg)
                     {
                         args.popFront;
@@ -260,7 +265,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                 immutable argName = config.convertCase(arg0[1..$]);     // 1 to remove "-" prefix
 
                 {
-                    auto res = findNamedArg(argName);
+                    auto res = findShortNamedArg(argName);
                     if (res.arg)
                     {
                         args.popFront;
@@ -273,7 +278,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                 if(argName.length > 1)     // Ensure that there is something to split
                 {
                     // Look for the first argument ("-A" from the example above)
-                    auto res = findNamedArg([argName[0]]);
+                    auto res = findShortNamedArg([argName[0]]);
                     if(res.arg)
                     {
                         // If argument accepts at least one value then the rest is that value
@@ -293,7 +298,7 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
                     // Process "-ABC" as "-A","-BC": extract first character and leave the rest
 
                     // Look for the first argument ("-A" from the example above)
-                    auto res = findNamedArg(config.convertCase([arg0[1]]));
+                    auto res = findShortNamedArg(config.convertCase([arg0[1]]));
                     if(res.arg)
                     {
                         // Drop first character
@@ -387,7 +392,7 @@ unittest
     Config config;
     auto args = [""];
 
-    assert(getNextEntry!false(config, args, null, null, null) == Entry(Unknown("")));
+    assert(getNextEntry!false(config, args, null, null, null, null) == Entry(Unknown("")));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -427,14 +432,14 @@ private struct FindResult
     Command[] cmdStack;
 }
 
-private FindResult findArgument(ref Command[] cmdStack, string name)
+private FindResult findArgument(ref Command[] cmdStack, Command.Argument delegate(ref Command) findNamedArgument)
 {
     import std.range: back, popBack;
 
     // Look up in command stack
     for(auto stack = cmdStack[]; stack.length > 0; stack.popBack)
     {
-        auto res = stack.back.findNamedArgument(name);
+        auto res = findNamedArgument(stack.back);
         if(res)
             return FindResult(res, stack);
     }
@@ -444,7 +449,7 @@ private FindResult findArgument(ref Command[] cmdStack, string name)
     {
         stack ~= stack.back.defaultSubCommand();
 
-        auto res = stack.back.findNamedArgument(name);
+        auto res = findNamedArgument(stack.back);
         if(res)
         {
             // update stack
@@ -540,26 +545,21 @@ private struct Parser
 
     ///////////////////////////////////////////////////////////////////////
 
-    FindResult findPositionalArgument(bool currentStackOnly)
-    {
-        return findArgument(cmdStack, idxPositionalStack, idxNextPositional, currentStackOnly);
-    }
-    FindResult findNamedArgument(string name)
-    {
-        return findArgument(cmdStack, name);
-    }
-    Command delegate() findCommand(string name)
-    {
-        return .findCommand(cmdStack, name);
-    }
-
     auto parseAll(bool completionMode, bool bundling)(string[] args)
     {
         import std.range: empty, join;
         import std.sumtype : match;
         import std.algorithm : map;
 
-        bool forcePositionalOnly = false;
+        auto findPositionalArgument = (bool currentStackOnly) => findArgument(cmdStack, idxPositionalStack, idxNextPositional, currentStackOnly);
+        auto getNext = () =>
+            getNextEntry!bundling(config, args,
+                findPositionalArgument,
+                name => findArgument(cmdStack, (ref cmd) => cmd.findShortNamedArgument(name)),
+                name => findArgument(cmdStack, (ref cmd) => cmd.findLongNamedArgument(name)),
+                name => findCommand(cmdStack, name)
+            );
+
 
         while(!args.empty)
         {
@@ -567,7 +567,7 @@ private struct Parser
             if(args[0] == config.endOfNamedArgs)
             {
                 args = args[1..$];
-                forcePositionalOnly = true;
+                getNext = () => getNextPositionalArgument(config, args, findPositionalArgument);
                 continue;// to check for args.empty
             }
 
@@ -575,14 +575,7 @@ private struct Parser
             {
                 if(args.length > 1)
                 {
-                    auto res = (forcePositionalOnly ?
-                        getNextPositionalArgument(config, args, &findPositionalArgument) :
-                        getNextEntry!bundling(
-                            config, args,
-                            &findPositionalArgument,
-                            &findNamedArgument,
-                            &findCommand,
-                        ))
+                    auto res = getNext()
                         .match!(
                             (Argument a) => parse(a, Result.Success),
                             _ => parse(_));
@@ -599,14 +592,7 @@ private struct Parser
             }
             else
             {
-                auto res = (forcePositionalOnly ?
-                    getNextPositionalArgument(config, args, &findPositionalArgument) :
-                    getNextEntry!bundling(
-                        config, args,
-                        &findPositionalArgument,
-                        &findNamedArgument,
-                        &findCommand,
-                    ))
+                auto res = getNext()
                     .match!(
                         (Argument a) => parse(a, a.parse()),
                         _ => parse(_)
