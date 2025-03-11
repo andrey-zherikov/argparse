@@ -3,10 +3,15 @@
 _Positional arguments_ are arguments that have specific position within the command line. This argument can be declared
 using `PositionalArgument` UDA. It has the following parameters:
 
-| # | Name          | Type     | Optional/<br/>Required | Description                                                                                                  |
-|---|---------------|----------|------------------------|--------------------------------------------------------------------------------------------------------------|
-| 1 | `position`    | `uint`   | required               | Zero-based unsigned position of the argument.                                                                |
-| 2 | `placeholder` | `string` | optional               | Name of this argument that is shown in help text.<br/>If not provided, then the name of data member is used. |
+```c++
+PositionalArgument(uint position)
+PositionalArgument(uint position, string placeholder)
+```
+
+| Name          | Type     | Optional/<br/>Required | Description                                                                                                  |
+|---------------|----------|------------------------|--------------------------------------------------------------------------------------------------------------|
+| `position`    | `uint`   | required               | Zero-based unsigned position of the argument.                                                                |
+| `placeholder` | `string` | optional               | Name of this argument that is shown in help text.<br/>If not provided, then the name of data member is used. |
 
 Since that both _named_ and _positional arguments_ can be mixed in the command line, `argparse` enforces the following
 restrictions to be able to parse a command line unambiguously:
