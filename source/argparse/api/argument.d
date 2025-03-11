@@ -128,9 +128,16 @@ auto PositionalArgument(uint position, string placeholder)
     return PositionalArgument(position).Placeholder(placeholder);
 }
 
+auto NamedArgument(string[] shortNames, string[] longNames)
+{
+    return ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo(shortNames, longNames)).Optional();
+}
+
 auto NamedArgument(string[] names...)
 {
-    return ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo(names.dup)).Optional();
+    auto arg = NamedArgument([], []);
+    arg.info.namesToSplit = names;
+    return arg;
 }
 
 unittest
@@ -144,26 +151,32 @@ unittest
 
 unittest
 {
-    auto arg = NamedArgument("foo");
+    auto arg = NamedArgument("f","foo");
     assert(!arg.info.required);
     assert(!arg.info.positional);
-    assert(arg.info.shortNames == ["foo"]);
+    assert(arg.info.shortNames == []);
+    assert(arg.info.longNames == []);
+    assert(arg.info.namesToSplit == ["f","foo"]);
 }
 
 unittest
 {
-    auto arg = NamedArgument(["foo","bar"]);
+    auto arg = NamedArgument(["f","foo"]);
     assert(!arg.info.required);
     assert(!arg.info.positional);
-    assert(arg.info.shortNames == ["foo","bar"]);
+    assert(arg.info.shortNames == []);
+    assert(arg.info.longNames == []);
+    assert(arg.info.namesToSplit == ["f","foo"]);
 }
 
 unittest
 {
-    auto arg = NamedArgument("foo","bar");
+    auto arg = NamedArgument(["f"],["foo"]);
     assert(!arg.info.required);
     assert(!arg.info.positional);
-    assert(arg.info.shortNames == ["foo","bar"]);
+    assert(arg.info.shortNames == ["f"]);
+    assert(arg.info.longNames == ["foo"]);
+    assert(arg.info.namesToSplit == []);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

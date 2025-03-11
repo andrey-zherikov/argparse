@@ -133,9 +133,18 @@ package struct Command
     }
 
 
-    auto findNamedArgument(string name)
+    auto findShortNamedArgument(string name)
     {
-        auto res = arguments.findNamedArgument(name);
+        auto res = arguments.findShortNamedArgument(name);
+        if(!res.arg)
+            return Argument.init;
+
+        return Argument(res.arg, getParseFunc(parseFuncs, res.index), getParseFunc(completeFuncs, res.index));
+    }
+
+    auto findLongNamedArgument(string name)
+    {
+        auto res = arguments.findLongNamedArgument(name);
         if(!res.arg)
             return Argument.init;
 

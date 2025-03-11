@@ -53,7 +53,7 @@ unittest
     T receiver;
     auto a = createCommand!config(receiver, getTopLevelCommandInfo!T(config));
     assert(a.arguments.requiredGroup.argIndex == [2,4]);
-    assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    assert(a.arguments.argsNamedShort == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
 }
 
@@ -73,7 +73,7 @@ unittest
     T receiver;
     auto a = createCommand!config(receiver, getTopLevelCommandInfo!T(config));
     assert(a.arguments.requiredGroup.argIndex == []);
-    assert(a.arguments.argsNamed == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
+    assert(a.arguments.argsNamedShort == ["a":0LU, "b":1LU, "c":2LU, "d":3LU, "e":4LU, "f":5LU]);
     assert(a.arguments.argsPositional == []);
 }
 
@@ -432,7 +432,7 @@ unittest
     }
 
     assert(CLI!T.parseArgs!((T t) { assert(t == T(-5,8,12.345)); return 12345; })(["-i","-5","-u","8","-d","12.345"]) == 12345);
-    assert(CLI!T.parseArgs!((T t) { assert(t == T(-5,8,12.345)); return 12345; })(["-i","-5","-u1","8","-d1","12.345"]) == 12345);
+    assert(CLI!T.parseArgs!((T t) { assert(t == T(-5,8,12.345)); return 12345; })(["-i","-5","--u1","8","--d1","12.345"]) == 12345);
 }
 
 unittest
