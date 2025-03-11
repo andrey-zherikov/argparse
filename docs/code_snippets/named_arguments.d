@@ -18,4 +18,8 @@ struct Params
     // Another way to specify multiple names: "--family", "--last-name"
     @NamedArgument("family", "last-name")
     string family;
+
+    // Explicitly providing short and long names: "-m","-middle", "--middle", "--middle-name"
+    @NamedArgument(["m","middle"], ["middle", "middle-name"])
+    string middle;
 }

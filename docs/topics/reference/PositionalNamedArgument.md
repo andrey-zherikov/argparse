@@ -9,6 +9,7 @@
 PositionalArgument(uint position)
 PositionalArgument(uint position, string placeholder)
 NamedArgument(string[] names...)
+NamedArgument(string[] shortNames, string[] longNames)
 ```
 
 **Parameters**
@@ -26,6 +27,14 @@ NamedArgument(string[] names...)
 
   Name(s) of this argument that can be used in command line.
   By default, the name of data member is used.
+
+- `shortNames`
+
+  Short name(s) of this argument that can be used in command line.
+
+- `longNames`
+
+  Long name(s) of this argument that can be used in command line.
 
 ## Public members
 
