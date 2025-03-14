@@ -276,7 +276,7 @@ private struct SubCommand(TYPE)
 private template TypeTraits(Config config, TYPE)
 {
     import std.meta: AliasSeq, Filter, staticMap, staticSort;
-    import std.range: chain;
+    import std.string: startsWith;
 
     /////////////////////////////////////////////////////////////////////
     /// Arguments
@@ -324,8 +324,12 @@ private template TypeTraits(Config config, TYPE)
     private enum positionalArgInfos = staticSort!(comparePosition, Filter!(positional, argumentInfos));
 
     static foreach(info; argumentInfos)
-        static foreach (name; chain(info.shortNames, info.longNames))
-            static assert(name[0] != config.namedArgPrefix, TYPE.stringof~": Argument name should not begin with '"~config.namedArgPrefix~"': "~name);
+    {
+        static foreach (name; info.shortNames)
+            static assert(!name.startsWith(config.shortNamePrefix), TYPE.stringof~": Argument name should not begin with '"~config.shortNamePrefix~"': "~name);
+        static foreach (name; info.longNames)
+            static assert(!name.startsWith(config.longNamePrefix), TYPE.stringof~": Argument name should not begin with '"~config.longNamePrefix~"': "~name);
+    }
 
     static foreach(int i, info; positionalArgInfos)
         static assert({
@@ -354,7 +358,10 @@ private template TypeTraits(Config config, TYPE)
 
     static foreach(info; subCommandInfos)
         static foreach(name; info.names)
-            static assert(name[0] != config.namedArgPrefix, TYPE.stringof~": Subcommand name should not begin with '"~config.namedArgPrefix~"': "~name);
+        {
+            static assert(!name.startsWith(config.shortNamePrefix), TYPE.stringof~": Subcommand name should not begin with '"~config.shortNamePrefix~"': "~name);
+            static assert(!name.startsWith(config.longNamePrefix), TYPE.stringof~": Subcommand name should not begin with '"~config.longNamePrefix~"': "~name);
+        }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

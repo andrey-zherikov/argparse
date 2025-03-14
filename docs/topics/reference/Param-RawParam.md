@@ -14,5 +14,6 @@
   The only difference is in [`Config.stylingMode`](Config.md#stylingMode) - it is either `Config.StylingMode.on` or `Config.StylingMode.off`
   based on [auto-detection](ANSI-coloring-and-styling.md#heuristic) results.
 - `string` `name` – For named argument, it contains a name that is specified in command line exactly including prefix(es)
-  ([`Config.namedArgPrefix`](Config.md#namedArgPrefix)). For positional arguments, it contains placeholder value.
+  ([`Config.shortNamePrefix`](Config.md#shortNamePrefix)/[`Config.longNamePrefix`](Config.md#longNamePrefix)).
+  For positional arguments, it contains placeholder value.
 - `VALUE_TYPE` `value` – Argument values that are provided in command line.

@@ -117,7 +117,7 @@ int complete()(string[] args)
 
 This function provides completion for the last argument in the command line:
 - If the last entry in command line is an empty string (`""`) then it provides all available argument names prepended
-  with [`Config.namedArgPrefix`](Config.md#namedArgPrefix).
+  with [`Config.shortNamePrefix`](Config.md#shortNamePrefix) or [`Config.longNamePrefix`](Config.md#longNamePrefix).
 - If the last entry in command line contains characters then `complete` provides completion only with those arguments
   that have names starting with specified characters.
 

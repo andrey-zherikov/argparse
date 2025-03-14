@@ -14,7 +14,7 @@ package(argparse) struct ArgumentInfo
 {
     string[] shortNames;
     string[] longNames;
-    string[] displayNames;    // names prefixed with Config.namedArgPrefix
+    string[] displayNames;    // names prefixed with Config.shortNamePrefix and Config.longNamePrefix
 
     string[] namesToSplit;
 
@@ -156,9 +156,10 @@ package ArgumentInfo finalize(MEMBERTYPE)(ArgumentInfo info, const Config config
         info.displayNames = [ info.placeholder ];
     else
     {
-        alias toDisplayName = _ => ( _.length == 1 ? config.namedArgPrefix ~ _ : text(config.namedArgPrefix, config.namedArgPrefix, _));
-
-        info.displayNames = chain(info.shortNames, info.longNames).map!toDisplayName.array;
+        info.displayNames = chain(
+            info.shortNames.map!(_ => config.shortNamePrefix ~ _),
+            info.longNames.map!(_ => config.longNamePrefix ~ _)
+        ).array;
     }
 
     if(!config.caseSensitive)
