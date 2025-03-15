@@ -14,7 +14,8 @@ struct Param(VALUE_TYPE)
 
     package bool isNamedArg() const
     {
-        return name.length > 0 && name[0] == config.namedArgPrefix;
+        import std.string: startsWith;
+        return name.startsWith(config.shortNamePrefix) || name.startsWith(config.longNamePrefix);
     }
 }
 

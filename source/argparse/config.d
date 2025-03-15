@@ -18,10 +18,16 @@ struct Config
     char valueSep = ',';
 
     /**
-       The prefix for argument name.
-       Defaults to '-'.
+       The prefix for short argument name.
+       Defaults to "-".
      */
-    char namedArgPrefix = '-';
+    string shortNamePrefix = "-";
+
+    /**
+       The prefix for long argument name.
+       Defaults to "--".
+     */
+    string longNamePrefix = "--";
 
     /**
        The string that conventionally marks the end of all named arguments.

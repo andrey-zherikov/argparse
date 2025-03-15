@@ -21,7 +21,7 @@
 
   * Custom error handler function (`Config.errorHandler`) now receives message text with ANSI styling if styling is enabled. One can use `argparse.ansi.getUnstyledText` function to remove any styling - this function returns a range of unstyled `string` objects which can be used as is or `join`'ed into a string if  needed: `message.getUnstyledText.join`.
 
-  * `Config.namedArgChar` is renamed to `Config.namedArgPrefix`.
+  * `Config.namedArgChar` is replaced with `Config.shortNamePrefix` and `Config.longNamePrefix`.
 
   * `Config.endOfArgs` is renamed to `Config.endOfNamedArgs`.
 
@@ -129,7 +129,7 @@
 * New `errorMessagePrefix` member in `Config.styling` that determines the style of "Error:" prefix in error messages. This prefix is printed in red by default.
 * New checks:
   * Argument is not allowed to be in multiple argument groups.
-  * Subcommand name can't start with `Config.namedArgPrefix` (dash `-` by default).
+  * Subcommand name can't start with `Config.shortNamePrefix` (dash `-` by default) or `Config.longNamePrefix` (double-dash `--` by default).
 * Functions for parsing customization (`PreValidation`, `Parse`, `Validation` and `Action`) can now return `Result` through `Result.Success` or `Result.Error` and provide error message if needed.
 * Fixes for bundling of single-letter arguments.
   For example, the following cases are supported for `bool b; string s;` arguments:
@@ -143,7 +143,7 @@
   * `./prog --arg=value1,value2,value3`
 * Removed support for delegate in `Config.errorHandler`, `Description`, `ShortDescription`, `Usage` and `Epilog` because of compiler's `closures are not yet supported in CTFE`.
 * Long and short names of arguments are now separated:
-  * Short names are single-character names by default. This can be overriden by explicitly specifying short and long names in `NamedArgument` UDA.
+  * Short names are single-character names by default. This can be overridden by explicitly specifying short and long names in `NamedArgument` UDA.
   * Short names can be specified with short prefix only (e.g. `-`).
   * Long names can be specified with long prefix only (e.g. `--`).
 

@@ -23,11 +23,21 @@ Example:
 
 <code-block src="code_snippets/config_valueSep.d" lang="c++"/>
 
-## Named argument prefix {id="namedArgPrefix"}
+## Prefix for short argument name {id="shortNamePrefix"}
 
-`Config.namedArgPrefix` is a character that named arguments begin with.
+`Config.shortNamePrefix` is a string that short names of arguments begin with.
 
 Default is dash (`-`).
+
+Example:
+
+<code-block src="code_snippets/config_namedArgPrefix.d" lang="c++"/>
+
+## Prefix for long argument name {id="longNamePrefix"}
+
+`Config.longNamePrefix` is a string that long names of arguments begin with.
+
+Default is double dash (`--`).
 
 Example:
 
@@ -36,8 +46,8 @@ Example:
 ## End of named arguments {id="endOfNamedArgs"}
 
 `Config.endOfNamedArgs` is a string that marks the end of all named arguments. All arguments that are specified
-after this one are treated as positional regardless to the value which can start with `namedArgPrefix` (dash `-` by default)
-or be a subcommand.
+after this one are treated as positional regardless to the value which can start with `Config.shortNamePrefix` or
+`Config.longNamePrefix` or be a subcommand.
 
 Default is double dash (`--`).
 

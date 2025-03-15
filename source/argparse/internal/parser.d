@@ -138,13 +138,15 @@ private struct SubCommand {
 
 private alias Entry = SumType!(Unknown, Argument, SubCommand);
 
-private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] args,
-                                          FindResult delegate(bool) findPositionalArg,
-                                          FindResult delegate(string) findShortNamedArg,
-                                          FindResult delegate(string) findLongNamedArg,
-                                          Command delegate() delegate(string) findCommand)
+private Entry getNextEntry(const ref Config config, ref string[] args,
+                           FindResult delegate(bool) findPositionalArg,
+                           FindResult delegate(string) findShortNamedArg,
+                           FindResult delegate(string) findLongNamedArg,
+                           Command delegate() delegate(string) findCommand)
 {
+    import std.algorithm : startsWith;
     import std.range: popFront;
+    import std.string : indexOf;
 
     assert(args.length > 0);
 
@@ -158,160 +160,154 @@ private Entry getNextEntry(bool bundling)(const ref Config config, ref string[] 
 
     auto isArgumentValue = (string str)
     {
-        return str.length == 0 ||                   // empty string is a value
-               str != config.endOfNamedArgs &&      // `--` is not a value
-               str[0] != config.namedArgPrefix &&   // `-...` is not a value
-               findCommand(str) is null;            // command is not a value
+        return str.length == 0 ||                           // empty string is a value
+               str != config.endOfNamedArgs &&              // `--` is not a value
+               !str.startsWith(config.shortNamePrefix) &&   // short name is not a value
+               !str.startsWith(config.longNamePrefix) &&    // long name is not a value
+               findCommand(str) is null;                    // command is not a value
     };
 
     auto createArgument = (string name, string[] values, FindResult res) => Entry(Argument(RawParam(&config, name, values), res));
 
-    // Is it named argument (starting with '-' and longer than 1 character)?
-    if(arg0[0] == config.namedArgPrefix && arg0.length > 1)
+    // Is it a long name ("--...")?
+    if(arg0.length > config.longNamePrefix.length && arg0.startsWith(config.longNamePrefix))
     {
-        import std.string : indexOf;
-        import std.algorithm : startsWith;
+        // cases (from higher to lower priority):
+        //  --foo=val    => --foo val
+        //  --abc ...    => --abc ...
+        //  --no-abc     => --abc false       < only for boolean flags
 
-        // Is it a long name ("--...")?
-        if(arg0[1] == config.namedArgPrefix)
+        // Look for assign character
+        immutable idxAssignChar = config.assignChar == char.init ? -1 : arg0.indexOf(config.assignChar);
+        if(idxAssignChar > 0)
         {
-            // cases (from higher to lower priority):
-            //  --foo=val    => --foo val
-            //  --abc ...    => --abc ...
-            //  --no-abc     => --abc false       < only for boolean flags
+            // "--<arg>=<value>" case
+            immutable usedName = arg0[0 .. idxAssignChar];
+            immutable value    = arg0[idxAssignChar + 1 .. $];
+            immutable argName  = config.convertCase(usedName[2..$]);     // 2 to remove "--" prefix
 
-            // Look for assign character
-            immutable idxAssignChar = config.assignChar == char.init ? -1 : arg0.indexOf(config.assignChar);
-            if(idxAssignChar > 0)
+            auto res = findLongNamedArg(argName);
+            if(res.arg)
             {
-                // "--<arg>=<value>" case
-                immutable usedName = arg0[0 .. idxAssignChar];
-                immutable value    = arg0[idxAssignChar + 1 .. $];
-                immutable argName  = config.convertCase(usedName[2..$]);     // 2 to remove "--" prefix
+                args.popFront;
+                return createArgument(usedName, splitValues(value, config.valueSep, res.arg.info), res);
+            }
+        }
+        else
+        {
+            // Just "--<arg>"
+            immutable argName = config.convertCase(arg0[2..$]);     // 2 to remove "--" prefix
 
+            {
                 auto res = findLongNamedArg(argName);
-                if(res.arg)
+                if (res.arg)
+                {
+                    args.popFront;
+                    auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
+                    return createArgument(arg0, values, res);
+                }
+            }
+
+            if(argName.startsWith(config.convertCase("no-")))
+            {
+                // It is a boolean flag specified as "--no-<arg>"
+                auto res = findShortNamedArg(argName[3..$]);    // remove "no-" prefix
+
+                if(!res.arg || !res.arg.info.isBooleanFlag)
+                    res = findLongNamedArg(argName[3..$]);    // remove "no-" prefix
+
+                if(res.arg && res.arg.info.isBooleanFlag)
+                {
+                    args.popFront;
+                    return createArgument(arg0, ["false"], res);
+                }
+            }
+        }
+    }
+    else if(arg0.length > config.shortNamePrefix.length && arg0.startsWith(config.shortNamePrefix))
+    {
+        // It is a short name: "-..."
+
+        // cases (from higher to lower priority):
+        //  -foo=val    => -foo val             < similar to "--..."
+        //  -abc=val    => -a -b -c=val         < only if config.bundling is true
+        //  -abcval     => -a -b -c val         < only if config.bundling is true
+        //  -abc        => -abc                 < similar to "--..."
+        //              => -a bc
+        //              => -a -b -c             < only if config.bundling is true
+
+        // First we will try o match whole argument name, then will try bundling
+
+        // Look for assign character
+        immutable idxAssignChar = config.assignChar == char.init ? -1 : arg0.indexOf(config.assignChar);
+        if(idxAssignChar > 0)
+        {
+            // "-<arg>=<value>" case
+            auto usedName = arg0[0 .. idxAssignChar];
+            auto value    = arg0[idxAssignChar + 1 .. $];
+            auto argName  = config.convertCase(usedName[1..$]);     // 1 to remove "-" prefix
+
+            {
+                auto res = findShortNamedArg(argName);
+                if (res.arg)
                 {
                     args.popFront;
                     return createArgument(usedName, splitValues(value, config.valueSep, res.arg.info), res);
                 }
             }
-            else
-            {
-                // Just "--<arg>"
-                immutable argName = config.convertCase(arg0[2..$]);     // 2 to remove "--" prefix
-
-                {
-                    auto res = findLongNamedArg(argName);
-                    if (res.arg)
-                    {
-                        args.popFront;
-                        auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-                        return createArgument(arg0, values, res);
-                    }
-                }
-
-                if(argName.startsWith(config.convertCase("no-")))
-                {
-                    // It is a boolean flag specified as "--no-<arg>"
-                    auto res = findShortNamedArg(argName[3..$]);    // remove "no-" prefix
-
-                    if(!res.arg || !res.arg.info.isBooleanFlag)
-                        res = findLongNamedArg(argName[3..$]);    // remove "no-" prefix
-
-                    if(res.arg && res.arg.info.isBooleanFlag)
-                    {
-                        args.popFront;
-                        return createArgument(arg0, ["false"], res);
-                    }
-                }
-            }
         }
         else
         {
-            // It is a short name: "-..."
+            // Just "-<arg>"
+            immutable argName = config.convertCase(arg0[1..$]);     // 1 to remove "-" prefix
 
-            // cases (from higher to lower priority):
-            //  -foo=val    => -foo val             < similar to "--..."
-            //  -abc=val    => -a -b -c=val         < only if config.bundling is true
-            //  -abcval     => -a -b -c val         < only if config.bundling is true
-            //  -abc        => -abc                 < similar to "--..."
-            //              => -a bc
-            //              => -a -b -c             < only if config.bundling is true
-
-            // First we will try o match whole argument name, then will try bundling
-
-            // Look for assign character
-            immutable idxAssignChar = config.assignChar == char.init ? -1 : arg0.indexOf(config.assignChar);
-            if(idxAssignChar > 0)
             {
-                // "-<arg>=<value>" case
-                auto usedName = arg0[0 .. idxAssignChar];
-                auto value    = arg0[idxAssignChar + 1 .. $];
-                auto argName  = config.convertCase(usedName[1..$]);     // 1 to remove "-" prefix
-
+                auto res = findShortNamedArg(argName);
+                if (res.arg)
                 {
-                    auto res = findShortNamedArg(argName);
-                    if (res.arg)
-                    {
-                        args.popFront;
-                        return createArgument(usedName, splitValues(value, config.valueSep, res.arg.info), res);
-                    }
-                }
-            }
-            else
-            {
-                // Just "-<arg>"
-                immutable argName = config.convertCase(arg0[1..$]);     // 1 to remove "-" prefix
-
-                {
-                    auto res = findShortNamedArg(argName);
-                    if (res.arg)
-                    {
-                        args.popFront;
-                        auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-                        return createArgument(arg0, values, res);
-                    }
-                }
-
-                // Try to process "-ABC" case where "A" is a single-character argument and BC is a value
-                if(argName.length > 1)     // Ensure that there is something to split
-                {
-                    // Look for the first argument ("-A" from the example above)
-                    auto res = findShortNamedArg([argName[0]]);
-                    if(res.arg)
-                    {
-                        // If argument accepts at least one value then the rest is that value
-                        if(res.arg.info.minValuesCount.get > 0)
-                        {
-                            auto value = arg0[2..$];
-                            args.popFront;
-                            return createArgument(arg0[0..2], [value], res);
-                        }
-                    }
+                    args.popFront;
+                    auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
+                    return createArgument(arg0, values, res);
                 }
             }
 
-            static if(bundling)
-                if(arg0.length >= 3 && arg0[2] != config.assignChar)  // At least -AB and not -A=...
+            // Try to process "-ABC" case where "A" is a single-character argument and BC is a value
+            if(argName.length > 1)     // Ensure that there is something to split
+            {
+                // Look for the first argument ("-A" from the example above)
+                auto res = findShortNamedArg([argName[0]]);
+                if(res.arg)
                 {
-                    // Process "-ABC" as "-A","-BC": extract first character and leave the rest
-
-                    // Look for the first argument ("-A" from the example above)
-                    auto res = findShortNamedArg(config.convertCase([arg0[1]]));
-                    if(res.arg)
+                    // If argument accepts at least one value then the rest is that value
+                    if(res.arg.info.minValuesCount.get > 0)
                     {
-                        // Drop first character
-                        auto rest = arg0[0]~arg0[2..$];// splitSingleLetterNames(usedName, config.assignChar, value)[1..$];
-
-                        // Replace first element with the rest
-                        args[0] = rest;
-
-                        // Due to bundling argument has no value
-                        return createArgument(arg0[0..2], [], res);
+                        auto value = arg0[2..$];
+                        args.popFront;
+                        return createArgument(arg0[0..2], [value], res);
                     }
                 }
+            }
         }
+
+        if(config.bundling)
+            if(arg0.length >= 3 && arg0[2] != config.assignChar)  // At least -AB and not -A=...
+            {
+                // Process "-ABC" as "-A","-BC": extract first character and leave the rest
+
+                // Look for the first argument ("-A" from the example above)
+                auto res = findShortNamedArg(config.convertCase([arg0[1]]));
+                if(res.arg)
+                {
+                    // Drop first character
+                    auto rest = arg0[0]~arg0[2..$];// splitSingleLetterNames(usedName, config.assignChar, value)[1..$];
+
+                    // Replace first element with the rest
+                    args[0] = rest;
+
+                    // Due to bundling argument has no value
+                    return createArgument(arg0[0..2], [], res);
+                }
+            }
     }
     else
     {
@@ -389,10 +385,10 @@ private Entry getNextPositionalArgument(const ref Config config, ref string[] ar
 
 unittest
 {
-    Config config;
+    Config config = { bundling: false };
     auto args = [""];
 
-    assert(getNextEntry!false(config, args, null, null, null, null) == Entry(Unknown("")));
+    assert(getNextEntry(config, args, null, null, null, null) == Entry(Unknown("")));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -545,7 +541,7 @@ private struct Parser
 
     ///////////////////////////////////////////////////////////////////////
 
-    auto parseAll(bool completionMode, bool bundling)(string[] args)
+    auto parseAll(bool completionMode)(string[] args)
     {
         import std.range: empty, join;
         import std.sumtype : match;
@@ -553,7 +549,7 @@ private struct Parser
 
         auto findPositionalArgument = (bool currentStackOnly) => findArgument(cmdStack, idxPositionalStack, idxNextPositional, currentStackOnly);
         auto getNext = () =>
-            getNextEntry!bundling(config, args,
+            getNextEntry(config, args,
                 findPositionalArgument,
                 name => findArgument(cmdStack, (ref cmd) => cmd.findShortNamedArgument(name)),
                 name => findArgument(cmdStack, (ref cmd) => cmd.findLongNamedArgument(name)),
@@ -620,7 +616,7 @@ private struct Parser
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private Result callParser(bool completionMode, bool bundling)(
+private Result callParser(bool completionMode)(
     Config config, Command cmd, string[] args, out string[] unrecognizedArgs,
 )
 {
@@ -629,7 +625,7 @@ private Result callParser(bool completionMode, bool bundling)(
     Parser parser = { config };
     parser.addCommand(cmd);
 
-    auto res = parser.parseAll!(completionMode, bundling)(args);
+    auto res = parser.parseAll!completionMode(args);
 
     static if(!completionMode)
     {
@@ -643,7 +639,7 @@ private Result callParser(bool completionMode, bool bundling)(
 package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 if(config.stylingMode != Config.StylingMode.autodetect)
 {
-    return callParser!(completionMode, config.bundling)(
+    return callParser!completionMode(
         config, createCommand!config(receiver, getTopLevelCommandInfo!COMMAND(config)), args, unrecognizedArgs,
     );
 }
@@ -683,35 +679,73 @@ unittest
         @PositionalArgument(0) string fileName;
     }
 
+    enum Config cfg = { stylingMode: Config.StylingMode.off };
+
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-", "-c"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(t, ["-", "-c"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(t == T(true, "-"));
     }
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-c", "-"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(t, ["-c", "-"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(t == T(true, "-"));
     }
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(t, ["-"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(t == T(false, "-"));
     }
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(t, ["-f","-"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(t, ["-f","-"], unrecognizedArgs));
         assert(unrecognizedArgs == ["-f"]);
         assert(t == T(false, "-"));
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    struct T
+    {
+        string a;
+        string baz;
+    }
+
+    enum Config cfg = { shortNamePrefix: "+", longNamePrefix: "==" };
+
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(cfg, false)(t, ["+a", "foo", "==baz", "BAZZ"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(t == T("foo", "BAZZ"));
+    }
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(cfg, false)(t, ["+a", "foo", "++baz", "BAZZ"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["++baz", "BAZZ"]);
+        assert(t == T("foo", ""));
+    }
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(cfg, false)(t, ["=a", "foo", "==baz", "BAZZ"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["=a", "foo"]);
+        assert(t == T("", "BAZZ"));
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 unittest
@@ -727,45 +761,47 @@ unittest
         SubCommand!(c1) c;
     }
 
+    enum Config cfg = { stylingMode: Config.StylingMode.off };
+
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--boo","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["--boo","BOO"]);
         assert(c == cmd.init);
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["--boo","BOO"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["--boo","BOO"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(c1("FOO","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
@@ -784,45 +820,47 @@ unittest
         SubCommand!(Default!c1) c;
     }
 
+    enum Config cfg = { stylingMode: Config.StylingMode.off };
+
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--boo","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(c1("","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(c1("FOO","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(c1("FOO","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
@@ -847,73 +885,75 @@ unittest
         SubCommand!(c1) c;
     }
 
+    enum Config cfg = { stylingMode: Config.StylingMode.off };
+
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FAA"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","--","FAA"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","--","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FAA"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FAA","BOO"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["c1","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FOO"]);
         assert(c == cmd("c1"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","c1","FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--","c1","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FOO"]);
         assert(c == cmd("c1"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","c1","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
@@ -938,80 +978,82 @@ unittest
         SubCommand!(Default!c1) c;
     }
 
+    enum Config cfg = { stylingMode: Config.StylingMode.off };
+
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","--","FAA"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","--","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--","FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["c1","FOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["c1","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("c1", typeof(c.c)(c1("FOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","c1","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--","FOO","c1","FAA"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--","FOO","c1","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("c1","FAA"))));
     }
@@ -1046,17 +1088,19 @@ unittest
         SubCommand!(Default!c1) c;
     }
 
+    enum Config cfg = { stylingMode: Config.StylingMode.off };
+
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO", typeof(c1.c)(c2("FEE","BEE"))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--bar","BAR","FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--bar","BAR","FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO", typeof(c1.c)(c2("FEE","BEE","BAR"))))));
     }
@@ -1086,24 +1130,26 @@ unittest
         SubCommand!(Default!c1) c;
     }
 
+    enum Config cfg = { stylingMode: Config.StylingMode.off };
+
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1(typeof(c1.c)(c2("FAA","BOO"))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["--bar","BAR","FOO","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["--bar","BAR","FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1(typeof(c1.c)(c2("FAA","BOO","BAR"))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!(enableStyling(Config.init, false), false)(c, ["FOO","c2","FAA","BOO"], unrecognizedArgs));
+        assert(callParser!(cfg, false)(c, ["FOO","c2","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1(typeof(c1.c)(c2("FAA","BOO"))))));
     }

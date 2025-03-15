@@ -22,7 +22,7 @@ Example:
 ## Short names
 
 - _Short names_ in command line are those that start with short name prefix which is a single dash `-` by default (see
-  [`Config.namedArgPrefix`](Config.md#namedArgPrefix) for customization).
+  [`Config.shortNamePrefix`](Config.md#shortNamePrefix) for customization).
 
 If short names are not explicitly passed to `NamedArgument` UDA then all single-character names are considered short names
 (see [reference](PositionalNamedArgument.md) for details).
@@ -48,7 +48,7 @@ Additionally, for single-character short names the following is supported:
 ## Long names
 
 _Long names_ in command line are those that start with long name prefix which is double dash `--` by default (see
-[`Config.namedArgPrefix`](Config.md#namedArgPrefix) for customization).
+[`Config.longNamePrefix`](Config.md#longNamePrefix) for customization).
 
 If long names are not explicitly passed to `NamedArgument` UDA then all multi-character names are considered long names
 (see [reference](PositionalNamedArgument.md) for details).

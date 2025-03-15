@@ -6,8 +6,8 @@ struct T
     string baz;
 }
 
-enum Config cfg = { namedArgPrefix: '+' };
+enum Config cfg = { shortNamePrefix: "+", longNamePrefix: "==" };
 
 T t;
-assert(CLI!(cfg, T).parseArgs(t, ["+a","foo","++baz","BAZZ"]));
+assert(CLI!(cfg, T).parseArgs(t, ["+a","foo","==baz","BAZZ"]));
 assert(t == T("foo","BAZZ"));

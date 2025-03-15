@@ -10,21 +10,19 @@ private auto createErrorMessage(T)(Param!T param, string prefix)
     import std.array: appender;
     import std.conv: to;
 
-    immutable namedArg = param.name.length > 0 && param.name[0] == param.config.namedArgPrefix;
-
     auto a = appender!string(prefix);
 
     static if(__traits(hasMember, param, "value"))
     {
         a ~= " '";
-        if(namedArg)
+        if(param.isNamedArg)
             a ~= param.config.styling.namedArgumentValue(param.value.to!string);
         else
             a ~= param.config.styling.positionalArgumentValue(param.value.to!string);
         a ~= "'";
     }
 
-    if(namedArg)
+    if(param.isNamedArg)
     {
         a ~= " for argument '";
         a ~= param.config.styling.argumentName(param.name);
