@@ -184,7 +184,7 @@ private Entry getNextEntry(const ref Config config, ref string[] args,
             // "--<arg>=<value>" case
             immutable usedName = arg0[0 .. idxAssignChar];
             immutable value    = arg0[idxAssignChar + 1 .. $];
-            immutable argName  = config.convertCase(usedName[2..$]);     // 2 to remove "--" prefix
+            immutable argName  = usedName[2..$];     // 2 to remove "--" prefix
 
             auto res = findLongNamedArg(argName);
             if(res.arg)
@@ -196,7 +196,7 @@ private Entry getNextEntry(const ref Config config, ref string[] args,
         else
         {
             // Just "--<arg>"
-            immutable argName = config.convertCase(arg0[2..$]);     // 2 to remove "--" prefix
+            immutable argName = arg0[2..$];     // 2 to remove "--" prefix
 
             {
                 auto res = findLongNamedArg(argName);
@@ -208,7 +208,7 @@ private Entry getNextEntry(const ref Config config, ref string[] args,
                 }
             }
 
-            if(argName.startsWith(config.convertCase("no-")))
+            if(argName.startsWith("no-"))
             {
                 // It is a boolean flag specified as "--no-<arg>"
                 auto res = findShortNamedArg(argName[3..$]);    // remove "no-" prefix
@@ -245,7 +245,7 @@ private Entry getNextEntry(const ref Config config, ref string[] args,
             // "-<arg>=<value>" case
             auto usedName = arg0[0 .. idxAssignChar];
             auto value    = arg0[idxAssignChar + 1 .. $];
-            auto argName  = config.convertCase(usedName[1..$]);     // 1 to remove "-" prefix
+            auto argName  = usedName[1..$];     // 1 to remove "-" prefix
 
             {
                 auto res = findShortNamedArg(argName);
@@ -259,7 +259,7 @@ private Entry getNextEntry(const ref Config config, ref string[] args,
         else
         {
             // Just "-<arg>"
-            immutable argName = config.convertCase(arg0[1..$]);     // 1 to remove "-" prefix
+            immutable argName = arg0[1..$];     // 1 to remove "-" prefix
 
             {
                 auto res = findShortNamedArg(argName);
@@ -295,7 +295,7 @@ private Entry getNextEntry(const ref Config config, ref string[] args,
                 // Process "-ABC" as "-A","-BC": extract first character and leave the rest
 
                 // Look for the first argument ("-A" from the example above)
-                auto res = findShortNamedArg(config.convertCase([arg0[1]]));
+                auto res = findShortNamedArg([arg0[1]]);
                 if(res.arg)
                 {
                     // Drop first character

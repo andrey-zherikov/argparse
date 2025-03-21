@@ -21,15 +21,18 @@
 
   * Custom error handler function (`Config.errorHandler`) now receives message text with ANSI styling if styling is enabled. One can use `argparse.ansi.getUnstyledText` function to remove any styling - this function returns a range of unstyled `string` objects which can be used as is or `join`'ed into a string if  needed: `message.getUnstyledText.join`.
 
-  * `Config.namedArgChar` is replaced with `Config.shortNamePrefix` and `Config.longNamePrefix`.
+  * `Config.addHelp` is renamed to `Config.addHelpArgument`.
+
+  * `Config.arraySep` is renamed to `Config.valueSep`.
+
+  * `Config.caseSensitive` is replaced with `Config.caseSensitiveShortName`, `Config.caseSensitiveLongName` and `Config.caseSensitiveSubCommand`.
+    There is also a "new" `Config.caseSensitive` function/property helper that sets all above settings to a specific value.
 
   * `Config.endOfArgs` is renamed to `Config.endOfNamedArgs`.
 
   * `Config.helpStyle` is renamed to `Config.styling`.
 
-  * `Config.addHelp` is renamed to `Config.addHelpArgument`.
-
-  * `Config.arraySep` is renamed to `Config.valueSep`.
+  * `Config.namedArgChar` is replaced with `Config.shortNamePrefix` and `Config.longNamePrefix`.
 
 * `Style.namedArgumentName` is renamed to `Style.argumentName`.
 

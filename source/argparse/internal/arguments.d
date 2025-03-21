@@ -7,6 +7,7 @@ import argparse.param;
 import argparse.result;
 
 import std.typecons: Nullable;
+import std.uni: toUpper;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,6 +16,9 @@ package(argparse) struct ArgumentInfo
     string[] shortNames;
     string[] longNames;
     string[] displayNames;    // names prefixed with Config.shortNamePrefix and Config.longNamePrefix
+
+    bool caseSensitiveShortName = true;
+    bool caseSensitiveLongName = true;
 
     string[] namesToSplit;
 
@@ -144,8 +148,6 @@ package ArgumentInfo finalize(MEMBERTYPE)(ArgumentInfo info, const Config config
         }
         else
         {
-            import std.uni: toUpper;
-
             info.placeholder = info.positional ? symbol : symbol.toUpper;
         }
     }
@@ -162,11 +164,15 @@ package ArgumentInfo finalize(MEMBERTYPE)(ArgumentInfo info, const Config config
         ).array;
     }
 
-    if(!config.caseSensitive)
-    {
-        info.shortNames.each!((ref _) => _ = config.convertCase(_));
-        info.longNames .each!((ref _) => _ = config.convertCase(_));
-    }
+    alias toupper = (ref string str) => str = str.toUpper;
+
+    info.caseSensitiveShortName = config.caseSensitiveShortName;
+    if(!config.caseSensitiveShortName)
+        info.shortNames.each!toupper;
+
+    info.caseSensitiveLongName = config.caseSensitiveLongName;
+    if(!config.caseSensitiveLongName)
+        info.longNames.each!toupper;
 
     // Note: `info.{minValuesCount,maxValuesCount}` are left unchanged
 
@@ -241,7 +247,7 @@ unittest
 
 unittest
 {
-    enum Config config = { caseSensitive: false };
+    enum Config config = { caseSensitiveShortName: false, caseSensitiveLongName: false, caseSensitiveSubCommand: false };
 
     auto createInfo(string placeholder = "")
     {
@@ -423,7 +429,7 @@ package struct Arguments
         const(ArgumentInfo)* arg;
     }
 
-    FindResult findArgumentImpl(const size_t* pIndex) const
+    private FindResult findArgumentImpl(const size_t* pIndex) const
     {
         return pIndex ? FindResult(*pIndex, &info[*pIndex]) : FindResult.init;
     }
@@ -435,11 +441,21 @@ package struct Arguments
 
     auto findShortNamedArgument(string name) const
     {
-        return findArgumentImpl(name in argsNamedShort);
+        auto idx = name in argsNamedShort;
+        if(idx)
+            return findArgumentImpl(idx);
+
+        auto res = findArgumentImpl(name.toUpper in argsNamedShort);
+        return (!res.arg || res.arg.caseSensitiveShortName) ? FindResult.init : res;
     }
     auto findLongNamedArgument(string name) const
     {
-        return findArgumentImpl(name in argsNamedLong);
+        auto idx = name in argsNamedLong;
+        if(idx)
+            return findArgumentImpl(idx);
+
+        auto res = findArgumentImpl(name.toUpper in argsNamedLong);
+        return (!res.arg || res.arg.caseSensitiveLongName) ? FindResult.init : res;
     }
 }
 

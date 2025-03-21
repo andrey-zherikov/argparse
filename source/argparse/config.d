@@ -37,17 +37,27 @@ struct Config
     string endOfNamedArgs = "--";
 
     /**
-       If set then argument names are case-sensitive.
+       If set then argument short names are case-sensitive.
        Defaults to true.
      */
-    bool caseSensitive = true;
+    bool caseSensitiveShortName  = true;
 
-    package string convertCase(string str) const
-    {
-        import std.uni: toUpper;
+    /**
+       If set then argument long names are case-sensitive.
+       Defaults to true.
+     */
+    bool caseSensitiveLongName   = true;
 
-        return caseSensitive ? str : str.toUpper;
-    }
+    /**
+       If set then subcommands are case-sensitive.
+       Defaults to true.
+     */
+    bool caseSensitiveSubCommand = true;
+
+    /**
+       Helper to set all case sensitivity settings to a specific value
+     */
+    void caseSensitive(bool value) { caseSensitiveShortName = caseSensitiveLongName = caseSensitiveSubCommand = value; }
 
     /**
         Single-character arguments can be bundled together, i.e. "-abc" is the same as "-a -b -c".
@@ -88,4 +98,20 @@ unittest
         cfg.errorHandler = (string s) { };
         return cfg;
     }();
+}
+
+unittest
+{
+    Config cfg;
+    assert(cfg.caseSensitiveShortName);
+    assert(cfg.caseSensitiveLongName);
+    assert(cfg.caseSensitiveSubCommand);
+    cfg.caseSensitive = false;
+    assert(!cfg.caseSensitiveShortName);
+    assert(!cfg.caseSensitiveLongName);
+    assert(!cfg.caseSensitiveSubCommand);
+    cfg.caseSensitive = true;
+    assert(cfg.caseSensitiveShortName);
+    assert(cfg.caseSensitiveLongName);
+    assert(cfg.caseSensitiveSubCommand);
 }
