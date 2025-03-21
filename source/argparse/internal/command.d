@@ -36,6 +36,18 @@ package struct SubCommands
                 byName[name] = index;
             }
     }
+
+    size_t find(string name) const
+    {
+        import std.uni: toUpper;
+
+        auto pIndex = name in byName;
+        if(pIndex)
+            return *pIndex;
+
+        pIndex = name.toUpper in byName;
+        return (!pIndex || info[*pIndex].caseSensitive) ? size_t(-1) : *pIndex;
+    }
 }
 
 
@@ -193,11 +205,8 @@ package struct Command
 
     auto getSubCommand(string name) const
     {
-        auto pIndex = name in subCommands.byName;
-        if(pIndex is null)
-            return null;
-
-        return subCommandCreate[*pIndex];
+        auto idx = subCommands.find(name);
+        return idx != size_t(-1) ? subCommandCreate[idx] : null;
     }
 
     Result checkRestrictions() const

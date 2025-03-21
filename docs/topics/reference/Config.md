@@ -57,10 +57,17 @@ Example:
 
 ## Case sensitivity {id="caseSensitive"}
 
-`Config.caseSensitive` controls whether the argument names are case-sensitive. By default they are and it can be changed
-by setting this member to `false`.
+`Config` type hase three data members to allow fine-grained tuning of case sensitivity:
+- `Config.caseSensitiveShortName` to control case sensitivity for short argument names.
+- `Config.caseSensitiveLongName` to control case sensitivity for long argument names.
+- `Config.caseSensitiveSubCommand` to control case sensitivity for subcommands.
 
-Default is `true`.
+Default value for all of them is `true`.
+
+> There is `Config.caseSensitive` helper function/property that sets all settings above to a specific value.
+>
+{style="note"}
+
 
 Example:
 

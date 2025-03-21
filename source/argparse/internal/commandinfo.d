@@ -9,6 +9,7 @@ package(argparse) struct CommandInfo
 {
     string[] names;
     string[] displayNames;
+    bool caseSensitive = true;
     LazyString usage;
     LazyString description;
     LazyString shortDescription;
@@ -21,10 +22,13 @@ private auto finalize(const Config config, CommandInfo uda)
 {
     uda.displayNames = uda.names.dup;
 
-    if(!config.caseSensitive)
+    uda.caseSensitive = config.caseSensitiveSubCommand;
+    if(!config.caseSensitiveSubCommand)
     {
         import std.algorithm: each;
-        uda.names.each!((ref _) => _ = config.convertCase(_));
+        import std.uni : toUpper;
+
+        uda.names.each!((ref _) => _ = _.toUpper);
     }
 
     return uda;
@@ -39,11 +43,7 @@ unittest
 
 unittest
 {
-    enum config = {
-        Config config;
-        config.caseSensitive = false;
-        return config;
-    }();
+    enum Config config = { caseSensitiveShortName: false, caseSensitiveLongName: false, caseSensitiveSubCommand: false };
 
     auto uda = finalize(config, CommandInfo(["cmd-Name"]));
     assert(uda.displayNames == ["cmd-Name"]);
