@@ -6,10 +6,16 @@ import argparse.internal.style: Style;
 struct Config
 {
     /**
-       The assignment character used in options with parameters.
+       The assignment character used in arguments with parameters.
        Defaults to '='.
      */
     char assignChar = '=';
+
+    /**
+       The assignment character used in "key=value" syntax for arguments that have associative array type.
+       Defaults to '='.
+     */
+    char assignKeyValueChar = '=';
 
     /**
        Value separator for "--arg=value1,value2,value3" syntax

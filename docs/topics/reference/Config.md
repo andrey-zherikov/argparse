@@ -13,6 +13,17 @@ Example:
 
 <code-block src="code_snippets/config_assignChar.d" lang="c++"/>
 
+
+## Assign character {id="assignKeyValueChar"}
+
+`Config.assignKeyValueChar` is an assignment character used in arguments that have associative array type: `-a=key=value`, `-boo=key=value`.
+
+Default is equal sign `=`.
+
+Example:
+
+<code-block src="code_snippets/config_assignKeyValueChar.d" lang="c++"/>
+
 ## Value separator {id="valueSep"}
 
 `Config.valueSep` is a separator that is used to extract argument values: `-a=5,6,7`, `--boo=foo,far,zoo`.

@@ -149,6 +149,7 @@
   * Short names are single-character names by default. This can be overridden by explicitly specifying short and long names in `NamedArgument` UDA.
   * Short names can be specified with short prefix only (e.g. `-`).
   * Long names can be specified with long prefix only (e.g. `--`).
+* Added new `Config.assignKeyValueChar` parameter to customize assign character in `key=value` syntax for arguments with associative array type.
 
 ### Other changes
 
