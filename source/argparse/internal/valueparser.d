@@ -319,7 +319,7 @@ if(!is(T == void))
 
                 foreach(input; param.value)
                 {
-                    auto j = indexOf(input, param.config.assignChar);
+                    auto j = indexOf(input, param.config.assignKeyValueChar);
                     if(j < 0)
                         return invalidValueError(param);
 
