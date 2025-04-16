@@ -398,12 +398,7 @@ package struct Arguments
         assert(info.shortNames.length + info.longNames.length > 0);
 
         if(info.positional)
-        {
-            if(argsPositional.length <= info.position.get)
-                argsPositional.length = info.position.get + 1;
-
-            argsPositional[info.position.get] = argIndex;
-        }
+            argsPositional ~= argIndex;
         else
         {
             foreach(name; info.shortNames)
