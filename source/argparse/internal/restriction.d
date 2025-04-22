@@ -4,8 +4,6 @@ import argparse.config;
 import argparse.result;
 import argparse.internal.arguments: ArgumentInfo;
 
-import std.traits: getUDAs;
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -191,15 +189,13 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto getRestrictionGroups(TYPE, string symbol)()
+private template getRestrictionGroups(alias member)
 {
-    RestrictionGroup[] restrictions;
+    import std.meta: Filter;
 
-    static if(symbol.length > 0)
-        static foreach(gr; getUDAs!(__traits(getMember, TYPE, symbol), RestrictionGroup))
-            restrictions ~= gr;
+    enum isRestriction(alias uda) = is(typeof(uda) == RestrictionGroup);
 
-    return restrictions;
+    enum getRestrictionGroups = Filter!(isRestriction, __traits(getAttributes, member));
 }
 
 unittest
@@ -212,7 +208,7 @@ unittest
         int a;
     }
 
-    assert(getRestrictionGroups!(T, "a") == [RestrictionGroup("1"), RestrictionGroup("2"), RestrictionGroup("3")]);
+    assert([getRestrictionGroups!(T.a)] == [RestrictionGroup("1"), RestrictionGroup("2"), RestrictionGroup("3")]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -227,13 +223,12 @@ package struct Restrictions
     package void add(TYPE, ArgumentInfo[] infos)(Config config)
     {
         static foreach(argIndex, info; infos)
-        static if(info.memberSymbol !is null)   // to skip HelpArgumentUDA
-        {
-            static if(info.required)
-                checks ~= RequiredArg(config, info, argIndex);
+            static if(info.memberSymbol !is null)   // to skip HelpArgumentUDA
+            {
+                static if(info.required)
+                    checks ~= RequiredArg(config, info, argIndex);
 
-            static if(info.memberSymbol)
-                static foreach(group; getRestrictionGroups!(TYPE, info.memberSymbol))
+                static foreach(group; getRestrictionGroups!(__traits(getMember, TYPE, info.memberSymbol)))
                 {{
                     auto groupIndex = (group.location in groupsByLocation);
                     if(groupIndex !is null)
@@ -247,7 +242,7 @@ package struct Restrictions
                         groups[gIndex].argIndex ~= argIndex;
                     }
                 }}
-        }
+            }
     }
 
 

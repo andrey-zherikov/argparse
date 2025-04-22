@@ -65,17 +65,25 @@ private template getCommandInfo(TYPE)
         enum getCommandInfo = CommandInfo.init;
 }
 
-package(argparse) CommandInfo getSubCommandInfo(COMMAND)(const Config config)
+package auto getSubCommandInfo(COMMAND)(Config config)
 {
+    struct SubCommand
+    {
+        CommandInfo info;
+        alias info this;
+
+        alias TYPE = COMMAND;
+    }
+
     CommandInfo info = getCommandInfo!COMMAND;
 
     if(info.names.length == 0)
         info.names = [COMMAND.stringof];
 
-    return finalize(config, info);
+    return SubCommand(finalize(config, info));
 }
 
-package(argparse) CommandInfo getTopLevelCommandInfo(COMMAND)(const Config config)
+package(argparse) CommandInfo getTopLevelCommandInfo(COMMAND)(Config config)
 {
     return finalize(config, getCommandInfo!COMMAND);
 }
@@ -85,7 +93,8 @@ unittest
     @CommandInfo()
     struct T {}
 
-    auto info = getSubCommandInfo!T(Config.init);
-    assert(info.displayNames == ["T"]);
-    assert(info.names == ["T"]);
+    auto sc = getSubCommandInfo!T(Config.init);
+    assert(sc.displayNames == ["T"]);
+    assert(sc.names == ["T"]);
+    assert(is(sc.TYPE == T));
 }

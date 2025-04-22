@@ -3,22 +3,19 @@ module argparse.internal.command;
 import argparse.config;
 import argparse.param;
 import argparse.result;
-import argparse.api.argument: NamedArgument, NumberOfValues;
-import argparse.api.subcommand: match, isSubCommand;
-import argparse.internal.arguments: Arguments, ArgumentInfo, finalize;
-import argparse.internal.argumentuda: ArgumentUDA;
-import argparse.internal.argumentudahelpers: getMemberArgumentUDA, isArgumentUDA;
+import argparse.api.subcommand: match;
+import argparse.internal.arguments: Arguments, ArgumentInfo;
+import argparse.internal.argumentudahelpers: getMemberArgumentUDA;
 import argparse.internal.commandinfo;
-import argparse.internal.help: HelpArgumentUDA;
 import argparse.internal.restriction;
+import argparse.internal.typetraits;
 
-import std.typecons: Nullable, nullable;
-import std.traits: getSymbolsByUDA, hasUDA, getUDAs;
+import std.meta;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct SubCommands
+private struct SubCommands
 {
     size_t[string] byName;
 
@@ -217,170 +214,8 @@ package struct Command
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private enum hasNoMembersWithUDA(COMMAND) = getSymbolsByUDA!(COMMAND, ArgumentUDA   ).length == 0 &&
-                                            getSymbolsByUDA!(COMMAND, NamedArgument ).length == 0;
-
-private enum isOpFunction(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem).length > 2 && __traits(identifier, mem)[0..2] == "op";
-private enum isConstructor(alias mem) = is(typeof(mem) == function) && __traits(identifier, mem) == "__ctor";
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private template iterateArguments(TYPE)
-{
-    import std.meta: Filter, anySatisfy;
-
-    // In case if TYPE is no members with ArgumentUDA, we filter out "op..." functions and ctors
-    // Otherwise, we pick members with ArgumentUDA
-    static if(hasNoMembersWithUDA!TYPE)
-        enum isValidArgumentMember(alias mem) = !isOpFunction!mem && !isConstructor!mem;
-    else
-        enum isValidArgumentMember(alias mem) = anySatisfy!(isArgumentUDA, __traits(getAttributes, mem));
-
-    template filter(string sym)
-    {
-        alias mem = __traits(getMember, TYPE, sym);
-
-        enum filter =
-            !is(mem) &&                     // not a type       -- and --
-            !isSubCommand!(typeof(mem)) &&  // not subcommand   -- and --
-            isValidArgumentMember!mem;      // is valid argument member
-    }
-
-    alias iterateArguments = Filter!(filter, __traits(allMembers, TYPE));
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private template subCommandSymbol(TYPE)
-{
-    import std.meta: Filter, AliasSeq;
-
-    template filter(string sym)
-    {
-        alias mem = __traits(getMember, TYPE, sym);
-
-        enum filter = !is(mem) && isSubCommand!(typeof(mem));
-    }
-
-    alias symbols = Filter!(filter, __traits(allMembers, TYPE));
-
-    static if(symbols.length == 0)
-        enum subCommandSymbol = "";
-    else static if(symbols.length == 1)
-        enum subCommandSymbol = symbols[0];
-    else
-        static assert(false, "Multiple subcommand members are in "~TYPE.stringof~": "~symbols.stringof);
-
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private struct SubCommand(TYPE)
-{
-    alias Type = TYPE;
-
-    CommandInfo info;
-}
-
-private template TypeTraits(Config config, TYPE)
-{
-    import std.meta: AliasSeq, Filter, staticMap, staticSort;
-    import std.string: startsWith;
-
-    /////////////////////////////////////////////////////////////////////
-    /// Arguments
-
-    private enum getArgumentUDA(string sym) = getMemberArgumentUDA!(TYPE, sym)(config);
-    private enum getArgumentInfo(alias uda) = uda.info;
-    private enum positional(ArgumentInfo info) = info.positional;
-    private enum comparePosition(ArgumentInfo info1, ArgumentInfo info2) = info1.position.get - info2.position.get;
-
-    static if(config.addHelpArgument)
-    {
-        private enum helpUDA = HelpArgumentUDA(HelpArgumentUDA.init.info.finalize!bool(config, null));
-        enum argumentUDAs = AliasSeq!(staticMap!(getArgumentUDA, iterateArguments!TYPE), helpUDA);
-    }
-    else
-        enum argumentUDAs = staticMap!(getArgumentUDA, iterateArguments!TYPE);
-
-    enum argumentInfos = staticMap!(getArgumentInfo, argumentUDAs);
-
-
-    /////////////////////////////////////////////////////////////////////
-    /// Subcommands
-
-    private enum getCommandInfo(CMD) = .getSubCommandInfo!CMD(config);
-    private enum getSubcommand(CMD) = SubCommand!CMD(getCommandInfo!CMD);
-
-    static if(.subCommandSymbol!TYPE.length == 0)
-        private alias subCommandTypes = AliasSeq!();
-    else
-    {
-        enum subCommandSymbol = .subCommandSymbol!TYPE;
-        private alias subCommandMemberType = typeof(__traits(getMember, TYPE, subCommandSymbol));
-        private alias subCommandTypes = subCommandMemberType.Types;
-
-        enum isDefaultSubCommand(T) = is(subCommandMemberType.DefaultCommand == T);
-    }
-
-    enum subCommands = staticMap!(getSubcommand, subCommandTypes);
-    enum subCommandInfos = staticMap!(getCommandInfo, subCommandTypes);
-
-
-    /////////////////////////////////////////////////////////////////////
-    /// Static checks whether TYPE does not violate argparse requirements
-
-    private enum positionalArgInfos = staticSort!(comparePosition, Filter!(positional, argumentInfos));
-
-    static foreach(info; argumentInfos)
-    {
-        static foreach (name; info.shortNames)
-            static assert(!name.startsWith(config.shortNamePrefix), TYPE.stringof~": Argument name should not begin with '"~config.shortNamePrefix~"': "~name);
-        static foreach (name; info.longNames)
-            static assert(!name.startsWith(config.longNamePrefix), TYPE.stringof~": Argument name should not begin with '"~config.longNamePrefix~"': "~name);
-    }
-
-    static foreach(int i, info; positionalArgInfos)
-        static assert({
-            enum int pos = info.position.get;
-
-            static if(i < pos)
-                static assert(false, TYPE.stringof~": Positional argument with index "~i.stringof~" is missed");
-            else static if(i > pos)
-                static assert(false, TYPE.stringof~": Positional argument with index "~pos.stringof~" is duplicated");
-
-            static if(pos < positionalArgInfos.length - 1)
-                static assert(info.minValuesCount.get == info.maxValuesCount.get,
-                    TYPE.stringof~": Positional argument with index "~pos.stringof~" has variable number of values.");
-
-            static if(i > 0 && info.required)
-                static assert(positionalArgInfos[i-1].required, TYPE.stringof~": Required positional argument with index "~pos.stringof~" comes after optional positional argument");
-
-            return true;
-        }());
-
-    static if(is(subCommandMemberType))
-    {
-        static if(positionalArgInfos.length > 0 && is(subCommandMemberType.DefaultCommand))
-            static assert(positionalArgInfos[$-1].required, TYPE.stringof~": Optional positional arguments and default subcommand are used together in one command");
-    }
-
-    static foreach(info; subCommandInfos)
-        static foreach(name; info.names)
-        {
-            static assert(!name.startsWith(config.shortNamePrefix), TYPE.stringof~": Subcommand name should not begin with '"~config.shortNamePrefix~"': "~name);
-            static assert(!name.startsWith(config.longNamePrefix), TYPE.stringof~": Subcommand name should not begin with '"~config.longNamePrefix~"': "~name);
-        }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 package(argparse) Command createCommand(Config config, COMMAND_TYPE)(ref COMMAND_TYPE receiver, CommandInfo info)
 {
-    import std.meta: staticMap;
-    import std.algorithm: map;
-    import std.array: array;
-
     alias typeTraits = TypeTraits!(config, COMMAND_TYPE);
 
     Command res;
@@ -399,20 +234,19 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE)(ref COMMAND
 
     res.completeFuncs = [staticMap!(getArgumentCompleteFunction, typeTraits.argumentUDAs)];
 
-    res.subCommands.add([typeTraits.subCommandInfos]);
-
-    static foreach(subcmd; typeTraits.subCommands)
-    {{
-        auto createFunc = () => ParsingSubCommandCreate!(config, subcmd.Type)(
+    static if(is(typeof(typeTraits.subCommands)))
+    {
+        alias createFunc(alias CMD) = () => ParsingSubCommandCreate!(config, CMD.TYPE)(
             __traits(getMember, receiver, typeTraits.subCommandSymbol),
-            subcmd.info,
+            CMD,
         );
 
-        static if(typeTraits.isDefaultSubCommand!(subcmd.Type))
-            res.defaultSubCommand = createFunc;
+        res.subCommandCreate = [staticMap!(createFunc, typeTraits.subCommands)];
+        res.subCommands.add([typeTraits.subCommands]);
 
-        res.subCommandCreate ~= createFunc;
-    }}
+        static if(is(typeof(typeTraits.defaultSubCommand)))
+            res.defaultSubCommand = createFunc!(typeTraits.defaultSubCommand);
+    }
 
     return res;
 }
