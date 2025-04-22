@@ -1,11 +1,12 @@
 module argparse.internal.argumentudahelpers;
 
-import argparse.api.argument: NamedArgument;
+import argparse.api.argument: NamedArgument, PositionalArgument;
 import argparse.config;
 import argparse.internal.argumentuda: ArgumentUDA;
 
-// `@NamedArgument` attaches the function itself as a UDA, but we should treat it the same as `@NamedArgument()`.
+// `@NamedArgument` and `@PositionalArgument` attach the functions as UDAs, but we should treat it the same as `@NamedArgument()`.
 package enum isArgumentUDA(alias _ : NamedArgument) = true;
+package enum isArgumentUDA(alias _ : PositionalArgument) = true;
 package enum isArgumentUDA(alias uda) = is(typeof(uda) == ArgumentUDA!T, T);
 
 private template defaultValuesCount(T)

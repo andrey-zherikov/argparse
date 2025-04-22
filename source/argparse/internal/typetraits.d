@@ -1,7 +1,6 @@
 module argparse.internal.typetraits;
 
 import argparse.config;
-import argparse.api.argument: NamedArgument, PositionalArgument;
 import argparse.api.subcommand: isSubCommand;
 import argparse.internal.arguments: finalize;
 import argparse.internal.argumentuda: ArgumentUDA;
@@ -18,42 +17,6 @@ import std.traits;
 
 private enum isPositional(alias uda) = uda.info.positional;
 private enum hasPosition(alias uda) = !uda.info.position.isNull;
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private auto setPosition(UDA)(uint pos, UDA uda)
-{
-    if(uda.info.positional && uda.info.position.isNull)
-        uda.info.position = pos;
-    return uda;
-}
-
-private template AssignPositions(udas...)
-{
-    alias AssignPositions = AliasSeq!();
-    alias pos = AliasSeq!();
-
-    static foreach(uda; udas)
-    {
-        static if(!isPositional!uda || hasPosition!uda)
-        AssignPositions = AliasSeq!(AssignPositions, uda);
-        else
-        {
-            AssignPositions = AliasSeq!(AssignPositions, setPosition(pos.length, uda));
-            pos = AliasSeq!(pos, 0);
-        }
-    }
-}
-
-unittest
-{
-    auto res = AssignPositions!(NamedArgument(), PositionalArgument(0), PositionalArgument(1), NamedArgument());
-
-    assert(!res[0].info.positional);
-    assert(res[1].info.position.get == 0);
-    assert(res[2].info.position.get == 1);
-    assert(!res[3].info.positional);
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -106,29 +69,41 @@ private template Arguments(Config config, TYPE)
         private enum positionalWithPos(alias uda) = isPositional!uda && hasPosition!uda;
         private enum positionalWithoutPos(alias uda) = isPositional!uda && !hasPosition!uda;
 
-        static assert(Filter!(positionalWithPos, originalUDAs).length == 0 || Filter!(positionalWithoutPos, originalUDAs).length == 0,
+        private enum positionalWithPosNum = Filter!(positionalWithPos, originalUDAs).length;
+
+        static assert(positionalWithPosNum == 0 || Filter!(positionalWithoutPos, originalUDAs).length == 0,
             TYPE.stringof~": Positions must be specified for all or none positional arguments");
 
-        enum UDAs = AliasSeq!(AssignPositions!originalUDAs, helpUDA);
+        enum UDAs = AliasSeq!(originalUDAs, helpUDA);
 
-        private enum sortByPosition(alias uda1, alias uda2) = uda1.info.position.get - uda2.info.position.get;
+        static if(positionalWithPosNum == 0)
+        {
+            private enum positionalUDAs = Filter!(isPositional, UDAs);
+        }
+        else
+        {
+            private enum sortByPosition(alias uda1, alias uda2) = uda1.info.position.get - uda2.info.position.get;
 
-        private enum positionalUDAs = staticSort!(sortByPosition, Filter!(isPositional, UDAs));
+            private enum positionalUDAs = staticSort!(sortByPosition, Filter!(isPositional, UDAs));
+
+            static foreach(i, uda; positionalUDAs)
+            {
+                static if(i < uda.info.position.get)
+                    static assert(false, TYPE.stringof~": Positional argument with index "~i.stringof~" is missed");
+                else static if(i > uda.info.position.get)
+                    static assert(false, TYPE.stringof~": Positional argument with index "~uda.info.position.get.stringof~" is duplicated");
+            }
+        }
 
         static foreach(i, uda; positionalUDAs)
         {
-            static if(i < uda.info.position.get)
-                static assert(false, TYPE.stringof~": Positional argument with index "~i.stringof~" is missed");
-            else static if(i > uda.info.position.get)
-                static assert(false, TYPE.stringof~": Positional argument with index "~uda.info.position.get.stringof~" is duplicated");
-
-            static if(uda.info.position.get < positionalUDAs.length - 1)
+            static if(i < positionalUDAs.length - 1)
                 static assert(uda.info.minValuesCount.get == uda.info.maxValuesCount.get,
-                    TYPE.stringof~": Positional argument with index "~uda.info.position.get.stringof~" has variable number of values.");
+                    TYPE.stringof~": Positional argument with index "~i.stringof~" has variable number of values - only last one is allowed to have it");
 
             static if(i > 0 && uda.info.required)
                 static assert(positionalUDAs[i-1].info.required,
-                    TYPE.stringof~": Required positional argument with index "~uda.info.position.get.stringof~" can't come after optional positional argument");
+                    TYPE.stringof~": Required positional argument with index "~i.stringof~" can't come after optional positional argument");
         }
 
         private enum hasOptionalPositional = positionalUDAs.length > 0 && !positionalUDAs[$-1].info.required;
