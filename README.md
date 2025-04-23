@@ -150,6 +150,7 @@
   * Short names can be specified with short prefix only (e.g. `-`).
   * Long names can be specified with long prefix only (e.g. `--`).
 * Added new `Config.assignKeyValueChar` parameter to customize assign character in `key=value` syntax for arguments with associative array type.
+* Added support of `@PositionalArgument` without explicit position. In this case positions are determined in the order of declarations of members.
 
 ### Other changes
 

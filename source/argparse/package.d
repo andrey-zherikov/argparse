@@ -79,6 +79,42 @@ unittest
 
 unittest
 {
+    struct T
+    {
+        @PositionalArgument(0) int a;
+        @PositionalArgument(1) int b;
+    }
+    T t;
+    assert(CLI!T.parseArgs(t, ["1","2"]));
+    assert(t == T(1,2));
+}
+
+unittest
+{
+    struct T
+    {
+        @PositionalArgument() int a;
+        @PositionalArgument() int b;
+    }
+    T t;
+    assert(CLI!T.parseArgs(t, ["1","2"]));
+    assert(t == T(1,2));
+}
+
+unittest
+{
+    struct T
+    {
+        @PositionalArgument int a;
+        @PositionalArgument int b;
+    }
+    T t;
+    assert(CLI!T.parseArgs(t, ["1","2"]));
+    assert(t == T(1,2));
+}
+
+unittest
+{
     struct T1
     {
         @(NamedArgument("1"))

@@ -44,6 +44,7 @@ package(argparse) struct ArgumentUDA(ValueParser)
         if(newInfo.placeholder.length == 0) newInfo.placeholder = uda.info.placeholder;
         if(!newInfo.description.isSet()) newInfo.description = uda.info.description;
         if(newInfo.position.isNull()) newInfo.position = uda.info.position;
+        if(!newInfo.positional) newInfo.positional = uda.info.positional;
         if(newInfo.minValuesCount.isNull()) newInfo.minValuesCount = uda.info.minValuesCount;
         if(newInfo.maxValuesCount.isNull()) newInfo.maxValuesCount = uda.info.maxValuesCount;
 
@@ -86,6 +87,7 @@ unittest
     arg1.info.placeholder = "ph1";
     arg1.info.description = "des1";
     arg1.info.position = 1;
+    arg1.info.positional = true;
     arg1.info.minValuesCount = 2;
     arg1.info.maxValuesCount = 3;
 
@@ -95,6 +97,7 @@ unittest
     arg2.info.placeholder = "ph2";
     arg2.info.description = "des2";
     arg2.info.position = 10;
+    arg1.info.positional = true;
     arg2.info.minValuesCount = 20;
     arg2.info.maxValuesCount = 30;
 

@@ -116,10 +116,18 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+auto PositionalArgument()
+{
+    auto arg = ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo.init).Required();
+    arg.info.positional = true;
+    return arg;
+}
+
 auto PositionalArgument(uint position)
 {
     auto arg = ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo.init).Required();
     arg.info.position = position;
+    arg.info.positional = true;
     return arg;
 }
 
@@ -138,6 +146,14 @@ auto NamedArgument(string[] names...)
     auto arg = NamedArgument([], []);
     arg.info.namesToSplit = names;
     return arg;
+}
+
+unittest
+{
+    auto arg = PositionalArgument();
+    assert(arg.info.required);
+    assert(arg.info.positional);
+    assert(arg.info.position.isNull);
 }
 
 unittest

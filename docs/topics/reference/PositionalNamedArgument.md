@@ -1,11 +1,14 @@
 # PositionalArgument/NamedArgument
 
+`NamedArgument` UDA is used to declare an argument that has a name (usually starting with `-` or `--`).
+
 `PositionalArgument` UDA is used to declare an argument that has specific position in the command line.
 
 
 **Signature**
 
 ```c++
+PositionalArgument()
 PositionalArgument(uint position)
 PositionalArgument(uint position, string placeholder)
 NamedArgument(string[] names...)
@@ -16,7 +19,7 @@ NamedArgument(string[] shortNames, string[] longNames)
 
 - `position`
 
-  Zero-based unsigned position of the argument.
+  Zero-based position of the argument. If it's omitted then positional arguments have an order of their declaration.
 
 - `placeholder`
 

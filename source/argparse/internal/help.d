@@ -402,7 +402,10 @@ unittest
         info.minValuesCount = 1;
         info.maxValuesCount = 1;
         if(positional)
+        {
             info.position = 0;
+            info.positional = true;
+        }
 
         import std.array: appender;
         auto a = appender!string;
@@ -440,7 +443,10 @@ unittest
         info.minValuesCount = 1;
         info.maxValuesCount = 1;
         if(positional)
+        {
             info.position = 0;
+            info.positional = true;
+        }
 
         import std.array: appender;
         auto a = appender!string;

@@ -38,7 +38,7 @@ package(argparse) struct ArgumentInfo
 
     Nullable!uint position;
 
-    bool positional() const { return !position.isNull; }
+    bool positional;
 
     Nullable!size_t minValuesCount;
     Nullable!size_t maxValuesCount;
@@ -185,6 +185,7 @@ unittest
     {
         ArgumentInfo info;
         info.position = 0;
+        info.positional = true;
         info.placeholder = placeholder;
         return info;
     }
