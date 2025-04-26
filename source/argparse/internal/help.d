@@ -327,7 +327,7 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private string printValue(in ArgumentInfo info)
+private string printValue(ref scope const ArgumentInfo info)
 {
     if(info.maxValuesCount.get == 0)
         return "";
