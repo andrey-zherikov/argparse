@@ -12,6 +12,93 @@ import std.traits;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private struct FuncValidator(T, int strategy, F)
+{
+    F func;
+
+    Result opCall(Param!T param) const
+    {
+        static if(strategy == 0)
+            return func(param) ? Result.Success : invalidValueError(param);
+        else static if(strategy == 1)
+            return func(param.value);
+        else static if(strategy == 2)
+            return func(param.value) ? Result.Success : invalidValueError(param);
+        else static if(strategy == 3 || strategy == 4)
+        {
+            T[1] values = [param.value];
+            auto arrParam = Param!(T[])(param.config, param.name, values[]);
+
+            static if(strategy == 3)
+                return func(arrParam);
+            else
+                return func(arrParam) ? Result.Success : invalidValueError(param);
+        }
+        else
+        {
+            foreach(value; param.value)
+                static if(strategy == 5)
+                {
+                    Result res = func(value);
+                    if(!res)
+                        return res;
+                }
+                else
+                    if(!func(value))
+                        return invalidValueError(param);
+            return Result.Success;
+        }
+    }
+}
+
+private auto toFuncValidator(T, int strategy, F)(F func)
+{
+    FuncValidator!(T, strategy, F) val = { func };
+    return val;
+}
+
+package(argparse)
+{
+    auto validationFunc(T)(Result function(Param!T) func)     { return func; }
+    auto validationFunc(T)(bool   function(Param!T) func)     { return func.toFuncValidator!(T, 0); }
+    auto validationFunc(T)(Result function(T) func)           { return func.toFuncValidator!(T, 1); }
+    auto validationFunc(T)(bool   function(T) func)           { return func.toFuncValidator!(T, 2); }
+    auto validationFunc(T)(Result function(Param!(T[])) func) { return func.toFuncValidator!(T, 3); }
+    auto validationFunc(T)(bool   function(Param!(T[])) func) { return func.toFuncValidator!(T, 4); }
+    auto validationFunc(T : U[], U)(Result function(U) func)  { return func.toFuncValidator!(T, 5); }
+    auto validationFunc(T : U[], U)(bool function(U) func)    { return func.toFuncValidator!(T, 6); }
+}
+
+unittest
+{
+    Config config;
+    auto fs = validationFunc!string((string s) => s.length > 0);
+    assert(!fs(Param!string(&config, "", "")));
+    assert(fs(Param!string(&config, "", "a")));
+
+    auto fsa = validationFunc!(string[2])((string s) => s.length > 0);
+    assert(!fsa(Param!(string[2])(&config, "", ["ab", ""])));
+    assert(fsa(Param!(string[2])(&config, "", ["a", "cd"])));
+
+    auto fi = validationFunc!int((int x) => bool(x & 0x1));
+    assert(!fi(Param!int(&config, "", 8)));
+    assert(fi(Param!int(&config, "", 13)));
+
+    auto fa = validationFunc!(int[])((int x) => bool(x & 0x1));
+    assert(!fa(Param!(int[])(&config, "", [3, 8])));
+    assert(fa(Param!(int[])(&config, "", [13, -1])));
+}
+
+package(argparse) Result validateAll(V, T)(const V validate, Param!(T[]) param) {
+    foreach(ref value; param.value)
+    {
+        auto res = validate(Param!T(param.config, param.name, value));
+        if(!res)
+            return res;
+    }
+    return Result.Success;
+}
+
 private struct Handler(TYPE)
 {
     static Result opCall(bool function(TYPE value) func, Param!TYPE param)
@@ -235,10 +322,42 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private struct ListValidator(TYPE)
+{
+    bool[TYPE] values;
+
+    this(TYPE[] values)
+    {
+        foreach(v; values)
+            this.values[v.to!(immutable(TYPE))] = false;
+    }
+
+    Result opCall(Param!TYPE param) const
+    {
+        if(!(param.value in values))
+        {
+            import std.algorithm : map;
+            import std.array : join;
+
+            auto valueStyle = param.isNamedArg ? (
+                param.config.styling.namedArgumentValue
+            ) : param.config.styling.positionalArgumentValue;
+
+            string valuesList = values.keys.map!(_ => valueStyle(_.to!string)).join(",");
+
+            return invalidValueError(param,
+                "\nValid argument values are: " ~ valuesList);
+        }
+
+        return Result.Success;
+    }
+}
+
 package(argparse) auto ValueInList(TYPE)(TYPE[] values...)
 {
     alias VF = ValidationFunc!TYPE;
     return VF(VF.ValueInList(values));
+    // return ListValidator!TYPE(values);
 }
 
 unittest
