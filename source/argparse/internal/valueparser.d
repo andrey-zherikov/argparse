@@ -10,8 +10,176 @@ import argparse.internal.novalueactionfunc;
 import argparse.internal.parsefunc;
 import argparse.internal.validationfunc;
 
+import std.meta: AliasSeq;
 import std.traits;
 
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private void defaultPreProcessFunc(ref RawParam) {}
+
+// Uncomment if you ever need polymorphic `preProcess`
+/+private struct DefaultPreProcessFunc
+{
+    void opCall(ref RawParam) const {}
+}+/
+
+private struct DefaultValidationFunc(T)
+{
+    Result opCall(Param!T) const { return Result.Success; }
+}
+
+private struct DefaultParseFunc(PARSE)
+{
+    Result opCall(ref PARSE, RawParam) const { return Result.Success; }
+}
+
+private struct DefaultActionFunc(RECEIVER, PARSE)
+{
+    Result opCall(ref RECEIVER receiver, Param!PARSE param) const
+    {
+        static if(is(RECEIVER == PARSE))
+            receiver = param.value;
+        return Result.Success;
+    }
+}
+
+private struct DefaultNoValueActionFunc(RECEIVER)
+{
+    Result opCall(ref RECEIVER, Param!void) const { return Result.Success; }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package(argparse) enum ParsingStep
+{
+    preProcess, preValidate, parse, validate, action, noValueAction
+}
+
+package(argparse) struct ValueParser2(PARSE, RECEIVER, FUNCS...)
+{
+    FUNCS funcs;
+
+    // TODO: We should ensure elsewhere that this substitution does not violate the type system. The compiler will catch
+    // the error eventually, but if we check ourselves, we can provide far more relevant error message.
+    auto change(ParsingStep step, F)(F newFunc)
+    {
+        return ValueParser2!(PARSE, RECEIVER, FUNCS[0 .. step], F, FUNCS[step + 1 .. $])(
+            funcs[0 .. step], newFunc, funcs[step + 1 .. $]
+        );
+    }
+
+    auto addDefaults(OTHER_FUNCS...)(ValueParser2!(PARSE, RECEIVER, OTHER_FUNCS) other)
+    {
+        static if(is(FUNCS[ParsingStep.preValidate] == DefaultValidationFunc!string))
+            alias pv = other;
+        else
+            alias pv = this;
+
+        static if(is(FUNCS[ParsingStep.parse] == DefaultParseFunc!PARSE))
+            alias p = other;
+        else
+            alias p = this;
+
+        static if(is(FUNCS[ParsingStep.validate] == DefaultValidationFunc!PARSE))
+            alias v = other;
+        else
+            alias v = this;
+
+        static if(is(FUNCS[ParsingStep.action] == DefaultActionFunc!(RECEIVER, PARSE)))
+            alias a = other;
+        else
+            alias a = this;
+
+        static if(is(FUNCS[ParsingStep.noValueAction] == DefaultNoValueActionFunc!RECEIVER))
+            alias nva = other;
+        else
+            alias nva = this;
+
+        auto newFuncs = AliasSeq!(
+            funcs[ParsingStep.preProcess] is &defaultPreProcessFunc ? (
+                other.funcs[ParsingStep.preProcess]
+            ) : funcs[ParsingStep.preProcess],
+            pv.funcs[ParsingStep.preValidate],
+            p.funcs[ParsingStep.parse],
+            v.funcs[ParsingStep.validate],
+            a.funcs[ParsingStep.action],
+            nva.funcs[ParsingStep.noValueAction],
+        );
+        return ValueParser2!(PARSE, RECEIVER, typeof(newFuncs))(newFuncs);
+    }
+}
+
+package(argparse) alias DefaultValueParser2(PARSE, RECEIVER) = ValueParser2!(
+    PARSE,
+    RECEIVER,
+    void function(ref RawParam), // preProcess
+    DefaultValidationFunc!string, // preValidate
+    DefaultParseFunc!PARSE, // parse
+    DefaultValidationFunc!PARSE, // validate
+    DefaultActionFunc!(RECEIVER, PARSE), // action
+    DefaultNoValueActionFunc!RECEIVER, // noValueAction
+);
+
+package(argparse) enum DefaultValueParser2!(PARSE, RECEIVER) defaultValueParser2(PARSE, RECEIVER) = {
+    &defaultPreProcessFunc,
+};
+
+unittest
+{
+    auto vp = defaultValueParser2!(int, int)
+        .change!(ParsingStep.preValidate)(validationFunc!string((string s) => Result.Error("test error")));
+    assert(vp.funcs[ParsingStep.preValidate](Param!string(null, "", "")).isError("test error"));
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Declared as a free function to avoid instantiating it for intermediate, incompletely built parsers, which
+// are not used to parse anything
+package(argparse) Result parseParameter(PARSE, RECEIVER, FUNCS...)(
+    ref const ValueParser2!(PARSE, RECEIVER, FUNCS) parser,
+    ref RECEIVER receiver,
+    RawParam rawParam,
+)
+in(parser.funcs[ParsingStep.preProcess] !is null)
+do {
+    if (rawParam.value.length == 0)
+        return parser.funcs[ParsingStep.noValueAction](receiver, Param!void(rawParam.config, rawParam.name));
+
+    parser.funcs[ParsingStep.preProcess](rawParam);
+
+    Result res = validateAll(parser.funcs[ParsingStep.preValidate], rawParam); // Be careful not to use UFCS
+    if (!res)
+        return res;
+
+    auto parsedParam = Param!PARSE(rawParam.config, rawParam.name);
+
+    res = parser.funcs[ParsingStep.parse](parsedParam.value, rawParam);
+    if (!res)
+        return res;
+
+    res = parser.funcs[ParsingStep.validate](parsedParam);
+    if (!res)
+        return res;
+
+    res = parser.funcs[ParsingStep.action](receiver, parsedParam);
+    if (!res)
+        return res;
+
+    return Result.Success;
+}
+
+unittest
+{
+    int receiver;
+    auto vp = defaultValueParser2!(int, int)
+        .change!(ParsingStep.preValidate)(validationFunc!string((string s) =>
+            s.length ? Result.Success : Result.Error("prevalidation failed")
+        ))
+        .change!(ParsingStep.validate)(validationFunc!int((int x) => Result.Error("main validation failed")));
+    assert(vp.parseParameter(receiver, RawParam(null,"",[""])).isError("prevalidation failed"));
+    assert(vp.parseParameter(receiver, RawParam(null,"",["a"])).isError("main validation failed"));
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
