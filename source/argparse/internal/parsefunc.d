@@ -11,6 +11,58 @@ import std.sumtype;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private struct FuncParser(T, int strategy, F)
+{
+    F func;
+
+    Result opCall(ref T receiver, RawParam param) const
+    {
+        static if(strategy == 0)
+        {
+            if(!func(receiver, param))
+                return invalidValueError(param);
+        }
+        else static if(strategy == 1)
+            func(receiver, param);
+        else static if(strategy == 2)
+            receiver = func(param);
+        else static if(strategy == 3)
+            receiver = func(param.value);
+        else
+            foreach(value; param.value)
+                receiver = func(value); // Only the last result is retained
+
+        return Result.Success;
+    }
+}
+
+private auto toFuncParser(T, int strategy, F)(F func)
+{
+    FuncParser!(T, strategy, F) p = { func };
+    return p;
+}
+
+package(argparse)
+{
+    auto parseFunc(T)(Result function(ref T, RawParam) func) { return func; }
+    auto parseFunc(T)(bool   function(ref T, RawParam) func) { return func.toFuncParser!(T, 0); }
+    auto parseFunc(T)(void   function(ref T, RawParam) func) { return func.toFuncParser!(T, 1); }
+    auto parseFunc(T)(T function(RawParam) func)             { return func.toFuncParser!(T, 2); }
+    auto parseFunc(T)(T function(string[]) func)             { return func.toFuncParser!(T, 3); }
+    auto parseFunc(T)(T function(string) func)               { return func.toFuncParser!(T, 4); }
+}
+
+unittest
+{
+    size_t receiver;
+    Config config;
+    auto f = parseFunc!size_t((const(string)[] values) => values.length);
+    assert(f(receiver, RawParam(&config, "", ["a", "bc"])));
+    assert(receiver == 2);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 private struct Handler(TYPE)
 {
     static Result opCall(TYPE function(string[] value) func, ref TYPE receiver, RawParam param)
