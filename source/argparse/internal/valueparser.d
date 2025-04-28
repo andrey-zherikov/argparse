@@ -56,59 +56,63 @@ package(argparse) enum ParsingStep
     preProcess, preValidate, parse, validate, action, noValueAction
 }
 
-package(argparse) struct ValueParser2(PARSE, RECEIVER, FUNCS...)
+package(argparse) struct ValueParser2(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
 {
-    FUNCS funcs;
+    // We could have assigned `&defaultPreProcessFunc` to `preProcess`, but we would lose `__traits(isZeroInit)`
+    // and not really gain anything
+    void function(ref RawParam) preProcess;
+    PRE_VALIDATE_F preValidate;
+    PARSE_F parse;
+    VALIDATE_F validate;
+    ACTION_F action;
+    NO_VALUE_ACTION_F noValueAction;
 
     // TODO: We should ensure elsewhere that this substitution does not violate the type system. The compiler will catch
     // the error eventually, but if we check ourselves, we can provide far more relevant error message.
     auto change(ParsingStep step, F)(F newFunc)
     {
-        return ValueParser2!(PARSE, RECEIVER, FUNCS[0 .. step], F, FUNCS[step + 1 .. $])(
-            funcs[0 .. step], newFunc, funcs[step + 1 .. $]
-        );
+        alias newFuncs = AliasSeq!(this.tupleof[0 .. step], newFunc, this.tupleof[step + 1 .. $]);
+        return ValueParser2!(PARSE, RECEIVER, typeof(newFuncs[1 .. $]))(newFuncs);
     }
 
     auto addDefaults(OTHER_FUNCS...)(ValueParser2!(PARSE, RECEIVER, OTHER_FUNCS) other)
     {
-        auto ppf = funcs[ParsingStep.preProcess] is &defaultPreProcessFunc ? (
-            other.funcs[ParsingStep.preProcess]
-        ) : funcs[ParsingStep.preProcess];
-
-        static if(is(FUNCS[ParsingStep.preValidate] == DefaultValidationFunc!string))
-            auto pvf = other.funcs[ParsingStep.preValidate];
+        static if(is(PRE_VALIDATE_F == DefaultValidationFunc!string))
+            auto pvf = other.preValidate;
         else
-            auto pvf = this.funcs[ParsingStep.preValidate];
+            alias pvf = preValidate;
 
-        static if(is(FUNCS[ParsingStep.parse] == DefaultParseFunc!PARSE))
-            auto pf = other.funcs[ParsingStep.parse];
+        static if(is(PARSE_F == DefaultParseFunc!PARSE))
+            auto pf = other.parse;
         else
-            auto pf = this.funcs[ParsingStep.parse];
+            alias pf = parse;
 
-        static if(is(FUNCS[ParsingStep.validate] == DefaultValidationFunc!PARSE))
-            auto vf = other.funcs[ParsingStep.validate];
+        static if(is(VALIDATE_F == DefaultValidationFunc!PARSE))
+            auto vf = other.validate;
         else
-            auto vf = this.funcs[ParsingStep.validate];
+            alias vf = validate;
 
-        static if(is(FUNCS[ParsingStep.action] == DefaultActionFunc!(RECEIVER, PARSE)))
-            auto af = other.funcs[ParsingStep.action];
+        static if(is(ACTION_F == DefaultActionFunc!(RECEIVER, PARSE)))
+            auto af = other.action;
         else
-            auto af = this.funcs[ParsingStep.action];
+            alias af = action;
 
-        static if(is(FUNCS[ParsingStep.noValueAction] == DefaultNoValueActionFunc!RECEIVER))
-            auto nvaf = other.funcs[ParsingStep.noValueAction];
+        static if(is(NO_VALUE_ACTION_F == DefaultNoValueActionFunc!RECEIVER))
+            auto nvaf = other.noValueAction;
         else
-            auto nvaf = this.funcs[ParsingStep.noValueAction];
+            alias nvaf = noValueAction;
 
-        alias newFuncs = AliasSeq!(ppf, pvf, pf, vf, af, nvaf);
-        return ValueParser2!(PARSE, RECEIVER, typeof(newFuncs))(newFuncs);
+        alias newFuncs = AliasSeq!(pvf, pf, vf, af, nvaf);
+        return ValueParser2!(PARSE, RECEIVER, typeof(newFuncs))(
+            preProcess is &defaultPreProcessFunc ? other.preProcess : preProcess,
+            newFuncs,
+        );
     }
 }
 
 package(argparse) enum defaultValueParser2(PARSE, RECEIVER) = ValueParser2!(
     PARSE,
     RECEIVER,
-    void function(ref RawParam), // preProcess
     DefaultValidationFunc!string, // preValidate
     DefaultParseFunc!PARSE, // parse
     DefaultValidationFunc!PARSE, // validate
@@ -120,7 +124,7 @@ unittest
 {
     auto vp = defaultValueParser2!(int, int)
         .change!(ParsingStep.preValidate)(validationFunc!string((string s) => Result.Error("test error")));
-    assert(vp.funcs[ParsingStep.preValidate](Param!string(null, "", "")).isError("test error"));
+    assert(vp.preValidate(Param!string(null, "", "")).isError("test error"));
 }
 
 unittest
@@ -132,8 +136,8 @@ unittest
         .change!(ParsingStep.validate)(validationFunc!int((int s) => Result.Error("c")));
 
     auto vp3 = vp1.addDefaults(vp2);
-    assert(vp3.funcs[ParsingStep.preValidate] is vp1.funcs[ParsingStep.preValidate]);
-    assert(vp3.funcs[ParsingStep.validate] is vp2.funcs[ParsingStep.validate]);
+    assert(vp3.preValidate is vp1.preValidate);
+    assert(vp3.validate is vp2.validate);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,28 +149,29 @@ package(argparse) Result parseParameter(PARSE, RECEIVER, FUNCS...)(
     ref RECEIVER receiver,
     RawParam rawParam,
 )
-in(parser.funcs[ParsingStep.preProcess] !is null)
-do {
+in(parser.preProcess !is null)
+do
+{
     if (rawParam.value.length == 0)
-        return parser.funcs[ParsingStep.noValueAction](receiver, Param!void(rawParam.config, rawParam.name));
+        return parser.noValueAction(receiver, Param!void(rawParam.config, rawParam.name));
 
-    parser.funcs[ParsingStep.preProcess](rawParam);
+    parser.preProcess(rawParam);
 
-    Result res = validateAll(parser.funcs[ParsingStep.preValidate], rawParam); // Be careful not to use UFCS
+    Result res = validateAll(parser.preValidate, rawParam); // Be careful not to use UFCS
     if (!res)
         return res;
 
     auto parsedParam = Param!PARSE(rawParam.config, rawParam.name);
 
-    res = parser.funcs[ParsingStep.parse](parsedParam.value, rawParam);
+    res = parser.parse(parsedParam.value, rawParam);
     if (!res)
         return res;
 
-    res = parser.funcs[ParsingStep.validate](parsedParam);
+    res = parser.validate(parsedParam);
     if (!res)
         return res;
 
-    res = parser.funcs[ParsingStep.action](receiver, parsedParam);
+    res = parser.action(receiver, parsedParam);
     if (!res)
         return res;
 
