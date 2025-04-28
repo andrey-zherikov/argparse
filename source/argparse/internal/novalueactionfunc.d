@@ -12,6 +12,19 @@ import std.sumtype;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private struct ValueSetter(RECEIVER)
+{
+    RECEIVER value;
+
+    Result opCall(ref RECEIVER receiver, Param!void) const
+    {
+        receiver = value;
+        return Result.Success;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 package(argparse) struct NoValueActionFunc(RECEIVER)
 {
     private struct ProcessingError
@@ -86,6 +99,8 @@ unittest
 package(argparse) auto SetValue(VALUE)(VALUE value)
 {
     return NoValueActionFunc!VALUE(NoValueActionFunc!VALUE.SetValue(value));
+    // ValueSetter!VALUE vs = { value };
+    // return vs;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

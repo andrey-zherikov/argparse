@@ -46,7 +46,7 @@ private struct DefaultActionFunc(RECEIVER, PARSE)
 
 private struct DefaultNoValueActionFunc(RECEIVER)
 {
-    Result opCall(ref RECEIVER, Param!void) const { return Result.Success; }
+    Result opCall(ref RECEIVER, Param!void param) const { return processingError(param); }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
