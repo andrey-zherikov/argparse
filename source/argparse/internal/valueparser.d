@@ -71,46 +71,41 @@ package(argparse) struct ValueParser2(PARSE, RECEIVER, FUNCS...)
 
     auto addDefaults(OTHER_FUNCS...)(ValueParser2!(PARSE, RECEIVER, OTHER_FUNCS) other)
     {
+        auto ppf = funcs[ParsingStep.preProcess] is &defaultPreProcessFunc ? (
+            other.funcs[ParsingStep.preProcess]
+        ) : funcs[ParsingStep.preProcess];
+
         static if(is(FUNCS[ParsingStep.preValidate] == DefaultValidationFunc!string))
-            alias pv = other;
+            auto pvf = other.funcs[ParsingStep.preValidate];
         else
-            alias pv = this;
+            auto pvf = this.funcs[ParsingStep.preValidate];
 
         static if(is(FUNCS[ParsingStep.parse] == DefaultParseFunc!PARSE))
-            alias p = other;
+            auto pf = other.funcs[ParsingStep.parse];
         else
-            alias p = this;
+            auto pf = this.funcs[ParsingStep.parse];
 
         static if(is(FUNCS[ParsingStep.validate] == DefaultValidationFunc!PARSE))
-            alias v = other;
+            auto vf = other.funcs[ParsingStep.validate];
         else
-            alias v = this;
+            auto vf = this.funcs[ParsingStep.validate];
 
         static if(is(FUNCS[ParsingStep.action] == DefaultActionFunc!(RECEIVER, PARSE)))
-            alias a = other;
+            auto af = other.funcs[ParsingStep.action];
         else
-            alias a = this;
+            auto af = this.funcs[ParsingStep.action];
 
         static if(is(FUNCS[ParsingStep.noValueAction] == DefaultNoValueActionFunc!RECEIVER))
-            alias nva = other;
+            auto nvaf = other.funcs[ParsingStep.noValueAction];
         else
-            alias nva = this;
+            auto nvaf = this.funcs[ParsingStep.noValueAction];
 
-        auto newFuncs = AliasSeq!(
-            funcs[ParsingStep.preProcess] is &defaultPreProcessFunc ? (
-                other.funcs[ParsingStep.preProcess]
-            ) : funcs[ParsingStep.preProcess],
-            pv.funcs[ParsingStep.preValidate],
-            p.funcs[ParsingStep.parse],
-            v.funcs[ParsingStep.validate],
-            a.funcs[ParsingStep.action],
-            nva.funcs[ParsingStep.noValueAction],
-        );
+        alias newFuncs = AliasSeq!(ppf, pvf, pf, vf, af, nvaf);
         return ValueParser2!(PARSE, RECEIVER, typeof(newFuncs))(newFuncs);
     }
 }
 
-package(argparse) alias DefaultValueParser2(PARSE, RECEIVER) = ValueParser2!(
+package(argparse) enum defaultValueParser2(PARSE, RECEIVER) = ValueParser2!(
     PARSE,
     RECEIVER,
     void function(ref RawParam), // preProcess
@@ -119,17 +114,26 @@ package(argparse) alias DefaultValueParser2(PARSE, RECEIVER) = ValueParser2!(
     DefaultValidationFunc!PARSE, // validate
     DefaultActionFunc!(RECEIVER, PARSE), // action
     DefaultNoValueActionFunc!RECEIVER, // noValueAction
-);
-
-package(argparse) enum DefaultValueParser2!(PARSE, RECEIVER) defaultValueParser2(PARSE, RECEIVER) = {
-    &defaultPreProcessFunc,
-};
+)(&defaultPreProcessFunc);
 
 unittest
 {
     auto vp = defaultValueParser2!(int, int)
         .change!(ParsingStep.preValidate)(validationFunc!string((string s) => Result.Error("test error")));
     assert(vp.funcs[ParsingStep.preValidate](Param!string(null, "", "")).isError("test error"));
+}
+
+unittest
+{
+    auto vp1 = defaultValueParser2!(int, int)
+        .change!(ParsingStep.preValidate)(validationFunc!string((string s) => Result.Error("a")));
+    auto vp2 = defaultValueParser2!(int, int)
+        .change!(ParsingStep.preValidate)(validationFunc!string((string s) => Result.Error("b")))
+        .change!(ParsingStep.validate)(validationFunc!int((int s) => Result.Error("c")));
+
+    auto vp3 = vp1.addDefaults(vp2);
+    assert(vp3.funcs[ParsingStep.preValidate] is vp1.funcs[ParsingStep.preValidate]);
+    assert(vp3.funcs[ParsingStep.validate] is vp2.funcs[ParsingStep.validate]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
