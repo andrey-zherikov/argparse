@@ -48,7 +48,7 @@ private struct AnsiStylingArgument
 unittest
 {
     AnsiStylingArgument arg;
-    assert(!arg);
+    arg.isEnabled = false;
     AnsiStylingArgument.actionNoValue(arg, Param!void.init);
     assert(arg);
 
@@ -58,6 +58,7 @@ unittest
 unittest
 {
     AnsiStylingArgument arg;
+    arg.isEnabled = false;
 
     AnsiStylingArgument.action(arg, Param!string(null, "", "always"));
     assert(arg);
@@ -70,6 +71,7 @@ unittest
 {
     Config config;
     AnsiStylingArgument arg;
+    arg.isEnabled = false;
 
     config.stylingMode = Config.StylingMode.on;
     AnsiStylingArgument.action(arg, Param!string(&config, "", "auto"));
