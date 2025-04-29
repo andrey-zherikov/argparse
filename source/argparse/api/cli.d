@@ -122,38 +122,32 @@ template CLI(Config config, COMMAND)
     }
 
     static int parseArgs(alias newMain)(string[] args, auto ref COMMAND initialValue = COMMAND.init)
-    if(__traits(compiles, { newMain(initialValue); }))
     {
         alias value = initialValue;
 
-        auto res = parseArgs(value, args);
-        if(!res)
-            return res.exitCode;
-
-        static if(__traits(compiles, { int a = cast(int) newMain(value); }))
-            return cast(int) newMain(value);
-        else
-        {
-            newMain(value);
-            return 0;
-        }
-    }
-
-    static int parseArgs(alias newMain)(string[] args, auto ref COMMAND initialValue = COMMAND.init)
-    if(__traits(compiles, { newMain(initialValue, string[].init); }))
-    {
-        alias value = initialValue;
-
-        auto res = parseKnownArgs(value, args);
-        if(!res)
-            return res.exitCode;
-
-        static if(__traits(compiles, { int a = cast(int) newMain(value, args); }))
-            return cast(int) newMain(value, args);
-        else
-        {
-            newMain(value, args);
-            return 0;
+        // Attempt to call the most complete overload first, and fall back as needed
+        // Make sure the last branch is unconditional so users get proper error
+        // messages when their own main does not compile.
+        static if(__traits(compiles, { newMain(initialValue, string[].init); })) {
+            auto res = parseKnownArgs(value, args);
+            if(!res)
+                return res.exitCode;
+            static if(__traits(compiles, { int a = cast(int) newMain(value, args); }))
+                return cast(int) newMain(value, args);
+            else {
+                newMain(value, args);
+                return 0;
+            }
+        } else {
+            auto res = parseArgs(value, args);
+            if(!res)
+                return res.exitCode;
+            static if(__traits(compiles, { int a = cast(int) newMain(value); }))
+                return cast(int) newMain(value);
+            else {
+                newMain(value);
+                return 0;
+            }
         }
     }
 
