@@ -11,6 +11,49 @@ import std.sumtype;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private struct FuncActionInvoker(RECEIVER, PARSE, int strategy, F)
+{
+    F func;
+
+    Result opCall(ref RECEIVER receiver, Param!PARSE param) const
+    {
+        static if(strategy == 0)
+            return func(receiver, param) ? Result.Success : processingError(param);
+        else static if(strategy == 1)
+        {
+            func(receiver, param);
+            return Result.Success;
+        }
+        else static if(strategy == 2)
+            return func(receiver, param.value);
+        else static if(strategy == 3)
+            return func(receiver, param.value) ? Result.Success : processingError(param);
+        else
+        {
+            func(receiver, param.value);
+            return Result.Success;
+        }
+    }
+}
+
+private auto toInvoker(RECEIVER, PARSE, int strategy, F)(F func)
+{
+    FuncActionInvoker!(RECEIVER, PARSE, strategy, F) inv = { func };
+    return inv;
+}
+
+package(argparse)
+{
+    auto actionFunc(RECEIVER, PARSE)(Result function(ref RECEIVER, Param!PARSE) func) { return func; }
+    auto actionFunc(RECEIVER, PARSE)(bool   function(ref RECEIVER, Param!PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 0); }
+    auto actionFunc(RECEIVER, PARSE)(void   function(ref RECEIVER, Param!PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 1); }
+    auto actionFunc(RECEIVER, PARSE)(Result function(ref RECEIVER, PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 2); }
+    auto actionFunc(RECEIVER, PARSE)(bool   function(ref RECEIVER, PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 3); }
+    auto actionFunc(RECEIVER, PARSE)(void   function(ref RECEIVER, PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 4); }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 private struct Handler(RECEIVER, PARSE)
 {
     static Result opCall(bool function(ref RECEIVER receiver, PARSE value) func, ref RECEIVER receiver, Param!PARSE param)
