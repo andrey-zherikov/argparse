@@ -343,6 +343,25 @@ unittest
     assert(test(["-a","-b","-c","foo"]) == T(true, true, "foo"));
 }
 
+unittest
+{
+    struct T
+    {
+        string c;
+    }
+
+    auto test(string[] args)
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, args));
+        return t;
+    }
+
+    assert(test(["-c","foo"]) == T("foo"));
+    assert(test(["-c=foo"])   == T("foo"));
+    assert(test(["-cfoo"])    == T("foo"));
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 unittest

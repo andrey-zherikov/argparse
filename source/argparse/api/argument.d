@@ -61,6 +61,8 @@ auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t num)
 
 auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t min, size_t max)
 {
+    assert(min <= max);
+
     uda.info.minValuesCount = min;
     uda.info.maxValuesCount = max;
     return uda;
@@ -101,17 +103,17 @@ unittest
     arg = arg.Hidden.Required.NumberOfValues(10);
     assert(arg.info.hidden);
     assert(arg.info.required);
-    assert(arg.info.minValuesCount.get == 10);
-    assert(arg.info.maxValuesCount.get == 10);
+    assert(arg.info.minValuesCount == 10);
+    assert(arg.info.maxValuesCount == 10);
 
     arg = arg.Optional.NumberOfValues(20,30);
     assert(!arg.info.required);
-    assert(arg.info.minValuesCount.get == 20);
-    assert(arg.info.maxValuesCount.get == 30);
+    assert(arg.info.minValuesCount == 20);
+    assert(arg.info.maxValuesCount == 30);
 
     arg = arg.MinNumberOfValues(2).MaxNumberOfValues(3);
-    assert(arg.info.minValuesCount.get == 2);
-    assert(arg.info.maxValuesCount.get == 3);
+    assert(arg.info.minValuesCount == 2);
+    assert(arg.info.maxValuesCount == 3);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

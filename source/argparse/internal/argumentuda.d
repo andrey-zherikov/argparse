@@ -109,8 +109,8 @@ unittest
         assert(res.info.placeholder == "ph1");
         assert(res.info.description.get == "des1");
         assert(res.info.position.get == 1);
-        assert(res.info.minValuesCount.get == 2);
-        assert(res.info.maxValuesCount.get == 3);
+        assert(res.info.minValuesCount == 2);
+        assert(res.info.maxValuesCount == 3);
         assert(res.valueParser.str == "foo1");
     }
 
@@ -121,8 +121,8 @@ unittest
         assert(res.info.placeholder == "ph1");
         assert(res.info.description.get == "des1");
         assert(res.info.position.get == 1);
-        assert(res.info.minValuesCount.get == 2);
-        assert(res.info.maxValuesCount.get == 3);
+        assert(res.info.minValuesCount == 2);
+        assert(res.info.maxValuesCount == 3);
         assert(res.valueParser.str == "foo1");
     }
 }

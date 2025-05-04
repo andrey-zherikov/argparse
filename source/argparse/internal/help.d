@@ -327,20 +327,20 @@ unittest
 
 private string printValue(in ArgumentInfo info)
 {
-    if(info.maxValuesCount.get == 0)
+    if(info.maxValuesCount == 0)
         return "";
 
     import std.array: appender;
     auto a = appender!string;
 
-    if(info.minValuesCount.get == 0)
+    if(info.minValuesCount == 0)
         a.put("[");
 
     a.put(info.placeholder);
     if(info.maxValuesCount.get > 1)
         a.put(" ...");
 
-    if(info.minValuesCount.get == 0)
+    if(info.minValuesCount == 0)
         a.put("]");
 
     return a[];
