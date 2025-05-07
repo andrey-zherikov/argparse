@@ -18,39 +18,6 @@ import std.traits;
 
 private void defaultPreProcessFunc(ref RawParam) {}
 
-// Uncomment if you ever need polymorphic `preProcess`
-/+private struct DefaultPreProcessFunc
-{
-    void opCall(ref RawParam) const {}
-}+/
-
-private struct DefaultValidationFunc(T)
-{
-    Result opCall(Param!T) const { return Result.Success; }
-}
-
-private struct DefaultParseFunc(PARSE)
-{
-    Result opCall(ref PARSE, RawParam) const { return Result.Success; }
-}
-
-private struct DefaultActionFunc(RECEIVER, PARSE)
-{
-    Result opCall(ref RECEIVER receiver, Param!PARSE param) const
-    {
-        static if(is(RECEIVER == PARSE))
-            receiver = param.value;
-        return Result.Success;
-    }
-}
-
-private struct DefaultNoValueActionFunc(RECEIVER)
-{
-    Result opCall(ref RECEIVER, Param!void param) const { return processingError(param); }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 package(argparse) enum ParsingStep
 {
     preProcess, preValidate, parse, validate, action, noValueAction
@@ -71,38 +38,41 @@ package(argparse) struct ValueParser2(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, 
     // the error eventually, but if we check ourselves, we can provide far more relevant error message.
     auto change(ParsingStep step, F)(F newFunc)
     {
+        // Changing a function can change our `PARSE` and/or `RECEIVER`
+        static if(step == ParsingStep.parse)
+            alias PARSE = Parameters!F[0];
+        else static if(step == ParsingStep.validate)
+        {
+            static if(is(Parameters!F[0] == Param!PARSE, PARSE)) {}
+        }
+        else static if(step >= ParsingStep.action)
+        {
+            alias RECEIVER = Parameters!F[0];
+            static if(step == ParsingStep.action && is(Parameters!F[1] == Param!PARSE, PARSE)) {}
+        }
+
         alias newFuncs = AliasSeq!(this.tupleof[0 .. step], newFunc, this.tupleof[step + 1 .. $]);
         return ValueParser2!(PARSE, RECEIVER, typeof(newFuncs[1 .. $]))(newFuncs);
     }
 
-    auto addDefaults(OTHER_FUNCS...)(ValueParser2!(PARSE, RECEIVER, OTHER_FUNCS) other)
+    auto addDefaults(OTHER_PARSE, OTHER_RECEIVER, OTHER_F...)(ValueParser2!(OTHER_PARSE, OTHER_RECEIVER, OTHER_F) other)
     {
-        static if(is(PRE_VALIDATE_F == DefaultValidationFunc!string))
-            auto pvf = other.preValidate;
-        else
-            alias pvf = preValidate;
+        static if(is(PARSE == void))
+            alias PARSE = OTHER_PARSE;
+        static if(is(RECEIVER == void))
+            alias RECEIVER = OTHER_RECEIVER;
+        static if(is(PRE_VALIDATE_F == byte)) // `byte` means "default"
+            auto preValidate = other.preValidate;
+        static if(is(PARSE_F == byte))
+            auto parse = other.parse;
+        static if(is(VALIDATE_F == byte))
+            auto validate = other.validate;
+        static if(is(ACTION_F == byte))
+            auto action = other.action;
+        static if(is(NO_VALUE_ACTION_F == byte))
+            auto noValueAction = other.noValueAction;
 
-        static if(is(PARSE_F == DefaultParseFunc!PARSE))
-            auto pf = other.parse;
-        else
-            alias pf = parse;
-
-        static if(is(VALIDATE_F == DefaultValidationFunc!PARSE))
-            auto vf = other.validate;
-        else
-            alias vf = validate;
-
-        static if(is(ACTION_F == DefaultActionFunc!(RECEIVER, PARSE)))
-            auto af = other.action;
-        else
-            alias af = action;
-
-        static if(is(NO_VALUE_ACTION_F == DefaultNoValueActionFunc!RECEIVER))
-            auto nvaf = other.noValueAction;
-        else
-            alias nvaf = noValueAction;
-
-        alias newFuncs = AliasSeq!(pvf, pf, vf, af, nvaf);
+        alias newFuncs = AliasSeq!(preValidate, parse, validate, action, noValueAction);
         return ValueParser2!(PARSE, RECEIVER, typeof(newFuncs))(
             preProcess is &defaultPreProcessFunc ? other.preProcess : preProcess,
             newFuncs,
@@ -110,28 +80,26 @@ package(argparse) struct ValueParser2(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, 
     }
 }
 
-package(argparse) enum defaultValueParser2(PARSE, RECEIVER) = ValueParser2!(
-    PARSE,
-    RECEIVER,
-    DefaultValidationFunc!string, // preValidate
-    DefaultParseFunc!PARSE, // parse
-    DefaultValidationFunc!PARSE, // validate
-    DefaultActionFunc!(RECEIVER, PARSE), // action
-    DefaultNoValueActionFunc!RECEIVER, // noValueAction
-)(&defaultPreProcessFunc);
+// We use `byte` as a placeholder for function types because it, unlike `void`, can be stored in a struct without
+// introducing special cases (e.g., `auto f = p.validate;` just works). Yes, `ValueParser2.sizeof` is then larger than
+// theoretically possible (+24 bytes in the worst case), but this doesn't matter much: parsers are only used in UDAs
+// so the compiler is always able to allocate memory for them statically. (Instead of `byte`, we could have chosen
+// `typeof(null)`, which is more intuitive but occupies a whole machine word.)
+package(argparse) enum defaultValueParser2(PARSE, RECEIVER) =
+    ValueParser2!(PARSE, RECEIVER, byte, byte, byte, byte, byte)(&defaultPreProcessFunc);
 
 unittest
 {
-    auto vp = defaultValueParser2!(int, int)
+    auto vp = defaultValueParser2!(void, void)
         .change!(ParsingStep.preValidate)(validationFunc!string((string s) => Result.Error("test error")));
     assert(vp.preValidate(Param!string(null, "", "")).isError("test error"));
 }
 
 unittest
 {
-    auto vp1 = defaultValueParser2!(int, int)
+    auto vp1 = defaultValueParser2!(void, void)
         .change!(ParsingStep.preValidate)(validationFunc!string((string s) => Result.Error("a")));
-    auto vp2 = defaultValueParser2!(int, int)
+    auto vp2 = defaultValueParser2!(void, void)
         .change!(ParsingStep.preValidate)(validationFunc!string((string s) => Result.Error("b")))
         .change!(ParsingStep.validate)(validationFunc!int((int s) => Result.Error("c")));
 
@@ -144,36 +112,57 @@ unittest
 
 // Declared as a free function to avoid instantiating it for intermediate, incompletely built parsers, which
 // are not used to parse anything
-package(argparse) Result parseParameter(PARSE, RECEIVER, FUNCS...)(
-    ref const ValueParser2!(PARSE, RECEIVER, FUNCS) parser,
+package(argparse) Result parseParameter(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)(
+    ref const ValueParser2!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F) parser,
     ref RECEIVER receiver,
     RawParam rawParam,
 )
 in(parser.preProcess !is null)
 do
 {
-    if (rawParam.value.length == 0)
-        return parser.noValueAction(receiver, Param!void(rawParam.config, rawParam.name));
+    if(rawParam.value.length == 0)
+    {
+        auto param = Param!void(rawParam.config, rawParam.name);
+        static if(is(NO_VALUE_ACTION_F == byte))
+            return processingError(param); // Default no-value action
+        else
+            return parser.noValueAction(receiver, param);
+    }
 
     parser.preProcess(rawParam);
+    Result res;
 
-    Result res = validateAll(parser.preValidate, rawParam); // Be careful not to use UFCS
-    if (!res)
-        return res;
+    static if(!is(PRE_VALIDATE_F == byte))
+    {
+        res = validateAll(parser.preValidate, rawParam); // Be careful not to use UFCS
+        if(!res)
+            return res;
+    }
 
     auto parsedParam = Param!PARSE(rawParam.config, rawParam.name);
 
-    res = parser.parse(parsedParam.value, rawParam);
-    if (!res)
-        return res;
+    static if(!is(PARSE_F == byte))
+    {
+        res = parser.parse(parsedParam.value, rawParam);
+        if(!res)
+            return res;
+    }
 
-    res = parser.validate(parsedParam);
-    if (!res)
-        return res;
+    static if(!is(VALIDATE_F == byte))
+    {
+        res = parser.validate(parsedParam);
+        if(!res)
+            return res;
+    }
 
-    res = parser.action(receiver, parsedParam);
-    if (!res)
-        return res;
+    static if(!is(ACTION_F == byte))
+    {
+        res = parser.action(receiver, parsedParam);
+        if(!res)
+            return res;
+    }
+    else static if(is(RECEIVER == PARSE)) // Default action
+        receiver = parsedParam.value;
 
     return Result.Success;
 }
@@ -181,7 +170,7 @@ do
 unittest
 {
     int receiver;
-    auto vp = defaultValueParser2!(int, int)
+    auto vp = defaultValueParser2!(void, int)
         .change!(ParsingStep.preValidate)(validationFunc!string((string s) =>
             s.length ? Result.Success : Result.Error("prevalidation failed")
         ))
