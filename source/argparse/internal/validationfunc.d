@@ -59,32 +59,39 @@ private auto toFuncValidator(T, int strategy, F)(F func)
 
 package(argparse)
 {
-    auto validationFunc(T)(Result function(Param!T) func)     { return func; }
-    auto validationFunc(T)(bool   function(Param!T) func)     { return func.toFuncValidator!(T, 0); }
-    auto validationFunc(T)(Result function(T) func)           { return func.toFuncValidator!(T, 1); }
-    auto validationFunc(T)(bool   function(T) func)           { return func.toFuncValidator!(T, 2); }
-    auto validationFunc(T)(Result function(Param!(T[])) func) { return func.toFuncValidator!(T, 3); }
-    auto validationFunc(T)(bool   function(Param!(T[])) func) { return func.toFuncValidator!(T, 4); }
-    auto validationFunc(T : U[], U)(Result function(U) func)  { return func.toFuncValidator!(T, 5); }
-    auto validationFunc(T : U[], U)(bool function(U) func)    { return func.toFuncValidator!(T, 6); }
+    // These overloads also force functions to drop their attributes, reducing the variety of types we have to handle
+    auto ValidationFunc(T)(Result function(Param!T) func)     { return func; }
+    auto ValidationFunc(T)(bool   function(Param!T) func)     { return func.toFuncValidator!(T, 0); }
+    auto ValidationFunc(T)(Result function(T) func)           { return func.toFuncValidator!(T, 1); }
+    auto ValidationFunc(T)(bool   function(T) func)           { return func.toFuncValidator!(T, 2); }
+    auto ValidationFunc(T)(Result function(Param!(T[])) func) { return func.toFuncValidator!(T, 3); }
+    auto ValidationFunc(T)(bool   function(Param!(T[])) func) { return func.toFuncValidator!(T, 4); }
+    auto ValidationFunc(T : U[], U)(Result function(U) func)  { return func.toFuncValidator!(T, 5); }
+    auto ValidationFunc(T : U[], U)(bool function(U) func)    { return func.toFuncValidator!(T, 6); }
+
+    auto ValidationFunc(T, F)(F obj)
+    if(!is(typeof(*obj) == function) && is(typeof(obj(Param!T.init)) : Result))
+    {
+        return obj;
+    }
 }
 
 unittest
 {
     Config config;
-    auto fs = validationFunc!string((string s) => s.length > 0);
+    auto fs = ValidationFunc!string((string s) => s.length > 0);
     assert(!fs(Param!string(&config, "", "")));
     assert(fs(Param!string(&config, "", "a")));
 
-    auto fsa = validationFunc!(string[2])((string s) => s.length > 0);
+    auto fsa = ValidationFunc!(string[2])((string s) => s.length > 0);
     assert(!fsa(Param!(string[2])(&config, "", ["ab", ""])));
     assert(fsa(Param!(string[2])(&config, "", ["a", "cd"])));
 
-    auto fi = validationFunc!int((int x) => bool(x & 0x1));
+    auto fi = ValidationFunc!int((int x) => bool(x & 0x1));
     assert(!fi(Param!int(&config, "", 8)));
     assert(fi(Param!int(&config, "", 13)));
 
-    auto fa = validationFunc!(int[])((int x) => bool(x & 0x1));
+    auto fa = ValidationFunc!(int[])((int x) => bool(x & 0x1));
     assert(!fa(Param!(int[])(&config, "", [3, 8])));
     assert(fa(Param!(int[])(&config, "", [13, -1])));
 }
@@ -158,7 +165,7 @@ private struct Handler(TYPE)
 // Result validate(T value)
 // Result validate(T[] value)
 // Result validate(Param!T param)
-package(argparse) struct ValidationFunc(TYPE)
+package(argparse) struct ValidationFunc1(TYPE)
 {
     private struct ValueInList
     {
@@ -326,12 +333,6 @@ private struct ListValidator(TYPE)
 {
     bool[TYPE] values;
 
-    this(TYPE[] values)
-    {
-        foreach(v; values)
-            this.values[v.to!(immutable(TYPE))] = false;
-    }
-
     Result opCall(Param!TYPE param) const
     {
         if(!(param.value in values))
@@ -353,16 +354,19 @@ private struct ListValidator(TYPE)
     }
 }
 
-package(argparse) auto ValueInList(TYPE)(TYPE[] values...)
+package(argparse) auto ValueInList(TYPE)(const(TYPE)[] values...)
 {
-    alias VF = ValidationFunc!TYPE;
-    return VF(VF.ValueInList(values));
-    // return ListValidator!TYPE(values);
+    ListValidator!TYPE result;
+
+    foreach(v; values)
+        result.values[v.to!(immutable TYPE)] = false;
+
+    return result;
 }
 
 unittest
 {
-    enum values = ["a","b","c"];
+    immutable values = ["a","b","c"];
 
     import argparse.config;
     Config config;
@@ -370,8 +374,8 @@ unittest
     assert(ValueInList(values)(Param!string(&config, "", "b")));
     assert(!ValueInList(values)(Param!string(&config, "", "d")));
 
-    assert(ValueInList(values)(RawParam(&config, "", ["b"])));
-    assert(ValueInList(values)(RawParam(&config, "", ["b","a"])));
-    assert(!ValueInList(values)(RawParam(&config, "", ["d"])));
-    assert(!ValueInList(values)(RawParam(&config, "", ["b","d"])));
+    assert(ValueInList(values).validateAll(RawParam(&config, "", ["b"])));
+    assert(ValueInList(values).validateAll(RawParam(&config, "", ["b","a"])));
+    assert(!ValueInList(values).validateAll(RawParam(&config, "", ["d"])));
+    assert(!ValueInList(values).validateAll(RawParam(&config, "", ["b","d"])));
 }

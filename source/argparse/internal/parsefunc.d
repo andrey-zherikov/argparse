@@ -20,7 +20,7 @@ private struct FuncParser(T, int strategy, F)
         static if(strategy == 0)
         {
             if(!func(receiver, param))
-                return invalidValueError(param);
+                return processingError(param);
         }
         else static if(strategy == 1)
             func(receiver, param);
@@ -44,20 +44,27 @@ private auto toFuncParser(T, int strategy, F)(F func)
 
 package(argparse)
 {
-    auto parseFunc(T)(Result function(ref T, RawParam) func) { return func; }
-    auto parseFunc(T)(bool   function(ref T, RawParam) func) { return func.toFuncParser!(T, 0); }
-    auto parseFunc(T)(void   function(ref T, RawParam) func) { return func.toFuncParser!(T, 1); }
-    auto parseFunc(T)(T function(RawParam) func)             { return func.toFuncParser!(T, 2); }
-    auto parseFunc(T)(T function(string[]) func)             { return func.toFuncParser!(T, 3); }
-    auto parseFunc(T)(T function(string) func)               { return func.toFuncParser!(T, 4); }
+    // These overloads also force functions to drop their attributes, reducing the variety of types we have to handle
+    auto ParseFunc(T)(Result function(ref T, RawParam) func) { return func; }
+    auto ParseFunc(T)(bool   function(ref T, RawParam) func) { return func.toFuncParser!(T, 0); }
+    auto ParseFunc(T)(void   function(ref T, RawParam) func) { return func.toFuncParser!(T, 1); }
+    auto ParseFunc(T)(T function(RawParam) func)             { return func.toFuncParser!(T, 2); }
+    auto ParseFunc(T)(T function(string[]) func)             { return func.toFuncParser!(T, 3); }
+    auto ParseFunc(T)(T function(string) func)               { return func.toFuncParser!(T, 4); }
+
+    auto ParseFunc(T, F)(F obj)
+    if(!is(typeof(*obj) == function) && is(typeof({ T receiver; return obj(receiver, RawParam.init); }()) : Result))
+    {
+        return obj;
+    }
 }
 
 unittest
 {
     size_t receiver;
     Config config;
-    auto f = parseFunc!size_t((const(string)[] values) => values.length);
-    assert(f(receiver, RawParam(&config, "", ["a", "bc"])));
+    auto f = ParseFunc!size_t((const(string)[] values) => values.length);
+    assert(f(receiver, RawParam(&config, "", ["abc", "def"])));
     assert(receiver == 2);
 }
 
@@ -104,7 +111,7 @@ private struct Handler(TYPE)
 // Result parse(ref T receiver, RawParam param)
 // bool parse(ref T receiver, RawParam param)
 // void parse(ref T receiver, RawParam param)
-package(argparse) struct ParseFunc(RECEIVER)
+package(argparse) struct ParseFunc1(RECEIVER)
 {
     alias getFirstParameter(T) = Parameters!T[0];
     alias TYPES = staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!RECEIVER, "opCall")));
@@ -222,6 +229,7 @@ unittest
 // has to do this way otherwise DMD compiler chokes - linker reports unresolved symbol for lambda:
 // Error: undefined reference to `pure nothrow @nogc @safe immutable(char)[][] argparse.internal.parsefunc.__lambda12(immutable(char)[][])`
 //       referenced from `pure nothrow @nogc @safe argparse.internal.valueparser.ValueParser!(immutable(char)[][], void delegate()).ValueParser argparse.internal.valueparser.ValueParser!(void, void).ValueParser.addReceiverTypeDefaults!(void delegate()).addReceiverTypeDefaults()`
+// TODO: Investigate
 private enum PassThroughImpl(TYPE) = ParseFunc!TYPE
     ((TYPE value)
     {

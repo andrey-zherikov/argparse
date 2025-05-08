@@ -16,16 +16,16 @@ import std.traits;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void defaultPreProcessFunc(ref RawParam) {}
+private enum void function(ref RawParam) defaultPreProcessFunc = (ref _) {};
 
 package(argparse) enum ParsingStep
 {
     preProcess, preValidate, parse, validate, action, noValueAction
 }
 
-package(argparse) struct ValueParser2(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
+package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
 {
-    // We could have assigned `&defaultPreProcessFunc` to `preProcess`, but we would lose `__traits(isZeroInit)`
+    // We could have assigned `defaultPreProcessFunc` to `preProcess`, but we would lose `__traits(isZeroInit)`
     // and not really gain anything
     void function(ref RawParam) preProcess;
     PRE_VALIDATE_F preValidate;
@@ -33,6 +33,9 @@ package(argparse) struct ValueParser2(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, 
     VALIDATE_F validate;
     ACTION_F action;
     NO_VALUE_ACTION_F noValueAction;
+
+    // TODO: Figure out what this thing is doing here
+    alias typeDefaults = TypedValueParser;
 
     // TODO: We should ensure elsewhere that this substitution does not violate the type system. The compiler will catch
     // the error eventually, but if we check ourselves, we can provide far more relevant error message.
@@ -52,10 +55,10 @@ package(argparse) struct ValueParser2(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, 
         }
 
         alias newFuncs = AliasSeq!(this.tupleof[0 .. step], newFunc, this.tupleof[step + 1 .. $]);
-        return ValueParser2!(PARSE, RECEIVER, typeof(newFuncs[1 .. $]))(newFuncs);
+        return ValueParser!(PARSE, RECEIVER, typeof(newFuncs[1 .. $]))(newFuncs);
     }
 
-    auto addDefaults(OTHER_PARSE, OTHER_RECEIVER, OTHER_F...)(ValueParser2!(OTHER_PARSE, OTHER_RECEIVER, OTHER_F) other)
+    auto addDefaults(OTHER_PARSE, OTHER_RECEIVER, OTHER_F...)(ValueParser!(OTHER_PARSE, OTHER_RECEIVER, OTHER_F) other)
     {
         static if(is(PARSE == void))
             alias PARSE = OTHER_PARSE;
@@ -73,35 +76,35 @@ package(argparse) struct ValueParser2(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, 
             auto noValueAction = other.noValueAction;
 
         alias newFuncs = AliasSeq!(preValidate, parse, validate, action, noValueAction);
-        return ValueParser2!(PARSE, RECEIVER, typeof(newFuncs))(
-            preProcess is &defaultPreProcessFunc ? other.preProcess : preProcess,
+        return ValueParser!(PARSE, RECEIVER, typeof(newFuncs))(
+            preProcess is defaultPreProcessFunc ? other.preProcess : preProcess,
             newFuncs,
         );
     }
 }
 
 // We use `byte` as a placeholder for function types because it, unlike `void`, can be stored in a struct without
-// introducing special cases (e.g., `auto f = p.validate;` just works). Yes, `ValueParser2.sizeof` is then larger than
+// introducing special cases (e.g., `auto f = p.validate;` just works). Yes, `ValueParser.sizeof` is then larger than
 // theoretically possible (+24 bytes in the worst case), but this doesn't matter much: parsers are only used in UDAs
 // so the compiler is always able to allocate memory for them statically. (Instead of `byte`, we could have chosen
 // `typeof(null)`, which is more intuitive but occupies a whole machine word.)
-package(argparse) enum defaultValueParser2(PARSE, RECEIVER) =
-    ValueParser2!(PARSE, RECEIVER, byte, byte, byte, byte, byte)(&defaultPreProcessFunc);
+package(argparse) enum defaultValueParser(PARSE, RECEIVER) =
+    ValueParser!(PARSE, RECEIVER, byte, byte, byte, byte, byte)(defaultPreProcessFunc);
 
 unittest
 {
-    auto vp = defaultValueParser2!(void, void)
-        .change!(ParsingStep.preValidate)(validationFunc!string((string s) => Result.Error("test error")));
+    auto vp = defaultValueParser!(void, void)
+        .change!(ParsingStep.preValidate)(ValidationFunc!string((string s) => Result.Error("test error")));
     assert(vp.preValidate(Param!string(null, "", "")).isError("test error"));
 }
 
 unittest
 {
-    auto vp1 = defaultValueParser2!(void, void)
-        .change!(ParsingStep.preValidate)(validationFunc!string((string s) => Result.Error("a")));
-    auto vp2 = defaultValueParser2!(void, void)
-        .change!(ParsingStep.preValidate)(validationFunc!string((string s) => Result.Error("b")))
-        .change!(ParsingStep.validate)(validationFunc!int((int s) => Result.Error("c")));
+    auto vp1 = defaultValueParser!(void, void)
+        .change!(ParsingStep.preValidate)(ValidationFunc!string((string s) => Result.Error("a")));
+    auto vp2 = defaultValueParser!(void, void)
+        .change!(ParsingStep.preValidate)(ValidationFunc!string((string s) => Result.Error("b")))
+        .change!(ParsingStep.validate)(ValidationFunc!int((int s) => Result.Error("c")));
 
     auto vp3 = vp1.addDefaults(vp2);
     assert(vp3.preValidate is vp1.preValidate);
@@ -113,7 +116,7 @@ unittest
 // Declared as a free function to avoid instantiating it for intermediate, incompletely built parsers, which
 // are not used to parse anything
 package(argparse) Result parseParameter(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)(
-    ref const ValueParser2!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F) parser,
+    ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F) parser,
     ref RECEIVER receiver,
     RawParam rawParam,
 )
@@ -170,18 +173,18 @@ do
 unittest
 {
     int receiver;
-    auto vp = defaultValueParser2!(void, int)
-        .change!(ParsingStep.preValidate)(validationFunc!string((string s) =>
+    auto vp = defaultValueParser!(void, int)
+        .change!(ParsingStep.preValidate)(ValidationFunc!string((string s) =>
             s.length ? Result.Success : Result.Error("prevalidation failed")
         ))
-        .change!(ParsingStep.validate)(validationFunc!int((int x) => Result.Error("main validation failed")));
+        .change!(ParsingStep.validate)(ValidationFunc!int((int x) => Result.Error("main validation failed")));
     assert(vp.parseParameter(receiver, RawParam(null,"",[""])).isError("prevalidation failed"));
     assert(vp.parseParameter(receiver, RawParam(null,"",["a"])).isError("main validation failed"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
+package(argparse) struct ValueParser1(PARSE_TYPE, RECEIVER_TYPE)
 {
     //////////////////////////
     /// pre process
@@ -211,7 +214,7 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
     auto changeParse(P)(ParseFunc!P func) const
     if(is(PARSE_TYPE == void) || is(PARSE_TYPE == P))
     {
-        return ValueParser!(P, RECEIVER_TYPE)( parse: func ).addDefaults(this);
+        return ValueParser1!(P, RECEIVER_TYPE)( parse: func ).addDefaults(this);
     }
 
     //////////////////////////
@@ -222,7 +225,7 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
     auto changeValidation(P)(ValidationFunc!P func) const
     if(is(PARSE_TYPE == void) || is(PARSE_TYPE == P))
     {
-        return ValueParser!(P, RECEIVER_TYPE)( validate: func ).addDefaults(this);
+        return ValueParser1!(P, RECEIVER_TYPE)( validate: func ).addDefaults(this);
     }
 
     //////////////////////////
@@ -234,7 +237,7 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
     if((is(PARSE_TYPE == void) || is(PARSE_TYPE == P)) &&
         (is(RECEIVER_TYPE == void) || is(RECEIVER_TYPE == R)))
     {
-        return ValueParser!(P, R)( action: func ).addDefaults(this);
+        return ValueParser1!(P, R)( action: func ).addDefaults(this);
     }
 
     //////////////////////////
@@ -245,11 +248,11 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
     auto changeNoValueAction(R)(NoValueActionFunc!R func) const
     if(is(RECEIVER_TYPE == void) || is(RECEIVER_TYPE == R))
     {
-        return ValueParser!(PARSE_TYPE, R)( noValueAction: func ).addDefaults(this);
+        return ValueParser1!(PARSE_TYPE, R)( noValueAction: func ).addDefaults(this);
     }
 
     //////////////////////////
-    auto addDefaults(P, R)(ValueParser!(P, R) other) const
+    auto addDefaults(P, R)(ValueParser1!(P, R) other) const
     {
         static if(is(PARSE_TYPE == void))
             alias RES_P = P;
@@ -261,7 +264,7 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
         else
             alias RES_R = RECEIVER_TYPE;
 
-        ValueParser!(RES_P, RES_R) res;
+        ValueParser1!(RES_P, RES_R) res;
         res.preProcess = preProcess ? preProcess : other.preProcess;
         res.preValidate = preValidate ? preValidate : other.preValidate;
 
@@ -307,7 +310,7 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
     {
         static auto defaults()
         {
-            ValueParser!(PARSE_TYPE, RECEIVER_TYPE) res;
+            ValueParser1!(PARSE_TYPE, RECEIVER_TYPE) res;
 
             res.preProcess = (ref _) {};
             res.preValidate = (string _) => true;
@@ -372,12 +375,24 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
 unittest
 {
     int receiver;
-    auto vp = ValueParser!(void, void)()
-        .changeParse(ParseFunc!int((ref int i, RawParam p) => Result.Error("test error")));
+    auto vp = defaultValueParser!(void, void)
+        .change!(ParsingStep.parse)(ParseFunc!int((ref int i, RawParam p) => Result.Error("test error")));
     assert(vp.parse(receiver, RawParam(null,"",[""])).isError("test error"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private void preProcessBool(ref RawParam param)
+{
+    import std.algorithm.iteration: map;
+    import std.array: array;
+    import std.ascii: toLower;
+    import std.string: representation;
+
+    // convert values to lower case and replace "" with "y"
+    foreach(ref value; param.value)
+        value = value.length == 0 ? "y" : value.representation.map!(_ => immutable char(_.toLower)).array;
+}
 
 private template TypedValueParser(T)
 if(!is(T == void))
@@ -386,31 +401,21 @@ if(!is(T == void))
 
     static if(is(T == enum))
     {
-        enum TypedValueParser = ValueParser!(T, T).defaults
-            .changePreValidation(ValueInList(getEnumValues!T))
-            .changeParse(ParseFunc!T((string _) => getEnumValue!T(_)));
+        enum TypedValueParser = defaultValueParser!(T, T)
+            .change!(ParsingStep.preValidate)(ValueInList(getEnumValues!T))
+            .change!(ParsingStep.parse)(ParseFunc!T((string _) => getEnumValue!T(_)));
     }
     else static if(isSomeString!T || isNumeric!T)
     {
-        enum TypedValueParser = ValueParser!(T, T).defaults
-            .changeParse(Convert!T);
+        enum TypedValueParser = defaultValueParser!(T, T)
+            .change!(ParsingStep.parse)(Convert!T);
     }
     else static if(isBoolean!T)
     {
-        enum TypedValueParser = ValueParser!(T, T).defaults
-            .changePreProcess((ref RawParam param)
-            {
-                import std.algorithm.iteration: map;
-                import std.array: array;
-                import std.ascii: toLower;
-                import std.string: representation;
-
-                // convert values to lower case and replace "" with "y"
-                foreach(ref value; param.value)
-                    value = value.length == 0 ? "y" : value.representation.map!(_ => immutable char(_.toLower)).array;
-            })
-            .changePreValidation(ValueInList("true","yes","y","false","no","n"))
-            .changeParse(ParseFunc!T((string value)
+        enum TypedValueParser = defaultValueParser!(T, T)
+            .change!(ParsingStep.preProcess)(&preProcessBool)
+            .change!(ParsingStep.preValidate)(ValueInList("true","yes","y","false","no","n"))
+            .change!(ParsingStep.parse)(ParseFunc!T((string value)
             {
                 switch(value)
                 {
@@ -418,12 +423,12 @@ if(!is(T == void))
                     default:                 return false;
                 }
             }))
-            .changeNoValueAction(SetValue(true));
+            .change!(ParsingStep.noValueAction)(SetValue(true));
     }
     else static if(isSomeChar!T)
     {
-        enum TypedValueParser = ValueParser!(T, T).defaults
-            .changeParse(ParseFunc!T((string value)
+        enum TypedValueParser = defaultValueParser!(T, T)
+            .change!(ParsingStep.parse)(ParseFunc!T((string value)
             {
                 return value.length > 0 ? value[0].to!T : T.init;
             }));
@@ -458,17 +463,17 @@ if(!is(T == void))
             else
                 enum action = Assign!T;
 
-            enum TypedValueParser = ValueParser!(T, T).defaults
-                .changeParse(parseValue!T)
-                .changeAction(action)
-                .changeNoValueAction(NoValueActionFunc!T((ref _1, _2) => Result.Success));
+            enum TypedValueParser = defaultValueParser!(T, T)
+                .change!(ParsingStep.parse)(parseValue!T)
+                .change!(ParsingStep.action)(action)
+                .change!(ParsingStep.noValueAction)(NoValueActionFunc!T((ref _1, _2) => Result.Success));
         }
         else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
         {
-            enum TypedValueParser = ValueParser!(TElement, T).defaults
-                .changeParse(parseValue!TElement)
-                .changeAction(Extend!T)
-                .changeNoValueAction(NoValueActionFunc!T((ref T receiver, _) { receiver ~= TElement.init; return Result.Success; }));
+            enum TypedValueParser = defaultValueParser!(TElement, T)
+                .change!(ParsingStep.parse)(parseValue!TElement)
+                .change!(ParsingStep.action)(Extend!T)
+                .change!(ParsingStep.noValueAction)(NoValueActionFunc!T((ref T receiver, _) { receiver ~= TElement.init; return Result.Success; }));
         }
         else
             static assert(false, "Multi-dimentional arrays are not supported: " ~ T.stringof);
@@ -476,9 +481,9 @@ if(!is(T == void))
     else static if(isAssociativeArray!T)
     {
         import std.string : indexOf;
-        enum TypedValueParser = ValueParser!(string[], T).defaults
-            .changeParse(PassThrough)
-            .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
+        enum TypedValueParser = defaultValueParser!(string[], T)
+            .change!(ParsingStep.parse)(PassThrough)
+            .change!(ParsingStep.action)(ActionFunc!(T,string[])((ref T receiver, RawParam param)
             {
                 alias K = KeyType!T;
                 alias V = ValueType!T;
@@ -503,19 +508,19 @@ if(!is(T == void))
                 }
                 return Result.Success;
             }))
-            .changeNoValueAction(NoValueActionFunc!T((ref _1, _2) => Result.Success));
+            .change!(ParsingStep.noValueAction)(NoValueActionFunc!T((ref _1, _2) => Result.Success));
     }
     else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
-        enum TypedValueParser = ValueParser!(string[], T).defaults
-            .changeParse(PassThrough)
-            .changeAction(CallFunction!T)
-            .changeNoValueAction(CallFunctionNoParam!T);
+        enum TypedValueParser = defaultValueParser!(string[], T)
+            .change!(ParsingStep.parse)(PassThrough)
+            .change!(ParsingStep.action)(CallFunction!T)
+            .change!(ParsingStep.noValueAction)(CallFunctionNoParam!T);
     }
     else
     {
-        enum TypedValueParser = ValueParser!(T, T).defaults
-            .changeAction(Assign!T);
+        enum TypedValueParser = defaultValueParser!(T, T)
+            .change!(ParsingStep.action)(Assign!T);
     }
 }
 

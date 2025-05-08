@@ -44,12 +44,19 @@ private auto toInvoker(RECEIVER, PARSE, int strategy, F)(F func)
 
 package(argparse)
 {
-    auto actionFunc(RECEIVER, PARSE)(Result function(ref RECEIVER, Param!PARSE) func) { return func; }
-    auto actionFunc(RECEIVER, PARSE)(bool   function(ref RECEIVER, Param!PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 0); }
-    auto actionFunc(RECEIVER, PARSE)(void   function(ref RECEIVER, Param!PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 1); }
-    auto actionFunc(RECEIVER, PARSE)(Result function(ref RECEIVER, PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 2); }
-    auto actionFunc(RECEIVER, PARSE)(bool   function(ref RECEIVER, PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 3); }
-    auto actionFunc(RECEIVER, PARSE)(void   function(ref RECEIVER, PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 4); }
+    // These overloads also force functions to drop their attributes, reducing the variety of types we have to handle
+    auto ActionFunc(RECEIVER, PARSE)(Result function(ref RECEIVER, Param!PARSE) func) { return func; }
+    auto ActionFunc(RECEIVER, PARSE)(bool   function(ref RECEIVER, Param!PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 0); }
+    auto ActionFunc(RECEIVER, PARSE)(void   function(ref RECEIVER, Param!PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 1); }
+    auto ActionFunc(RECEIVER, PARSE)(Result function(ref RECEIVER, PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 2); }
+    auto ActionFunc(RECEIVER, PARSE)(bool   function(ref RECEIVER, PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 3); }
+    auto ActionFunc(RECEIVER, PARSE)(void   function(ref RECEIVER, PARSE) func) { return func.toInvoker!(RECEIVER, PARSE, 4); }
+
+    auto ActionFunc(RECEIVER, PARSE, F)(F obj)
+    if(!is(typeof(*obj) == function) && is(typeof({ RECEIVER receiver; return obj(receiver, Param!PARSE.init); }()) : Result))
+    {
+        return obj;
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,7 +99,7 @@ private struct Handler(RECEIVER, PARSE)
 // bool action(ref T receiver, Param!ParseType param)
 // void action(ref T receiver, Param!ParseType param)
 // Result action(ref T receiver, Param!ParseType param)
-package(argparse) struct ActionFunc(RECEIVER, PARSE)
+package(argparse) struct ActionFunc1(RECEIVER, PARSE)
 {
     alias getFirstParameter(T) = Parameters!T[0];
     alias TYPES = staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!(RECEIVER, PARSE), "opCall")));
@@ -231,8 +238,8 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package enum CallFunction(FUNC) = ActionFunc!(FUNC, string[])
-    ((ref FUNC func, RawParam param)
+package enum CallFunction(FUNC) =
+    (ref FUNC func, RawParam param)
     {
         // ... func()
         static if(__traits(compiles, { func(); }))
@@ -259,5 +266,5 @@ package enum CallFunction(FUNC) = ActionFunc!(FUNC, string[])
             static assert(false, "Unsupported callback: " ~ FUNC.stringof);
 
         return Result.Success;
-    });
+    };
 

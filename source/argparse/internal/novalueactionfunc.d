@@ -12,6 +12,20 @@ import std.sumtype;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+package(argparse)
+{
+    // This overload also forces functions to drop their attributes, reducing the variety of types we have to handle
+    auto NoValueActionFunc(T)(Result function(ref T, Param!void) func) { return func; }
+
+    auto NoValueActionFunc(T, F)(F obj)
+    if(!is(typeof(*obj) == function) && is(typeof({ T receiver; return obj(receiver, Param!void.init); }()) : Result))
+    {
+        return obj;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 private struct ValueSetter(RECEIVER)
 {
     RECEIVER value;
@@ -25,7 +39,7 @@ private struct ValueSetter(RECEIVER)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) struct NoValueActionFunc(RECEIVER)
+package(argparse) struct NoValueActionFunc1(RECEIVER)
 {
     private struct ProcessingError
     {
@@ -98,9 +112,8 @@ unittest
 
 package(argparse) auto SetValue(VALUE)(VALUE value)
 {
-    return NoValueActionFunc!VALUE(NoValueActionFunc!VALUE.SetValue(value));
-    // ValueSetter!VALUE vs = { value };
-    // return vs;
+    ValueSetter!VALUE vs = { value };
+    return vs;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
