@@ -5,9 +5,6 @@ import argparse.param;
 import argparse.result;
 import argparse.internal.errorhelpers;
 
-import std.traits;
-import std.sumtype;
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,116 +63,6 @@ unittest
     auto f = ParseFunc!size_t((const(string)[] values) => values.length);
     assert(f(receiver, RawParam(&config, "", ["abc", "def"])));
     assert(receiver == 2);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private struct Handler(TYPE)
-{
-    static Result opCall(TYPE function(string[] value) func, ref TYPE receiver, RawParam param)
-    {
-        receiver = func(param.value);
-        return Result.Success;
-    }
-    static Result opCall(TYPE function(string value) func, ref TYPE receiver, RawParam param)
-    {
-        foreach (value; param.value)
-            receiver = func(value);
-        return Result.Success;
-    }
-    static Result opCall(TYPE function(RawParam param) func, ref TYPE receiver, RawParam param)
-    {
-        receiver = func(param);
-        return Result.Success;
-    }
-    static Result opCall(Result function(ref TYPE receiver, RawParam param) func, ref TYPE receiver, RawParam param)
-    {
-        return func(receiver, param);
-    }
-    static Result opCall(bool function(ref TYPE receiver, RawParam param) func, ref TYPE receiver, RawParam param)
-    {
-        return func(receiver, param) ? Result.Success : processingError(param);
-    }
-    static Result opCall(void function(ref TYPE receiver, RawParam param) func, ref TYPE receiver, RawParam param)
-    {
-        func(receiver, param);
-        return Result.Success;
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// T parse(string[] value)
-// T parse(string value)
-// T parse(RawParam param)
-// Result parse(ref T receiver, RawParam param)
-// bool parse(ref T receiver, RawParam param)
-// void parse(ref T receiver, RawParam param)
-package(argparse) struct ParseFunc1(RECEIVER)
-{
-    alias getFirstParameter(T) = Parameters!T[0];
-    alias TYPES = staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!RECEIVER, "opCall")));
-
-    SumType!TYPES F;
-
-    static foreach(T; TYPES)
-    this(T func)
-    {
-        F = func;
-    }
-
-    static foreach(T; TYPES)
-    auto opAssign(T func)
-    {
-        F = func;
-    }
-
-    bool opCast(T : bool)() const
-    {
-        return F != typeof(F).init;
-    }
-
-    Result opCall(ref RECEIVER receiver, RawParam param) const
-    {
-        return F.match!(_ => Handler!RECEIVER(_, receiver, param));
-    }
-}
-
-unittest
-{
-    auto test(T, F)(F func, string[] values)
-    {
-        T receiver;
-        Config config;
-        assert(ParseFunc!T(func)(receiver, RawParam(&config, "", values)));
-        return receiver;
-    }
-    auto testErr(T, F)(F func, string[] values)
-    {
-        T receiver;
-        Config config;
-        return ParseFunc!T(func)(receiver, RawParam(&config, "", values));
-    }
-
-    // T parse(string value)
-    assert(test!string((string a) => a, ["1","2","3"]) == "3");
-
-    // T parse(string[] value)
-    assert(test!(string[])((string[] a) => a, ["1","2","3"]) == ["1","2","3"]);
-
-    // T parse(RawParam param)
-    assert(test!string((RawParam p) => p.value[0], ["1","2","3"]) == "1");
-
-    // Result parse(ref T receiver, RawParam param)
-    assert(test!(string[])((ref string[] r, RawParam p) { r = p.value; return Result.Success; }, ["1","2","3"]) == ["1","2","3"]);
-    assert(testErr!(string[])((ref string[] r, RawParam p) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
-
-    // bool parse(ref T receiver, RawParam param)
-    assert(test!(string[])((ref string[] r, RawParam p) { r = p.value; return true; }, ["1","2","3"]) == ["1","2","3"]);
-    assert(testErr!(string[])((ref string[] r, RawParam p) => false, ["1","2","3"]).isError("Can't process value"));
-
-    // void parse(ref T receiver, RawParam param)
-    assert(test!(string[])((ref string[] r, RawParam p) { r = p.value; }, ["1","2","3"]) == ["1","2","3"]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

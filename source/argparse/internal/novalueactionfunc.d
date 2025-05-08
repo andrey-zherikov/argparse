@@ -5,10 +5,6 @@ import argparse.param;
 import argparse.result;
 import argparse.internal.errorhelpers;
 
-import std.meta;
-import std.traits;
-import std.sumtype;
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,71 +17,6 @@ package(argparse)
     if(!is(typeof(*obj) == function) && is(typeof({ T receiver; return obj(receiver, Param!void.init); }()) : Result))
     {
         return obj;
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-private struct ValueSetter(RECEIVER)
-{
-    RECEIVER value;
-
-    Result opCall(ref RECEIVER receiver, Param!void) const
-    {
-        receiver = value;
-        return Result.Success;
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package(argparse) struct NoValueActionFunc1(RECEIVER)
-{
-    private struct ProcessingError
-    {
-        Result opCall(ref RECEIVER receiver, Param!void param) const
-        {
-            return processingError(param);
-        }
-    }
-
-    private struct SetValue
-    {
-        RECEIVER value;
-
-        this(RECEIVER v)
-        {
-            value = v;
-        }
-
-        Result opCall(ref RECEIVER receiver, Param!void param) const
-        {
-            import std.conv: to;
-
-            receiver = value.to!RECEIVER;
-
-            return Result.Success;
-        }
-    }
-
-    alias TYPES = AliasSeq!(ProcessingError, Result function(ref RECEIVER receiver, Param!void param), SetValue);
-
-    SumType!TYPES F;
-
-    static foreach(T; TYPES)
-    this(T func)
-    {
-        F = func;
-    }
-
-    bool opCast(T : bool)() const
-    {
-        return F != typeof(F).init;
-    }
-
-    Result opCall(ref RECEIVER receiver, Param!void param) const
-    {
-        return F.match!(_ => _(receiver, param));
     }
 }
 
@@ -109,6 +40,17 @@ unittest
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private struct ValueSetter(RECEIVER)
+{
+    RECEIVER value;
+
+    Result opCall(ref RECEIVER receiver, Param!void) const
+    {
+        receiver = value;
+        return Result.Success;
+    }
+}
 
 package(argparse) auto SetValue(VALUE)(VALUE value)
 {
