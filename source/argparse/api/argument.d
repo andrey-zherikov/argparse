@@ -118,12 +118,214 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-auto PositionalArgument()
+private struct NotSet {}
+
+private enum isSet(T : NotSet) = false;
+private enum isSet(T) = true;
+
+private enum isNotSet(T : NotSet) = true;
+private enum isNotSet(T) = false;
+
+private enum isPreValidation(T) = is(T == RETURN function(VALUE), RETURN, VALUE) &&
+    (is(VALUE == string) || is(VALUE == string[]) || is(VALUE == RawParam)) &&
+    (is(RETURN == bool) || is(RETURN == Result));
+
+private enum isParse(T) =
+    (
+        is(T == RECEIVER function(VALUE), RECEIVER, VALUE) &&
+        (is(VALUE == string) || is(VALUE == string[]) || is(VALUE == RawParam))
+    ) ||
+    (
+        is(T == RETURN function(ref RECEIVER, RawParam), RETURN, RECEIVER) &&
+        (is(RETURN == void) || is(RETURN == bool) || is(RETURN == Result))
+    );
+
+private enum isValidation(T) = is(T == RETURN function(VALUE), RETURN, VALUE) &&
+    (is(RETURN == bool) || is(RETURN == Result));
+
+private enum isAction(T) = is(T == RETURN function(ref RECEIVER, VALUE), RETURN, RECEIVER, VALUE) &&
+    (is(RETURN == void) || is(RETURN == bool) || is(RETURN == Result));
+
+//positional:
+//Placeholder
+
+//auto Argument(
+//    AllowNoValue = NotSet,
+//    ForceNoValue = NotSet,
+//    PreValidation = NotSet,
+//    Parse = NotSet,
+//    Validation = NotSet,
+//    Action = NotSet,
+//    AllowedValues = NotSet
+//)(
+//    bool Required,
+//    bool Hidden = false,
+//    string description = "",
+//    size_t minNumberOfValues = size_t(-1),
+//    size_t maxNumberOfValues = size_t(-1),
+//    AllowNoValue allowNoValue = AllowNoValue.init,
+//    ForceNoValue forceNoValue = ForceNoValue.init,
+//    PreValidation preValidation = PreValidation.init,
+//    Parse parse = Parse.init,
+//    Validation validation = Validation.init,
+//    Action action = Action.init,
+//    AllowedValues allowedValues = AllowedValues.init
+//)
+//if(
+//    (isNotSet!AllowNoValue || isNotSet!ForceNoValue) &&
+//    (isNotSet!PreValidation || isPreValidation!PreValidation) &&
+//    (isNotSet!Parse || isParse!Parse) &&
+//    (isNotSet!Validation || isValidation!Validation) &&
+//    (isNotSet!Action || isAction!Action) &&
+//    (isNotSet!AllowedValues || isArray!AllowedValues)
+//)
+//{}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// THIS IS NOT USABLE DUE TO https://github.com/dlang/dmd/issues/21335
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+auto PositionalArgument(
+        AllowNoValue    = NotSet,
+        ForceNoValue    = NotSet,
+        AllowedValues   = NotSet,
+        PreValidation   = NotSet,
+        Parse           = NotSet,
+        Validation      = NotSet,
+        Action          = NotSet,
+    )
+    (
+        uint position               = uint(-1),
+        string placeholder          = "",
+        bool required               = true,
+        bool hidden                 = false,
+        string description          = "",
+        size_t minNumberOfValues    = size_t(-1),
+        size_t maxNumberOfValues    = size_t(-1),
+        AllowNoValue allowNoValue   = AllowNoValue.init,
+        ForceNoValue forceNoValue   = ForceNoValue.init,
+        AllowedValues allowedValues = AllowedValues.init,
+        PreValidation preValidation = PreValidation.init,
+        Parse parse                 = Parse.init,
+        Validation validation       = Validation.init,
+        Action action               = Action.init,
+    )
+if(
+    (!isSet!AllowNoValue  || !isSet!ForceNoValue) &&
+    (!isSet!AllowedValues || isArray!AllowedValues) &&
+    (!isSet!PreValidation || isPreValidation!PreValidation) &&
+    (!isSet!Parse         || isParse!Parse) &&
+    (!isSet!Validation    || isValidation!Validation) &&
+    (!isSet!Action        || isAction!Action)
+)
 {
-    auto arg = ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo.init).Required();
-    arg.info.positional = true;
-    return arg;
+    assert(minNumberOfValues == size_t(-1) || maxNumberOfValues == size_t(-1) || minNumberOfValues <= maxNumberOfValues);
+
+    auto arg0 = ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo.init);
+    arg0.info.positional = true;
+
+    if(position != uint(-1))
+        arg0.info.position = position;
+
+    if(placeholder.length > 0)
+        arg0 = arg0.Placeholder(placeholder);
+
+    if(required)
+        arg0 = arg0.Required();
+    else
+        arg0 = arg0.Optional();
+
+    if(hidden)
+        arg0 = arg0.Hidden();
+
+    if(description.length > 0)
+        arg0 = arg0.Description(description);
+
+    if(minNumberOfValues != size_t(-1))
+        arg0 = arg0.MinNumberOfValues(minNumberOfValues);
+
+    if(maxNumberOfValues != size_t(-1))
+        arg0 = arg0.MaxNumberOfValues(maxNumberOfValues);
+
+    static if(isSet!AllowNoValue)
+        auto arg1 = arg0.AllowNoValue(allowNoValue);
+    else
+        auto arg1 = arg0;
+
+    static if(isSet!ForceNoValue)
+        auto arg2 = arg1.ForceNoValue(forceNoValue);
+    else
+        auto arg2 = arg1;
+
+    static if(isSet!AllowedValues)
+        auto arg3 = arg2.AllowedValues(allowedValues);
+    else
+        auto arg3 = arg2;
+
+    static if(isSet!PreValidation)
+        auto arg4 = arg3.PreValidation(preValidation);
+    else
+        auto arg4 = arg3;
+
+    static if(isSet!Parse)
+        auto arg5 = arg4.Parse(parse);
+    else
+        auto arg5 = arg4;
+
+    static if(isSet!Validation)
+        auto arg6 = arg5.Validation(validation);
+    else
+        auto arg6 = arg5;
+
+    static if(isSet!Action)
+        auto arg7 = arg6.Action(action);
+    else
+        auto arg7 = arg6;
+
+    return arg7;
 }
+
+unittest
+{
+    auto arg = PositionalArgument();
+    assert(arg.info.required);
+    assert(arg.info.positional);
+    assert(arg.info.position.isNull);
+}
+
+unittest
+{
+    auto arg = PositionalArgument(
+        position          : 3,
+        placeholder       : "placeholder",
+        required          : false,
+        hidden            : true,
+        description       : "description",
+        minNumberOfValues : 5,
+        maxNumberOfValues : 7,
+    );
+    assert(arg.info.positional);
+    assert(arg.info.position == 3);
+    assert(arg.info.placeholder == "placeholder");
+    assert(!arg.info.required);
+    assert(arg.info.hidden);
+    assert(arg.info.description.get == "description");
+    assert(arg.info.minValuesCount == 5);
+    assert(arg.info.maxValuesCount == 7);
+}
+
+unittest
+{
+    assert(PositionalArgument(allowNoValue : "abc") == PositionalArgument().AllowNoValue("abc"));
+    assert(PositionalArgument(forceNoValue : "abc") == PositionalArgument().ForceNoValue("abc"));
+}
+
+
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! // TODO: unittest for ^
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 auto PositionalArgument(uint position)
 {
@@ -148,14 +350,6 @@ auto NamedArgument(string[] names...)
     auto arg = NamedArgument([], []);
     arg.info.namesToSplit = names;
     return arg;
-}
-
-unittest
-{
-    auto arg = PositionalArgument();
-    assert(arg.info.required);
-    assert(arg.info.positional);
-    assert(arg.info.position.isNull);
 }
 
 unittest
