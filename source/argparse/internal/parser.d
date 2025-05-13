@@ -676,7 +676,7 @@ unittest
     struct T
     {
         @NamedArgument bool c;
-        @PositionalArgument(0) string fileName;
+        @PositionalArgument string fileName;
     }
 
     enum Config cfg = { stylingMode: Config.StylingMode.off };
@@ -873,13 +873,13 @@ unittest
     import argparse.api.subcommand: SubCommand;
 
     struct c1 {
-        @PositionalArgument(0)
+        @PositionalArgument
         string foo;
-        @(PositionalArgument(1).Optional)
+        @(PositionalArgument.Optional)
         string boo;
     }
     struct cmd {
-        @PositionalArgument(0)
+        @PositionalArgument
         string foo;
 
         SubCommand!(c1) c;
@@ -966,13 +966,13 @@ unittest
     import argparse.api.subcommand: Default, SubCommand;
 
     struct c1 {
-        @PositionalArgument(0)
+        @PositionalArgument
         string foo;
-        @(PositionalArgument(1).Optional)
+        @(PositionalArgument.Optional)
         string boo;
     }
     struct cmd {
-        @PositionalArgument(0)
+        @PositionalArgument
         string foo;
 
         SubCommand!(Default!c1) c;
@@ -1066,23 +1066,23 @@ unittest
     import argparse.api.subcommand: Default, SubCommand;
 
     struct c2 {
-        @PositionalArgument(0)
+        @PositionalArgument
         string foo;
-        @PositionalArgument(1)
+        @PositionalArgument
         string boo;
         @NamedArgument
         string bar;
     }
     struct c1 {
-        @PositionalArgument(0)
+        @PositionalArgument
         string foo;
-        @PositionalArgument(1)
+        @PositionalArgument
         string boo;
 
         SubCommand!(Default!c2) c;
     }
     struct cmd {
-        @PositionalArgument(0)
+        @PositionalArgument
         string foo;
 
         SubCommand!(Default!c1) c;
@@ -1113,9 +1113,9 @@ unittest
     import argparse.api.subcommand: Default, SubCommand;
 
     struct c2 {
-        @PositionalArgument(0)
+        @PositionalArgument
         string foo;
-        @PositionalArgument(1)
+        @PositionalArgument
         string boo;
         @NamedArgument
         string bar;
@@ -1124,7 +1124,7 @@ unittest
         SubCommand!(Default!c2) c;
     }
     struct cmd {
-        @PositionalArgument(0)
+        @PositionalArgument
         string foo;
 
         SubCommand!(Default!c1) c;

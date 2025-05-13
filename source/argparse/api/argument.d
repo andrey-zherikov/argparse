@@ -125,6 +125,11 @@ auto PositionalArgument()
     return arg;
 }
 
+auto PositionalArgument(string placeholder)
+{
+    return PositionalArgument().Placeholder(placeholder);
+}
+
 auto PositionalArgument(uint position)
 {
     auto arg = ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo.init).Required();
@@ -152,10 +157,11 @@ auto NamedArgument(string[] names...)
 
 unittest
 {
-    auto arg = PositionalArgument();
+    auto arg = PositionalArgument("foo");
     assert(arg.info.required);
     assert(arg.info.positional);
     assert(arg.info.position.isNull);
+    assert(arg.info.placeholder == "foo");
 }
 
 unittest

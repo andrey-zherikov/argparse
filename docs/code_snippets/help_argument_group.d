@@ -13,7 +13,7 @@ struct T
             string a;
             string b;
         }
-        @PositionalArgument(0) string p;
+        @PositionalArgument string p;
     }
 
     @(ArgumentGroup("group2").Description("group2 description"))
@@ -22,7 +22,7 @@ struct T
         string c;
         string d;
     }
-    @PositionalArgument(1) string q;
+    @PositionalArgument string q;
 }
 
 T t;

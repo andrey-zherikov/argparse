@@ -28,7 +28,7 @@ auto filter(R)(R numbers, Filter filt)
 )
 struct sum
 {
-    @PositionalArgument(0)
+    @PositionalArgument
     int[] numbers;
 }
 
@@ -39,7 +39,7 @@ struct sum
 )
 struct MinCmd
 {
-    @PositionalArgument(0)
+    @PositionalArgument
     int[] numbers;
 }
 
@@ -50,7 +50,7 @@ struct MinCmd
 )
 struct MaxCmd
 {
-    @PositionalArgument(0)
+    @PositionalArgument
     int[] numbers;
 }
 
