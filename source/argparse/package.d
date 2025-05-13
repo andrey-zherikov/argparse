@@ -451,7 +451,7 @@ unittest
         @NamedArgument
         string b;
 
-        @PositionalArgument(0)
+        @PositionalArgument
         string[] args;
     }
 
@@ -755,7 +755,7 @@ unittest
                 string a;
                 string b;
             }
-            @PositionalArgument(0) string p;
+            @PositionalArgument string p;
         }
 
         @(ArgumentGroup("group2").Description("group2 description"))
@@ -764,7 +764,7 @@ unittest
             string c;
             string d;
         }
-        @PositionalArgument(1) string q;
+        @PositionalArgument string q;
     }
 
     import std.array: appender;

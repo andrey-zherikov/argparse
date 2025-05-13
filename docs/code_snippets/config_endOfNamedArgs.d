@@ -3,8 +3,8 @@ import argparse;
 struct T
 {
     @NamedArgument string a;
-    @PositionalArgument(0) string b;
-    @PositionalArgument(1) string[] c;
+    @PositionalArgument string b;
+    @PositionalArgument string[] c;
 }
 
 enum Config cfg = { endOfNamedArgs: "---" };

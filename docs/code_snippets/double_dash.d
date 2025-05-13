@@ -7,7 +7,7 @@ struct T
     @NamedArgument
     string b;
 
-    @PositionalArgument(0)
+    @PositionalArgument
     string[] args;
 }
 
