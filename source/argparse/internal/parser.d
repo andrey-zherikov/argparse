@@ -144,7 +144,7 @@ private Entry getNextEntry(const ref Config config, ref string[] args,
                            FindResult delegate(string) findLongNamedArg,
                            Command delegate() delegate(string) findCommand)
 {
-    import std.algorithm : startsWith;
+    import std.algorithm : startsWith, min;
     import std.range: popFront;
     import std.string : indexOf;
 
@@ -203,7 +203,10 @@ private Entry getNextEntry(const ref Config config, ref string[] args,
                 if (res.arg)
                 {
                     args.popFront;
-                    auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
+                    auto values = consumeValuesFromCLI(args,
+                                                       res.arg.info.minValuesCount.get,
+                                                       config.atMostOneValuePerNamedArg ? min(1, res.arg.info.maxValuesCount.get) : res.arg.info.maxValuesCount.get,
+                                                       isArgumentValue);
                     return createArgument(arg0, values, res);
                 }
             }
@@ -266,7 +269,10 @@ private Entry getNextEntry(const ref Config config, ref string[] args,
                 if (res.arg)
                 {
                     args.popFront;
-                    auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
+                    auto values = consumeValuesFromCLI(args,
+                                                       res.arg.info.minValuesCount.get,
+                                                       config.atMostOneValuePerNamedArg ? min(1, res.arg.info.maxValuesCount.get) : res.arg.info.maxValuesCount.get,
+                                                       isArgumentValue);
                     return createArgument(arg0, values, res);
                 }
             }
@@ -666,6 +672,40 @@ if(config.stylingMode == Config.StylingMode.autodetect)
         return callParser!(enableStyling(config, true), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
     else
         return callParser!(enableStyling(config, false), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+unittest
+{
+    import argparse.api.argument;
+
+    struct T
+    {
+        @(NamedArgument.NumberOfValues(2,4)) string[] f;
+    }
+
+    {
+        enum Config config = { atMostOneValuePerNamedArg: false };
+
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(config, false)(t, ["-f", "a"], unrecognizedArgs).isError("Argument", "expected at least 2 values"));
+        assert(callParser!(config, false)(t, ["-f", "a", "a"], unrecognizedArgs));
+        assert(callParser!(config, false)(t, ["-f", "a", "a", "a"], unrecognizedArgs));
+        assert(callParser!(config, false)(t, ["-f", "a", "a", "a", "a"], unrecognizedArgs));
+
+        assert(unrecognizedArgs.length == 0);
+        assert(callParser!(config, false)(t, ["-f", "a", "a", "a", "a", "a"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["a"]);
+    }
+    {
+        T t;
+        string[] unrecognizedArgs;
+        assert(callParser!(Config.init, false)(t, ["-f=a,a"], unrecognizedArgs));
+        assert(callParser!(Config.init, false)(t, ["-f=a,a,a"], unrecognizedArgs));
+        assert(callParser!(Config.init, false)(t, ["-f=a,a,a,a"], unrecognizedArgs));
+        assert(callParser!(Config.init, false)(t, ["-f=a,a,a,a,a"], unrecognizedArgs).isError("Argument","expected at most 4 values"));
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

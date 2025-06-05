@@ -72,6 +72,12 @@ struct Config
     bool bundling = false;
 
     /**
+        Maximum one value per appearance of named argument in command line.
+        Enabled by default.
+     */
+    bool atMostOneValuePerNamedArg = true;
+
+    /**
        Add a -h/--help argument to the parser.
        Defaults to true.
      */

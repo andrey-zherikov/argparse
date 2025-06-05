@@ -266,13 +266,19 @@ if(!is(T == void))
     {
         enum parseValue(TYPE) = ParseFunc!TYPE((ref TYPE receiver, RawParam param)
             {
+                import std.array: split;
+
+                auto values = param.value.length == 1 && param.config.atMostOneValuePerNamedArg ?
+                              param.value[0].split(param.config.valueSep) :
+                              param.value;
+
                 static if(!isStaticArray!TYPE)
                 {
-                    if(receiver.length < param.value.length)
-                        receiver.length = param.value.length;
+                    if(receiver.length < values.length)
+                        receiver.length = values.length;
                 }
 
-                foreach(i, value; param.value)
+                foreach(i, value; values)
                 {
                     Result res = TypedValueParser!(ForeachType!TYPE).parseParameter(receiver[i], RawParam(param.config, param.name, [value]));
                     if(!res)
@@ -309,7 +315,9 @@ if(!is(T == void))
     }
     else static if(isAssociativeArray!T)
     {
+        import std.array: split;
         import std.string : indexOf;
+
         enum TypedValueParser = ValueParser!(string[], T).defaults
             .changeParse(PassThrough)
             .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
@@ -317,24 +325,25 @@ if(!is(T == void))
                 alias K = KeyType!T;
                 alias V = ValueType!T;
 
-                foreach(input; param.value)
-                {
-                    auto j = indexOf(input, param.config.assignKeyValueChar);
-                    if(j < 0)
-                        return invalidValueError(param);
+                foreach(paramValue; param.value)
+                    foreach(input; paramValue.split(param.config.valueSep))
+                    {
+                        auto j = indexOf(input, param.config.assignKeyValueChar);
+                        if(j < 0)
+                            return invalidValueError(param);
 
-                    K key;
-                    Result res = TypedValueParser!K.parseParameter(key, RawParam(param.config, param.name, [input[0 .. j]]));
-                    if(!res)
-                        return res;
+                        K key;
+                        Result res = TypedValueParser!K.parseParameter(key, RawParam(param.config, param.name, [input[0 .. j]]));
+                        if(!res)
+                            return res;
 
-                    V value;
-                    res = TypedValueParser!V.parseParameter(value, RawParam(param.config, param.name, [input[j + 1 .. $]]));
-                    if(!res)
-                        return res;
+                        V value;
+                        res = TypedValueParser!V.parseParameter(value, RawParam(param.config, param.name, [input[j + 1 .. $]]));
+                        if(!res)
+                            return res;
 
-                    receiver[key] = value;
-                }
+                        receiver[key] = value;
+                    }
                 return Result.Success;
             }))
             .changeNoValueAction(NoValueActionFunc!T((ref _1, _2) => Result.Success));
