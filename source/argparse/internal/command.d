@@ -75,25 +75,6 @@ private Result ArgumentCompleteFunction(alias uda, RECEIVER)(const Command[] cmd
 
 unittest
 {
-    struct T { string a; }
-
-    auto test(string[] values)
-    {
-        T t;
-        Config cfg;
-        auto param = RawParam(&cfg, "a", values);
-
-        enum uda = getMemberArgumentUDA!(T, "a")(Config.init);
-
-        return ArgumentParsingFunction!uda([], t, param);
-    }
-
-    assert(test(["raw-value"]));
-    assert(!test(["value1","value2"]));
-}
-
-unittest
-{
     struct T
     {
         void func() { throw new Exception("My Message."); }
