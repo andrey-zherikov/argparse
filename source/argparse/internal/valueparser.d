@@ -268,7 +268,7 @@ if(!is(T == void))
             {
                 import std.array: split;
 
-                auto values = param.value.length == 1 && param.config.atMostOneValuePerNamedArg ?
+                auto values = param.value.length == 1 && !param.config.variadicNamedArgument ?
                               param.value[0].split(param.config.valueSep) :
                               param.value;
 
@@ -352,7 +352,80 @@ if(!is(T == void))
     {
         enum TypedValueParser = ValueParser!(string[], T).defaults
             .changeParse(PassThrough)
-            .changeAction(CallFunction!T)
+            .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
+            {
+                auto parseInto(DEST)(ref DEST dest)
+                {
+                    return TypedValueParser!DEST.parseParameter(dest, param);
+                }
+
+                // Result function()
+                static if(is(T == Result function()) || is(T == Result delegate()))
+                {
+                    return receiver();
+                }
+                // void function()
+                else static if(is(T == void function()) || is(T == void delegate()))
+                {
+                    receiver();
+                    return Result.Success;
+                }
+                // Result function(string value)
+                else static if(is(T == Result function(string)) || is(T == Result delegate(string)))
+                {
+                    foreach(value; param.value)
+                    {
+                        auto res = receiver(value);
+                        if(!res)
+                            return res;
+                    }
+                    return Result.Success;
+                }
+                // void function(string value)
+                else static if(is(T == void function(string)) || is(T == void delegate(string)))
+                {
+                    foreach(value; param.value)
+                        receiver(value);
+
+                    return Result.Success;
+                }
+                // Result function(string[] value)
+                else static if(is(T == Result function(string[])) || is(T == Result delegate(string[])))
+                {
+                    string[] value;
+                    Result res = TypedValueParser!(string[]).parseParameter(value, param);
+                    if(!res)
+                        return res;
+
+                    return receiver(value);
+                }
+                // void function(string[] value)
+                else static if(is(T == void function(string[])) || is(T == void delegate(string[])))
+                {
+                    string[] value;
+                    Result res = TypedValueParser!(string[]).parseParameter(value, param);
+                    if(!res)
+                        return res;
+
+                    receiver(value);
+                    return Result.Success;
+                }
+                // Result function(RawParam value)
+                else static if(is(T == Result function(RawParam)) || is(T == Result delegate(RawParam)))
+                {
+                    return receiver(param);
+                }
+                // void function(RawParam value)
+                else static if(is(T == void function(RawParam)) || is(T == void delegate(RawParam)))
+                {
+                    receiver(param);
+                    return Result.Success;
+                }
+                else
+                    static assert(false, "Unsupported callback: " ~ T.stringof);
+
+                return Result.Success;
+            }))
             .changeNoValueAction(CallFunctionNoParam!T);
     }
     else
@@ -449,6 +522,78 @@ unittest
     assert(test!(MyEnum[string])(["a=bar","b=foo"]) == ["a":MyEnum.bar, "b":MyEnum.foo]);
     assert(test!(int[MyEnum])(["bar=3","foo=5"]) == [MyEnum.bar:3, MyEnum.foo:5]);
     assert(test!(int[][])([]) == [[]]);
+}
+
+unittest
+{
+    struct T
+    {
+        int a_;
+        string[] b_;
+        string[][] c_;
+        string[][] d_;
+
+        void av() { a_++; }
+        void bv(string s) { b_ ~= s; }
+        void cv(string[] s) { c_ ~= s; }
+        void dv(RawParam p) { d_ ~= p.value; }
+
+        Result as() { a_++; return Result.Success; }
+        Result bs(string s) { b_ ~= s; return Result.Success; }
+        Result cs(string[] s) { c_ ~= s; return Result.Success; }
+        Result ds(RawParam p) { d_ ~= p.value; return Result.Success; }
+
+        Result ae() { return Result.Error("my error"); }
+        Result be(string s) { return Result.Error("my error"); }
+        Result ce(string[] s) { return Result.Error("my error"); }
+        Result de(RawParam p) { return Result.Error("my error"); }
+    }
+
+    auto test(F)(string[] values, F func)
+    {
+        Config config;
+        return TypedValueParser!F.parseParameter(func, RawParam(&config, "", values));
+    }
+
+    {
+        T t;
+        assert(test(["a"], &t.av));
+        assert(t.a_ == 1);
+        assert(test(["a"], &t.as));
+        assert(t.a_ == 2);
+        assert(test(["a"], &t.ae).isError("my error"));
+    }
+    {
+        T t;
+        assert(test(["a","b","c"], &t.bv));
+        assert(t.b_ == ["a","b","c"]);
+        assert(test(["d","e","f"], &t.bs));
+        assert(t.b_ == ["a","b","c","d","e","f"]);
+        assert(test(["a"], &t.be).isError("my error"));
+    }
+    {
+        T t;
+        assert(test(["a","b","c"], &t.cv));
+        assert(t.c_ == [["a","b","c"]]);
+        assert(test(["d","e","f"], &t.cs));
+        assert(t.c_ == [["a","b","c"],["d","e","f"]]);
+        assert(test(["a"], &t.ce).isError("my error"));
+    }
+    {
+        T t;
+        assert(test(["a,b,c"], &t.cv));
+        assert(t.c_ == [["a","b","c"]]);
+        assert(test(["d,e,f"], &t.cs));
+        assert(t.c_ == [["a","b","c"],["d","e","f"]]);
+    }
+    {
+        T t;
+        assert(test(["a","b","c"], &t.dv));
+        assert(t.d_ == [["a","b","c"]]);
+        assert(test(["d","e","f"], &t.ds));
+        assert(t.d_ == [["a","b","c"],["d","e","f"]]);
+        assert(test(["a"], &t.de).isError("my error"));
+    }
 }
 
 unittest

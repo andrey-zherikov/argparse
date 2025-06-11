@@ -268,13 +268,12 @@ unittest
         string[][]  b;
     }
 
-    enum Config config = { atMostOneValuePerNamedArg: false };
+    enum Config config = { variadicNamedArgument: true };
 
     auto test(string[] args)
     {
         T t;
         assert(CLI!(config, T).parseArgs(t, args));
-        import std.stdio;stderr.writeln(t);
         return t;
     }
 
@@ -301,7 +300,7 @@ unittest
     assert(test(["-a=foo=3","-a","boo=7"]) == T(["foo":3,"boo":7]));
     assert(test(["-a=foo=3,boo=7"]) == T(["foo":3,"boo":7]));
 
-    enum Config config = { atMostOneValuePerNamedArg: false };
+    enum Config config = { variadicNamedArgument: true };
 
     assert(test!config(["-a","foo=3","boo=7"])== T(["foo":3,"boo":7]));
 }

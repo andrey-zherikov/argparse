@@ -46,20 +46,12 @@ The difference can be easily shown in the following example:
 
 <code-block src="code_snippets/types_array.d" lang="c++"/>
 
-Alternatively one can set [`Config.valueSep`](Config.md#valueSep) to allow multiple elements in one command line entry:
-
-<code-block src="code_snippets/types_array_comma.d" lang="c++"/>
-
 ## Associative arrays
 
 `argparse` also supports associative array where simple value type (e.g. numbers, strings etc.). In this case, expected
 format of the value is `key=value` (equal sign can be customized with [`Config.assignChar`](Config.md#assignChar)):
 
 <code-block src="code_snippets/types_assoc_array.d" lang="c++"/>
-
-Alternatively one can set [`Config.valueSep`](Config.md#valueSep) to allow multiple elements in one command line entry:
-
-<code-block src="code_snippets/types_assoc_array_comma.d" lang="c++"/>
 
 ## Enums {id="enum"}
 

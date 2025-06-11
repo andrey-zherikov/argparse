@@ -76,7 +76,7 @@ struct Config
         With `variadicNamedArgument` enabled (as was the default in v1), named arguments will
         consume all named arguments up to the next named argument if the receiving field is an array.
      */
-    bool variadicNamedArgument= false;
+    bool variadicNamedArgument = false;
 
     /**
        Add a -h/--help argument to the parser.

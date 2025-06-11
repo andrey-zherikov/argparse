@@ -195,7 +195,7 @@ unittest
 {
     void test(string[] args, alias expected)()
     {
-        enum Config config = { atMostOneValuePerNamedArg: false };
+        enum Config config = { variadicNamedArgument: true };
 
         assert(CLI!(config, typeof(expected)).parseArgs!((t) {
             assert(t == expected);
@@ -394,7 +394,7 @@ unittest
         int[] b;
     }
 
-    enum Config config = { atMostOneValuePerNamedArg: false };
+    enum Config config = { variadicNamedArgument: true };
 
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T([1,2,3],[4,5])); return 12345; })(["-a","1","2","3","-b","4","5"]) == 12345);
     assert(CLI!(config, T).parseArgs!((T t) { assert(t == T([1],[4,5])); return 12345; })(["-a","1","-b","4","5"]) == 12345);
@@ -416,7 +416,7 @@ unittest
     }
 
     assert(test(["-a","a","b1","b2"]) == T(["a"],["b1","b2"]));
-    assert(test(["-a","a","b1","b2", "-a", "a2"]) == T(["a","a2"],["b1","b2"]));   
+    assert(test(["-a","a","b1","b2", "-a", "a2"]) == T(["a","a2"],["b1","b2"]));
 }
 
 

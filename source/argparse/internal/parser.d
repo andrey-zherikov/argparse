@@ -204,8 +204,8 @@ private Entry getNextEntry(const ref Config config, ref string[] args,
                 {
                     args.popFront;
                     auto values = consumeValuesFromCLI(args,
-                                                       res.arg.info.minValuesCount.get,
-                                                       config.atMostOneValuePerNamedArg ? min(1, res.arg.info.maxValuesCount.get) : res.arg.info.maxValuesCount.get,
+                                                       config.variadicNamedArgument ? res.arg.info.minValuesCount.get : min(1, res.arg.info.minValuesCount.get),
+                                                       config.variadicNamedArgument ? res.arg.info.maxValuesCount.get : min(1, res.arg.info.maxValuesCount.get),
                                                        isArgumentValue);
                     return createArgument(arg0, values, res);
                 }
@@ -270,8 +270,8 @@ private Entry getNextEntry(const ref Config config, ref string[] args,
                 {
                     args.popFront;
                     auto values = consumeValuesFromCLI(args,
-                                                       res.arg.info.minValuesCount.get,
-                                                       config.atMostOneValuePerNamedArg ? min(1, res.arg.info.maxValuesCount.get) : res.arg.info.maxValuesCount.get,
+                                                       config.variadicNamedArgument ? res.arg.info.minValuesCount.get : min(1, res.arg.info.minValuesCount.get),
+                                                       config.variadicNamedArgument ? res.arg.info.maxValuesCount.get : min(1, res.arg.info.maxValuesCount.get),
                                                        isArgumentValue);
                     return createArgument(arg0, values, res);
                 }
@@ -685,7 +685,7 @@ unittest
     }
 
     {
-        enum Config config = { atMostOneValuePerNamedArg: false };
+        enum Config config = { variadicNamedArgument: true };
 
         T t;
         string[] unrecognizedArgs;
@@ -704,7 +704,6 @@ unittest
         assert(callParser!(Config.init, false)(t, ["-f=a,a"], unrecognizedArgs));
         assert(callParser!(Config.init, false)(t, ["-f=a,a,a"], unrecognizedArgs));
         assert(callParser!(Config.init, false)(t, ["-f=a,a,a,a"], unrecognizedArgs));
-        assert(callParser!(Config.init, false)(t, ["-f=a,a,a,a,a"], unrecognizedArgs).isError("Argument","expected at most 4 values"));
     }
 }
 

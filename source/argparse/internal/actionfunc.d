@@ -185,36 +185,3 @@ unittest
     Extend!(int[][])(i,Param!(int[])(&config,"",[7,8,9]));
     assert(i == [[1,2,3],[7,8,9]]);
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package enum CallFunction(FUNC) = ActionFunc!(FUNC, string[])
-    ((ref FUNC func, RawParam param)
-    {
-        // ... func()
-        static if(__traits(compiles, { func(); }))
-        {
-            func();
-        }
-        // ... func(RawParam param)
-        else static if(__traits(compiles, { func(param); }))
-        {
-            func(param);
-        }
-        // ... func(string[] value)
-        else static if(__traits(compiles, { func(param.value); }))
-        {
-            func(param.value);
-        }
-        // ... func(string value)
-        else static if(__traits(compiles, { func(param.value[0]); }))
-        {
-            foreach(value; param.value)
-                func(value);
-        }
-        else
-            static assert(false, "Unsupported callback: " ~ FUNC.stringof);
-
-        return Result.Success;
-    });
-

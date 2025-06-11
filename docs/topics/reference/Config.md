@@ -54,6 +54,19 @@ Example:
 
 <code-block src="code_snippets/config_namedArgPrefix.d" lang="c++"/>
 
+## Variadic named arguments {id="variadicNamedArgument"}
+
+`Config.variadicNamedArgument` flag controls whether named arguments should be follow POSIX guidelines which allows
+only one value per named argument: `-a value1 -a value2`.
+
+Setting this flag to `true` allows multiple values to be passed to a named argument: `-a value1 value2`.
+
+Default is `false`.
+
+Example:
+
+<code-block src="code_snippets/config_variadicNamedArgument.d" lang="c++"/>
+
 ## End of named arguments {id="endOfNamedArgs"}
 
 `Config.endOfNamedArgs` is a string that marks the end of all named arguments. All arguments that are specified
