@@ -138,8 +138,8 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package enum Assign(TYPE) = ActionFunc!(TYPE, TYPE)
-    ((ref TYPE _1, TYPE _2)
+package enum Assign(RECEIVER, PARSE = RECEIVER) = ActionFunc!(RECEIVER, PARSE)
+    ((ref RECEIVER _1, PARSE _2)
     {
         _1 = _2;
     });

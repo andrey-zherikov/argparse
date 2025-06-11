@@ -141,6 +141,14 @@ package(argparse) struct ValueParser(PARSE_TYPE, RECEIVER_TYPE)
     {
         static auto defaults()
         {
+            auto res2 = ValueParser!(PARSE_TYPE, RECEIVER_TYPE).init
+                .changePreProcess((ref _) {})
+                .changePreValidation(Pass!string)
+                .changeValidation(Pass!PARSE_TYPE);
+
+            static if(is(RECEIVER_TYPE == PARSE_TYPE))
+                res2.changeAction(Assign!(RECEIVER_TYPE, PARSE_TYPE));
+
             ValueParser!(PARSE_TYPE, RECEIVER_TYPE) res;
 
             res.preProcess = (ref _) {};
@@ -209,6 +217,16 @@ unittest
     auto vp = ValueParser!(void, void)()
         .changeParse(ParseFunc!int((ref int i, RawParam p) => Result.Error("test error")));
     assert(vp.parse(receiver, RawParam(null,"",[""])).isError("test error"));
+}
+
+unittest
+{
+    int receiver;
+    auto vp = ValueParser!(int, int).defaults;
+    assert(vp.preProcess);
+    assert(vp.preValidate);
+    assert(vp.validate);
+    assert(vp.action);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
