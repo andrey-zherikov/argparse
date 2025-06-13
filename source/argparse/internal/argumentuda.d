@@ -23,9 +23,12 @@ package(argparse) struct ArgumentUDA(ValueParser)
         static assert(!is(RECEIVER == T*, T));
         try
         {
-            auto res = info.checkValuesCount(param);
-            if(!res)
-                return res;
+            if(param.config.variadicNamedArgument)
+            {
+                auto res = info.checkValuesCount(param);
+                if(!res)
+                    return res;
+            }
 
             return valueParser.parseParameter(receiver, param);
         }
