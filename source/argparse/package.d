@@ -195,7 +195,9 @@ unittest
 {
     void test(string[] args, alias expected)()
     {
-        assert(CLI!(typeof(expected)).parseArgs(args, (t) {
+        enum Config config = { variadicNamedArgument: true };
+
+        assert(CLI!(config, typeof(expected)).parseArgs(args, (t) {
             assert(t == expected);
             return 12345;
         }) == 12345);
@@ -203,8 +205,8 @@ unittest
 
     struct T
     {
-        @NamedArgument                           string x;
-        @NamedArgument                           string foo;
+        @NamedArgument                         string x;
+        @NamedArgument                         string foo;
         @(PositionalArgument(0, "a").Optional) string a;
         @(PositionalArgument(1, "b").Optional) string[] b;
     }
@@ -392,8 +394,29 @@ unittest
         int[] b;
     }
 
-    assert(CLI!T.parseArgs(["-a","1","2","3","-b","4","5"], (T t) { assert(t == T([1,2,3],[4,5])); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-a","1","-b","4","5"], (T t) { assert(t == T([1],[4,5])); return 12345; }) == 12345);
+    enum Config config = { variadicNamedArgument: true };
+
+    assert(CLI!(config, T).parseArgs(["-a","1","2","3","-b","4","5"], (T t) { assert(t == T([1,2,3],[4,5])); return 12345; }) == 12345);
+    assert(CLI!(config, T).parseArgs(["-a","1","-b","4","5"], (T t) { assert(t == T([1],[4,5])); return 12345; }) == 12345);
+}
+
+unittest
+{
+    struct T
+    {
+        @NamedArgument string[] a;
+        @PositionalArgument string[]  b;
+    }
+
+    auto test(string[] args)
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, args));
+        return t;
+    }
+
+    assert(test(["-a","a","b1","b2"]) == T(["a"],["b1","b2"]));
+    assert(test(["-a","a","b1","b2", "-a", "a2"]) == T(["a","a2"],["b1","b2"]));
 }
 
 

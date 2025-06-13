@@ -376,10 +376,19 @@ unittest
         string[][]  b;
     }
 
-    assert(CLI!T.parseArgs(["-a","1","2","3","-a","4","5"], (T t) { assert(t.a == ["1","2","3","4","5"]); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-a=1,2,3","-a","4","5"], (T t) { assert(t.a == ["1","2","3","4","5"]); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-a","1,2,3","-a","4","5"], (T t) { assert(t.a == ["1,2,3","4","5"]); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-b","1","2","3","-b","4","5"], (T t) { assert(t.b == [["1","2","3"],["4","5"]]); return 12345; }) == 12345);
+    enum Config config = { variadicNamedArgument: true };
+
+    auto test(string[] args)
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, args));
+        return t;
+    }
+
+    assert(test(["-a","1","2","3","-a","4","5"]).a == ["1","2","3","4","5"]);
+    assert(test(["-a=1,2,3","-a","4","5"]).a == ["1","2","3","4","5"]);
+    assert(test(["-a","1,2,3","-a","4","5"]).a == ["1,2,3","4","5"]);
+    assert(test(["-b","1","2","3","-b","4","5"]).b == [["1","2","3"],["4","5"]]);
 }
 
 unittest
@@ -389,9 +398,19 @@ unittest
         int[string] a;
     }
 
-    assert(CLI!T.parseArgs(["-a=foo=3","-a","boo=7"], (T t) { assert(t == T(["foo":3,"boo":7])); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-a=foo=3,boo=7"], (T t) { assert(t == T(["foo":3,"boo":7])); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-a","foo=3","boo=7"], (T t) { assert(t == T(["foo":3,"boo":7])); return 12345; }) == 12345);
+    auto test(Config config = Config.init)(string[] args)
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, args));
+        return t;
+    }
+
+    assert(test(["-a=foo=3","-a","boo=7"]) == T(["foo":3,"boo":7]));
+    assert(test(["-a=foo=3,boo=7"]) == T(["foo":3,"boo":7]));
+
+    enum Config config = { variadicNamedArgument: true };
+
+    assert(test!config(["-a","foo=3","boo=7"])== T(["foo":3,"boo":7]));
 }
 
 unittest
@@ -403,8 +422,16 @@ unittest
         Fruit a;
     }
 
-    assert(CLI!T.parseArgs(["-a","apple"], (T t) { assert(t == T(T.Fruit.apple)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-a=pear"], (T t) { assert(t == T(T.Fruit.pear)); return 12345; }) == 12345);
+    auto test(string[] args)
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, args));
+        return t;
+    }
+
+    assert(test(["-a","apple"]) == T(T.Fruit.apple));
+    assert(test(["-a=pear"]) == T(T.Fruit.pear));
+
     assert(CLI!T.parseArgs(["-a", "kiwi"], (T t) { assert(false); }) != 0);    // "kiwi" is not allowed
 }
 
@@ -420,8 +447,16 @@ unittest
 
     enum Config config = { caseSensitiveShortName: false, caseSensitiveLongName: false, caseSensitiveSubCommand: false };
 
-    assert(CLI!(config, T).parseArgs(["--Foo","FOO","-X","X"], (T t) { assert(t == T("X", "FOO")); return 12345; }) == 12345);
-    assert(CLI!(config, T).parseArgs(["--FOo=FOO","-X=X"], (T t) { assert(t == T("X", "FOO")); return 12345; }) == 12345);
+    auto test(string[] args)
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, args));
+        return t;
+    }
+
+
+    assert(test(["--Foo","FOO","-X","X"]) == T("X", "FOO"));
+    assert(test(["--FOo=FOO","-X=X"]) == T("X", "FOO"));
 }
 
 unittest
