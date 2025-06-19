@@ -306,6 +306,48 @@ template CLI(Config config, COMMAND)
             }
         }
     }
+
+    template main1(alias newMain)
+    {
+        int main1(string[] argv)
+        {
+            COMMAND value;
+
+            static if (is(typeof(newMain(value))))
+            {
+                // newMain has one parameter so strictly parse command line
+                auto res = CLI!(config, COMMAND).parseArgs(value, argv);
+            }
+            else
+            {
+                // newMain has two parameters so parse only known arguments
+                auto res = CLI!(config, COMMAND).parseKnownArgs(value, argv);
+            }
+
+            if (!res)
+            return res.exitCode;
+
+            // call newMain
+            static if (is(typeof(newMain(value)) == void))
+            {
+                newMain(value);
+                return 0;
+            }
+            else static if (is(typeof(newMain(value))))
+            {
+                return newMain(value);
+            }
+            else static if (is(typeof(newMain(value, [])) == void))
+            {
+                newMain(value, argv);
+                return 0;
+            }
+            else
+            {
+                return newMain(value, argv);
+            }
+        }
+    }
 }
 
 alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS);
