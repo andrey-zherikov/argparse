@@ -156,16 +156,6 @@ unittest
 
 unittest
 {
-    struct T
-    {
-        @(NamedArgument("--"))
-        int a;
-    }
-    static assert(!__traits(compiles, { enum p = CLI!T.parseArgs([], (T t){}); }));
-}
-
-unittest
-{
     struct params
     {
         int no_a;
@@ -193,51 +183,50 @@ unittest
 
 unittest
 {
-    void test(string[] args, alias expected)()
+    auto test(TYPE)(string[] args)
     {
         enum Config config = { variadicNamedArgument: true };
 
-        assert(CLI!(config, typeof(expected)).parseArgs(args, (t) {
-            assert(t == expected);
-            return 12345;
-        }) == 12345);
+        TYPE t;
+        assert(CLI!(config, TYPE).parseArgs(t, args));
+        return t;
     }
 
     struct T
     {
-        @NamedArgument                         string x;
-        @NamedArgument                         string foo;
-        @(PositionalArgument(0, "a").Optional) string a;
-        @(PositionalArgument(1, "b").Optional) string[] b;
+        @NamedArgument                 string x;
+        @NamedArgument                 string foo;
+        @(PositionalArgument.Optional) string a;
+        @(PositionalArgument.Optional) string[] b;
     }
-    test!(["--foo","FOO","-x","X"], T("X", "FOO"));
-    test!(["--foo=FOO","-x=X"], T("X", "FOO"));
-    test!(["--foo=FOO","1","-x=X"], T("X", "FOO", "1"));
-    test!(["--foo=FOO","1","2","3","4"], T(string.init, "FOO", "1",["2","3","4"]));
-    test!(["-xX"], T("X"));
+    assert(test!T(["--foo", "FOO", "-x", "X"]) == T("X", "FOO"));
+    assert(test!T(["--foo=FOO", "-x=X"]) == T("X", "FOO"));
+    assert(test!T(["--foo=FOO", "1", "-x=X"]) == T("X", "FOO", "1"));
+    assert(test!T(["--foo=FOO", "1", "2", "3", "4"]) == T(string.init, "FOO", "1", ["2", "3", "4"]));
+    assert(test!T(["-xX"]) == T("X"));
 
     struct T1
     {
-        @(PositionalArgument(0, "a")) string[3] a;
-        @(PositionalArgument(1, "b")) string[] b;
+        @PositionalArgument string[3] a;
+        @PositionalArgument string[] b;
     }
-    test!(["1","2","3","4","5","6"], T1(["1","2","3"],["4","5","6"]));
+    assert(test!T1(["1", "2", "3", "4", "5", "6"]) == T1(["1", "2", "3"], ["4", "5", "6"]));
 
     struct T2
     {
         bool foo = true;
     }
-    test!(["--no-foo"], T2(false));
+    assert(test!T2(["--no-foo"]) == T2(false));
 
     struct T3
     {
-        @(PositionalArgument(0, "a").Optional)
+        @(PositionalArgument.Optional)
         string a = "not set";
 
         @(NamedArgument.Required)
         int b;
     }
-    test!(["-b", "4"], T3("not set", 4));
+    assert(test!T3(["-b", "4"]) == T3("not set", 4));
 }
 
 unittest
@@ -248,18 +237,30 @@ unittest
         bool b;
     }
 
-    assert(CLI!T.parseArgs(["-b"], (T t) { assert(t == T(true)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-b=true"], (T t) { assert(t == T(true)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-b=false"], (T t) { assert(t == T(false)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["--no-b"], (T t) { assert(t == T(false)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-b", "true"], (T t) { assert(false); }) == 1);
-    assert(CLI!T.parseArgs(["-b", "false"], (T t) { assert(false); }) == 1);
-    assert(CLI!T.parseArgs(["--boo"], (T t) { assert(t == T(true)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["--boo=true"], (T t) { assert(t == T(true)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["--boo=false"], (T t) { assert(t == T(false)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["--no-boo"], (T t) { assert(t == T(false)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["--boo","true"], (T t) { assert(false); }) == 1);
-    assert(CLI!T.parseArgs(["--boo","false"], (T t) { assert(false); }) == 1);
+    auto test(string[] args)
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, args));
+        return t;
+    }
+
+    assert(test(["-b"]) == T(true));
+    assert(test(["-b=true"]) == T(true));
+    assert(test(["-b=false"]) == T(false));
+    assert(test(["--no-b"]) == T(false));
+    assert(test(["--boo"]) == T(true));
+    assert(test(["--boo=true"]) == T(true));
+    assert(test(["--boo=false"]) == T(false));
+    assert(test(["--no-boo"]) == T(false));
+
+    {
+        T t;
+
+        assert(CLI!T.parseArgs(t,["-b", "true"]).isError("Unrecognized arguments","true"));
+        assert(CLI!T.parseArgs(t,["-b", "false"]).isError("Unrecognized arguments","false"));
+        assert(CLI!T.parseArgs(t,["--boo","true"]).isError("Unrecognized arguments","true"));
+        assert(CLI!T.parseArgs(t,["--boo","false"]).isError("Unrecognized arguments","false"));
+    }
 }
 
 unittest
@@ -272,7 +273,7 @@ unittest
             @NamedArgument
             string b;
 
-            @(PositionalArgument(0).Optional)
+            @(PositionalArgument.Optional)
             string[] args;
         }
 
@@ -282,8 +283,16 @@ unittest
         SubCommand!(cmd1, cmd2) cmd;
     }
 
-    assert(CLI!T.parseArgs(["-c","C","cmd2","-b","B"], (T t) { assert(t == T("C",null,typeof(T.cmd)(T.cmd2("B")))); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-c","C","cmd2","--","-b","B"], (T t) { assert(t == T("C",null,typeof(T.cmd)(T.cmd2("",["-b","B"])))); return 12345; }) == 12345);
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, ["-c","C","cmd2","-b","B"]));
+        assert(t == T("C",null,typeof(T.cmd)(T.cmd2("B"))));
+    }
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, ["-c","C","cmd2","--","-b","B"]));
+        assert(t == T("C",null,typeof(T.cmd)(T.cmd2("",["-b","B"]))));
+    }
 }
 
 unittest
@@ -296,8 +305,16 @@ unittest
         SubCommand!(cmd1, cmd2) cmd;
     }
 
-    assert(CLI!T.parseArgs(["cmd1"], (T t) { assert(t == T(typeof(T.cmd)(T.cmd1.init))); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["cmd2"], (T t) { assert(t == T(typeof(T.cmd)(T.cmd2.init))); return 12345; }) == 12345);
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, ["cmd1"]));
+        assert(t == T(typeof(T.cmd)(T.cmd1.init)));
+    }
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, ["cmd2"]));
+        assert(t == T(typeof(T.cmd)(T.cmd2.init)));
+    }
 }
 
 unittest
@@ -313,9 +330,11 @@ unittest
         SubCommand!(cmd1, Default!cmd2) cmd;
     }
 
-    assert(CLI!T.parseArgs(["-c","C","-b","B"], (T t) { assert(t == T("C",null,typeof(T.cmd)(T.cmd2("B")))); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-h"], (_) {assert(false);}) == 0);
-    assert(CLI!T.parseArgs(["--help"], (_) {assert(false);}) == 0);
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, ["-c","C","-b","B"]));
+        assert(t == T("C",null,typeof(T.cmd)(T.cmd2("B"))));
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -394,10 +413,18 @@ unittest
         int[] b;
     }
 
-    enum Config config = { variadicNamedArgument: true };
+    auto test(string[] args)
+    {
+        enum Config config = { variadicNamedArgument: true };
 
-    assert(CLI!(config, T).parseArgs(["-a","1","2","3","-b","4","5"], (T t) { assert(t == T([1,2,3],[4,5])); return 12345; }) == 12345);
-    assert(CLI!(config, T).parseArgs(["-a","1","-b","4","5"], (T t) { assert(t == T([1],[4,5])); return 12345; }) == 12345);
+        T t;
+        assert(CLI!(config, T).parseArgs(t, args));
+        return t;
+    }
+
+
+    assert(test(["-a","1","2","3","-b","4","5"]) == T([1,2,3],[4,5]));
+    assert(test(["-a","1","-b","4","5"]) == T([1],[4,5]));
 }
 
 unittest
@@ -427,7 +454,9 @@ unittest
         @(NamedArgument.Counter) int a;
     }
 
-    assert(CLI!T.parseArgs(["-a","-a","-a"], (T t) { assert(t == T(3)); return 12345; }) == 12345);
+    T t;
+    assert(CLI!T.parseArgs(t, ["-a","-a","-a"]));
+    assert(t == T(3));
 }
 
 
@@ -438,19 +467,23 @@ unittest
         @(NamedArgument.AllowedValues(1,3,5)) int a;
     }
 
-    assert(CLI!T.parseArgs(["-a", "3"], (T t) { assert(t == T(3)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-a", "2"], (T t) { assert(false); }) != 0);    // "2" is not allowed
+    T t;
+    assert(CLI!T.parseArgs(t, ["-a", "3"]));
+    assert(t == T(3));
+    assert(CLI!T.parseArgs(t, ["-a", "2"]).isError("Invalid value","2"));
 }
 
 unittest
 {
     struct T
     {
-        @(PositionalArgument(0).AllowedValues(1,3,5)) int a;
+        @(PositionalArgument.AllowedValues(1,3,5)) int a;
     }
 
-    assert(CLI!T.parseArgs(["3"], (T t) { assert(t == T(3)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["2"], (T t) { assert(false); }) != 0);    // "2" is not allowed
+    T t;
+    assert(CLI!T.parseArgs(t, ["3"]));
+    assert(t == T(3));
+    assert(CLI!T.parseArgs(t, ["2"]).isError("Invalid value","2"));
 }
 
 unittest
@@ -461,8 +494,10 @@ unittest
         string fruit;
     }
 
-    assert(CLI!T.parseArgs(["--fruit", "apple"], (T t) { assert(t == T("apple")); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["--fruit", "kiwi"], (T t) { assert(false); }) != 0);    // "kiwi" is not allowed
+    T t;
+    assert(CLI!T.parseArgs(t, ["--fruit", "apple"]));
+    assert(t == T("apple"));
+    assert(CLI!T.parseArgs(t, ["--fruit", "kiwi"]).isError("Invalid value","kiwi"));
 }
 
 unittest
@@ -478,7 +513,9 @@ unittest
         string[] args;
     }
 
-    assert(CLI!T.parseArgs(["-a","A","--","-b","B"], (T t) { assert(t == T("A","",["-b","B"])); return 12345; }) == 12345);
+    T t;
+    assert(CLI!T.parseArgs(t, ["-a","A","--","-b","B"]));
+    assert(t == T("A","",["-b","B"]));
 }
 
 unittest
@@ -490,8 +527,11 @@ unittest
         @NamedArgument("d","d1")  double d;
     }
 
-    assert(CLI!T.parseArgs(["-i","-5","-u","8","-d","12.345"], (T t) { assert(t == T(-5,8,12.345)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-i","-5","--u1","8","--d1","12.345"], (T t) { assert(t == T(-5,8,12.345)); return 12345; }) == 12345);
+    T t;
+    assert(CLI!T.parseArgs(t, ["-i","-5","-u","8","-d","12.345"]));
+    assert(t == T(-5,8,12.345));
+    assert(CLI!T.parseArgs(t, ["-i","-5","--u1","8","--d1","12.345"]));
+    assert(t == T(-5,8,12.345));
 }
 
 unittest
@@ -507,9 +547,13 @@ unittest
         Fruit a;
     }
 
-    assert(CLI!T.parseArgs(["-a","apple"], (T t) { assert(t == T(T.Fruit.apple)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-a=no-apple"], (T t) { assert(t == T(T.Fruit.noapple)); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-a","noapple"], (T t) { assert(t == T(T.Fruit.noapple)); return 12345; }) == 12345);
+    T t;
+    assert(CLI!T.parseArgs(t, ["-a","apple"]));
+    assert(t == T(T.Fruit.apple));
+    assert(CLI!T.parseArgs(t, ["-a=no-apple"]));
+    assert(t == T(T.Fruit.noapple));
+    assert(CLI!T.parseArgs(t, ["-a","noapple"]));
+    assert(t == T(T.Fruit.noapple));
 }
 
 unittest
@@ -520,10 +564,14 @@ unittest
         @(NamedArgument.ForceNoValue(20)) int b;
     }
 
-    assert(CLI!T.parseArgs(["-a"], (T t) { assert(t.a == 10); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-b"], (T t) { assert(t.b == 20); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-a", "30"], (T t) { assert(t.a == 30); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs(["-b","30"], (T t) { assert(false); }) != 0);
+    T t;
+    assert(CLI!T.parseArgs(t, ["-a"]));
+    assert(t.a == 10);
+    assert(CLI!T.parseArgs(t, ["-b"]));
+    assert(t.b == 20);
+    assert(CLI!T.parseArgs(t, ["-a", "30"]));
+    assert(t.a == 30);
+    assert(CLI!T.parseArgs(t, ["-b","30"]).isError("Unrecognized arguments","30"));
 }
 
 unittest
@@ -539,7 +587,9 @@ unittest
         int a;
     }
 
-    assert(CLI!T.parseArgs(["-a","!4"], (T t) { assert(t == T(4)); return 12345; }) == 12345);
+    T t;
+    assert(CLI!T.parseArgs(t, ["-a","!4"]));
+    assert(t == T(4));
 }
 
 unittest
@@ -551,7 +601,9 @@ unittest
         @(NamedArgument("a")) void foo() { a++; }
     }
 
-    assert(CLI!T.parseArgs(["-a","-a","-a","-a"], (T t) { assert(t == T(4)); return 12345; }) == 12345);
+    T t;
+    assert(CLI!T.parseArgs(t, ["-a","-a","-a","-a"]));
+    assert(t == T(4));
 }
 
 unittest
@@ -563,40 +615,25 @@ unittest
         Value s;
     }
 
-    assert(CLI!T.parseArgs(["-s","foo"], (T t) { assert(t == T(Value("foo"))); return 12345; }) == 12345);
+    T t;
+    assert(CLI!T.parseArgs(t, ["-s","foo"]));
+    assert(t == T(Value("foo")));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 unittest
 {
-    @Command("MYPROG")
-    struct T
-    {
-        @(NamedArgument.Hidden)  string s;
-    }
-
-    assert(CLI!T.parseArgs(["-h","-s","asd"], (T t) { assert(false); }) == 0);
-    assert(CLI!T.parseArgs(["-h"], (T t) { assert(false); }) == 0);
-
-    assert(CLI!T.parseArgs(["-h","-s","asd"], (T t, string[] args) { assert(false); }) == 0);
-    assert(CLI!T.parseArgs(["-h"], (T t, string[] args) { assert(false); }) == 0);
-}
-
-unittest
-{
-    @Command("MYPROG")
     struct T
     {
         @(NamedArgument.Required)  string s;
     }
-
-    assert(CLI!T.parseArgs([], (T t) { assert(false); }) != 0);
+    T t;
+    assert(CLI!T.parseArgs(t, []).isError("The following argument is required","-s"));
 }
 
 unittest
 {
-    @Command("MYPROG")
     struct T
     {
         @MutuallyExclusive()
@@ -606,18 +643,19 @@ unittest
         }
     }
 
+    T t;
+
     // Either or no argument is allowed
-    assert(CLI!T.parseArgs(["-a","a"], (T t) {}) == 0);
-    assert(CLI!T.parseArgs(["-b","b"], (T t) {}) == 0);
-    assert(CLI!T.parseArgs([], (T t) {}) == 0);
+    assert(CLI!T.parseArgs(t, ["-a","a"]));
+    assert(CLI!T.parseArgs(t, ["-b","b"]));
+    assert(CLI!T.parseArgs(t, []));
 
     // Both arguments are not allowed
-    assert(CLI!T.parseArgs(["-a","a","-b","b"], (T t) { assert(false); }) != 0);
+    assert(CLI!T.parseArgs(t, ["-a","a","-b","b"]).isError("Argument","-a","is not allowed with argument","-b"));
 }
 
 unittest
 {
-    @Command("MYPROG")
     struct T
     {
         @(MutuallyExclusive.Required)
@@ -627,18 +665,19 @@ unittest
         }
     }
 
+    T t;
+
     // Either argument is allowed
-    assert(CLI!T.parseArgs(["-a","a"], (T t) {}) == 0);
-    assert(CLI!T.parseArgs(["-b","b"], (T t) {}) == 0);
+    assert(CLI!T.parseArgs(t, ["-a","a"]));
+    assert(CLI!T.parseArgs(t, ["-b","b"]));
 
     // Both arguments or no argument is not allowed
-    assert(CLI!T.parseArgs([], (T t) { assert(false); }) != 0);
-    assert(CLI!T.parseArgs(["-a","a","-b","b"], (T t) { assert(false); }) != 0);
+    assert(CLI!T.parseArgs(t, []).isError("One of the following arguments is required","-a","-b"));
+    assert(CLI!T.parseArgs(t, ["-a","a","-b","b"]).isError("Argument","-a","is not allowed with argument","-b"));
 }
 
 unittest
 {
-    @Command("MYPROG")
     struct T
     {
         @RequiredTogether()
@@ -648,18 +687,19 @@ unittest
         }
     }
 
+    T t;
+
     // Both or no argument is allowed
-    assert(CLI!T.parseArgs(["-a","a","-b","b"], (T t) {}) == 0);
-    assert(CLI!T.parseArgs([], (T t) {}) == 0);
+    assert(CLI!T.parseArgs(t, ["-a","a","-b","b"]));
+    assert(CLI!T.parseArgs(t, []));
 
     // Single argument is not allowed
-    assert(CLI!T.parseArgs(["-a","a"], (T t) { assert(false); }) != 0);
-    assert(CLI!T.parseArgs(["-b","b"], (T t) { assert(false); }) != 0);
+    assert(CLI!T.parseArgs(t, ["-a","a"]).isError("Missed argument","-b","it is required by argument","-a"));
+    assert(CLI!T.parseArgs(t, ["-b","b"]).isError("Missed argument","-a","it is required by argument","-b"));
 }
 
 unittest
 {
-    @Command("MYPROG")
     struct T
     {
         @(RequiredTogether.Required)
@@ -669,13 +709,15 @@ unittest
         }
     }
 
+    T t;
+
     // Both arguments are allowed
-    assert(CLI!T.parseArgs(["-a","a","-b","b"], (T t) {}) == 0);
+    assert(CLI!T.parseArgs(t, ["-a","a","-b","b"]));
 
     // Single argument or no argument is not allowed
-    assert(CLI!T.parseArgs(["-a","a"], (T t) { assert(false); }) != 0);
-    assert(CLI!T.parseArgs(["-b","b"], (T t) { assert(false); }) != 0);
-    assert(CLI!T.parseArgs([], (T t) { assert(false); }) != 0);
+    assert(CLI!T.parseArgs(t, ["-a","a"]).isError("Missed argument","-b","it is required by argument","-a"));
+    assert(CLI!T.parseArgs(t, ["-b","b"]).isError("Missed argument","-a","it is required by argument","-b"));
+    assert(CLI!T.parseArgs(t, []).isError("One of the following arguments is required","-a","-b"));
 }
 
 
