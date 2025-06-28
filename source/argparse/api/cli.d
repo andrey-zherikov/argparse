@@ -474,7 +474,8 @@ unittest
     assert(test(["-a","apple"]) == T(T.Fruit.apple));
     assert(test(["-a=pear"]) == T(T.Fruit.pear));
 
-    assert(CLI!T.parseArgs(["-a", "kiwi"], (T t) { assert(false); }) != 0);    // "kiwi" is not allowed
+    T t;
+    assert(CLI!T.parseArgs(t, ["-a", "kiwi"]).isError("Invalid value","kiwi"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -553,87 +554,15 @@ unittest
 {
     struct T
     {
-        string a;
         static auto color = ansiStylingArgument;
     }
 
-    assert(CLI!T.parseArgs(["-g"], (T t) { assert(false); }) != 0);
-    assert(CLI!T.parseArgs([], (T t) { assert(t == T.init); return 12345; }) == 12345);
-    assert(CLI!T.parseArgs([], (T t, string[] args) {
-        assert(t == T.init);
-        assert(args.length == 0);
-        return 12345;
-    }) == 12345);
-    assert(CLI!T.parseArgs(["-a","aa","-g"], (T t, string[] args) {
-        assert(t == T("aa"));
-        assert(args == ["-g"]);
-        return 12345;
-    }) == 12345);
-    assert(CLI!T.parseArgs(["--color"], (T t) {
-        assert(t.color);
-        return 12345;
-    }) == 12345);
-    assert(CLI!T.parseArgs(["--color","never"], (T t) {
-        assert(!t.color);
-        return 12345;
-    }) == 12345);
-}
+    T t;
 
-unittest
-{
-    struct T
-    {
-        string a;
-        string b;
-    }
-
-    assert(CLI!T.parseArgs(["-a","A","--"], (T t, string[] args) {
-        assert(t == T("A"));
-        assert(args == []);
-        return 12345;
-    }) == 12345);
-
-    {
-        T args;
-
-        assert(CLI!T.parseArgs(args, [ "-a", "A"]));
-        assert(CLI!T.parseArgs(args, [ "-b", "B"]));
-
-        assert(args == T("A","B"));
-    }
-}
-
-unittest
-{
-    struct T
-    {
-        string a;
-    }
-
-    import std.exception;
-
-    assert(collectExceptionMsg(
-        CLI!T.parseArgs([], (T t, string[] args) {
-            assert(t == T.init);
-            assert(args.length == 0);
-            throw new Exception("My Message.");
-        }))
-    == "My Message.");
-    assert(collectExceptionMsg(
-        CLI!T.parseArgs(["-a","aa","-g"], (T t, string[] args) {
-            assert(t == T("aa"));
-            assert(args == ["-g"]);
-            throw new Exception("My Message.");
-        }))
-    == "My Message.");
-    assert(CLI!T.parseArgs([], (T t, string[] args) {
-        assert(t == T.init);
-        assert(args.length == 0);
-    }) == 0);
-    assert(CLI!T.parseArgs(["-a","aa","-g"], (T t, string[] args) {
-        assert(t == T("aa"));
-        assert(args == ["-g"]);
-    }) == 0);
+    assert(CLI!T.parseArgs(t, ["--color"]));
+    assert(t.color);
+    assert(CLI!T.parseArgs(t, ["--color","never"]));
+    assert(!t.color);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
