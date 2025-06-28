@@ -313,38 +313,38 @@ template CLI(Config config, COMMAND)
         {
             COMMAND value;
 
-            static if (is(typeof(newMain(value))))
-            {
-                // newMain has one parameter so strictly parse command line
-                auto res = CLI!(config, COMMAND).parseArgs(value, argv);
-            }
-            else
+            static if (is(typeof(newMain(value, argv))))
             {
                 // newMain has two parameters so parse only known arguments
                 auto res = CLI!(config, COMMAND).parseKnownArgs(value, argv);
             }
+            else
+            {
+                // Assume newMain has one parameter, so strictly parse command line
+                auto res = CLI!(config, COMMAND).parseArgs(value, argv);
+            }
 
             if (!res)
-            return res.exitCode;
+                return res.exitCode;
 
             // call newMain
-            static if (is(typeof(newMain(value)) == void))
-            {
-                newMain(value);
-                return 0;
-            }
-            else static if (is(typeof(newMain(value))))
-            {
-                return newMain(value);
-            }
-            else static if (is(typeof(newMain(value, [])) == void))
+            static if (is(typeof(newMain(value, argv)) == void))
             {
                 newMain(value, argv);
                 return 0;
             }
-            else
+            else static if (is(typeof(newMain(value, argv))))
             {
                 return newMain(value, argv);
+            }
+            else static if (is(typeof(newMain(value)) == void))
+            {
+                newMain(value);
+                return 0;
+            }
+            else
+            {
+                return newMain(value);
             }
         }
     }
