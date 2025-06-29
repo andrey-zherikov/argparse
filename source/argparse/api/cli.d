@@ -153,62 +153,54 @@ template CLI(Config config, COMMAND)
         }
     }
 
-    template main(alias newMain)
+    version(argparse_completion)
     {
-        version(argparse_completion)
+        template main(alias newMain)
         {
             mixin CLI!(config, COMMAND).mainComplete;
         }
-        else
+    }
+    else
+    {
+        template main(alias newMain)
         {
             int main(string[] argv)
             {
-                static if (is(typeof(newMain!COMMAND)))
-                    return CLI!(config, COMMAND).parseArgs(argv[1..$], newMain!COMMAND);
+                COMMAND value;
+
+                static if (is(typeof(newMain(value, argv))))
+                {
+                    // newMain has two parameters so parse only known arguments
+                    auto res = CLI!(config, COMMAND).parseKnownArgs(value, argv);
+                }
                 else
-                    return CLI!(config, COMMAND).parseArgs(argv[1..$], newMain!(COMMAND, string[]));
-            }
-        }
-    }
+                {
+                    // Assume newMain has one parameter, so strictly parse command line
+                    auto res = CLI!(config, COMMAND).parseArgs(value, argv);
+                }
 
-    template main1(alias newMain)
-    {
-        int main1(string[] argv)
-        {
-            COMMAND value;
+                if (!res)
+                    return res.exitCode;
 
-            static if (is(typeof(newMain(value, argv))))
-            {
-                // newMain has two parameters so parse only known arguments
-                auto res = CLI!(config, COMMAND).parseKnownArgs(value, argv);
-            }
-            else
-            {
-                // Assume newMain has one parameter, so strictly parse command line
-                auto res = CLI!(config, COMMAND).parseArgs(value, argv);
-            }
-
-            if (!res)
-                return res.exitCode;
-
-            // call newMain
-            static if (is(typeof(newMain(value, argv)) == void))
-            {
-                newMain(value, argv);
-                return 0;
-            }
-            else static if (is(typeof(newMain(value, argv))))
-            {
-                return newMain(value, argv);
-            }
-            else static if (is(typeof(newMain(value)) == void))
-            {
-                newMain(value);
-                return 0;
-            }
-            else
-            {
-                return newMain(value);
+                // call newMain
+                static if (is(typeof(newMain(value, argv)) == void))
+                {
+                    newMain(value, argv);
+                    return 0;
+                }
+                else static if (is(typeof(newMain(value, argv))))
+                {
+                    return newMain(value, argv);
+                }
+                else static if (is(typeof(newMain(value)) == void))
+                {
+                    newMain(value);
+                    return 0;
+                }
+                else
+                {
+                    return newMain(value);
+                }
             }
         }
     }
