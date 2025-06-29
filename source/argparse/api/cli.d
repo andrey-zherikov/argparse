@@ -121,148 +121,6 @@ template CLI(Config config, COMMAND)
         return res;
     }
 
-    /**
-     * Parse the arguments and call `newMain`, errors on unknown arguments
-     *
-     * This overload will parse the command line arguments in `args`, populate
-     * a `COMMAND` struct based on `initialValue`, and then call `newMain`.
-     *
-     * Params:
-     *   args = The CLI arguments as provided to `main`
-     *   newMain = The main function to call if argument parsing is successful
-     *   initialValue = An optional initial state for the `COMMAND` struct
-     *
-     * Returns:
-     *   The return value of `newMain`, or `0` if `newMain` returns `void`.
-     *   If any unrecognized argument is provided, returns a non-zero value.
-     */
-    static int parseArgs(string[] args, scope int delegate(ref COMMAND) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        // For some reason the compiler tries to call the copy ctor despite our
-        // use of auto-ref, so use its own overload to force `ref`
-        return parseArgsFinal(args, newMain, initialValue);
-    }
-
-    /// Ditto
-    private static int parseArgsFinal(string[] args,
-        scope int delegate(ref COMMAND) newMain, ref COMMAND initialValue) {
-        alias value = initialValue;
-        auto res = parseArgs(value, args);
-        if (!res)
-            return res.exitCode;
-        return newMain(value);
-    }
-
-    //// Ditto
-    static int parseArgs(string[] args, scope void function(ref COMMAND) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgsFinal(args, (ref COMMAND cmd) { newMain(cmd); return 0; }, initialValue);
-    }
-
-    /// Ditto
-    static int parseArgs(string[] args, scope void delegate(ref COMMAND) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgsFinal(args, (ref COMMAND cmd) { newMain(cmd); return 0; }, initialValue);
-    }
-
-    /// Ditto
-    static int parseArgs(string[] args, scope int function(ref COMMAND) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgsFinal(args, (ref COMMAND cmd) => newMain(cmd), initialValue);
-    }
-
-    /// Ditto
-    static int parseArgs(string[] args, scope int delegate(COMMAND) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgsFinal(args, (ref COMMAND cmd) => newMain(cmd), initialValue);
-    }
-
-    //// Ditto
-    static int parseArgs(string[] args, scope void function(COMMAND) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgsFinal(args, (ref COMMAND cmd) { newMain(cmd); return 0; }, initialValue);
-    }
-
-    /// Ditto
-    static int parseArgs(string[] args, scope void delegate(COMMAND) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgsFinal(args, (ref COMMAND cmd) { newMain(cmd); return 0; }, initialValue);
-    }
-
-    /// Ditto
-    static int parseArgs(string[] args, scope int function(COMMAND) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgsFinal(args, (ref COMMAND cmd) => newMain(cmd), initialValue);
-    }
-
-    /**
-     * Parse the arguments and call `newMain`, forwarding unknown arguments
-     *
-     * This overload will parse the command line arguments in `args`, populate
-     * a `COMMAND` struct based on `initialValue`, and then call `newMain`
-     * with the `COMMAND` as first argument and the remaining, unrecognized
-     * arguments (if any) as second argument.
-     *
-     * Params:
-     *   args = The CLI arguments as provided to `main`
-     *   newMain = The main function to call if argument parsing is successful
-     *   initialValue = An optional initial state for the `COMMAND` struct
-     *
-     * Returns:
-     *   The return value of `newMain`, or `0` if `newMain` returns `void`.
-     */
-    static int parseArgs(string[] args, scope int delegate(ref COMMAND, string[]) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        alias value = initialValue;
-        auto res = parseKnownArgs(value, args);
-        if (!res)
-            return res.exitCode;
-        return newMain(value, args);
-    }
-
-    //// Ditto
-    static int parseArgs(string[] args, scope void function(ref COMMAND, string[]) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgs(args, (ref COMMAND cmd, string[] args) { newMain(cmd, args); return 0; }, initialValue);
-    }
-
-    /// Ditto
-    static int parseArgs(string[] args, scope void delegate(ref COMMAND, string[]) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgs(args, (ref COMMAND cmd, string[] args) { newMain(cmd, args); return 0; }, initialValue);
-    }
-
-    /// Ditto
-    static int parseArgs(string[] args, scope int function(ref COMMAND, string[]) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgs(args, (ref COMMAND cmd, string[] args) => newMain(cmd, args), initialValue);
-    }
-
-    /// Ditto
-    static int parseArgs(string[] args, scope int delegate(COMMAND, string[]) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgs(args, (ref COMMAND cmd, string[] args) => newMain(cmd, args), initialValue);
-    }
-
-    //// Ditto
-    static int parseArgs(string[] args, scope void function(COMMAND, string[]) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgs(args, (ref COMMAND cmd, string[] args) { newMain(cmd, args); return 0; }, initialValue);
-    }
-
-    /// Ditto
-    static int parseArgs(string[] args, scope void delegate(COMMAND, string[]) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgs(args, (ref COMMAND cmd, string[] args) { newMain(cmd, args); return 0; }, initialValue);
-    }
-
-    /// Ditto
-    static int parseArgs(string[] args, scope int function(COMMAND, string[]) newMain,
-            auto ref COMMAND initialValue = COMMAND.init) {
-        return parseArgs(args, (ref COMMAND cmd, string[] args) => newMain(cmd, args), initialValue);
-    }
-
-
     // This is a template to avoid compiling it unless it is actually used.
     string[] completeArgs()(string[] args)
     {
@@ -274,11 +132,17 @@ template CLI(Config config, COMMAND)
     {
         import argparse.api.subcommand: match;
 
+        Complete!COMMAND comp;
+
         // We are able to instantiate `CLI` with different arguments solely because we reside in a templated function.
         // If we weren't, that would lead to infinite template recursion.
-        return CLI!(config, Complete!COMMAND).parseArgs(args, comp =>
-            comp.cmd.match!(_ => _.execute!(config, COMMAND))
-        );
+        auto res = CLI!(config, Complete!COMMAND).parseArgs(comp, args);
+        if (!res)
+        return res.exitCode;
+
+        comp.cmd.match!(_ => _.execute!(config, COMMAND));
+
+        return 0;
     }
 
     template mainComplete()
