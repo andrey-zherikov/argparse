@@ -8,7 +8,7 @@
 > [!WARNING]
 > :warning: Please be aware that current HEAD contains breaking changes comparing to 1.* 
 > 
-> :warning: This includes changes in documentation - documentation for 1.* version is [here](https://github.com/andrey-zherikov/argparse/blob/v1.3.0/README.md)
+> :warning: This includes changes in documentation - documentation for 1.* version is [here](https://github.com/andrey-zherikov/argparse/blob/release/1.x/README.md)
 
 ## Changes since 1.* version
 
