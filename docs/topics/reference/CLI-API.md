@@ -63,7 +63,6 @@ This means that having unrecognized arguments in a command line is not an error.
 
 ```c++
 Result parseArgs(ref COMMAND receiver, string[] args)
-int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)
 ```
 
 **Parameters**
@@ -76,26 +75,10 @@ int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)
 
   Command line arguments to parse (excluding `argv[0]` – first command line argument in `main` function).
 
-- `newMain`
-
-  Function that is called after successful command line parsing. See [`newMain`](#newMain) for details.
-
-- `initialValue`
-
-  Initial value for the object passed to `newMain` function.
-
-
-**Notes**
-
-- `newMain` will not be called in case of parsing error.
-
 **Return value**
 
 - In case of parsing error - `Result.exitCode` (`1` by default).
-- In case of success:
-  - `0` for the `parseArgs` version that doesn't accept `newMain` function.
-  - `0` if `newMain` doesn't return a value that can be cast to `int`.
-  - Value returned by `newMain` that is cast to `int`.
+- In case of success - `0`.
 
 ### complete
 
@@ -183,8 +166,7 @@ See [`CLI.mainComplete`](#maincomplete) and [`CLI.parseArgs`](#parseargs).
 
   `... newMain(COMMAND command, string[] unrecognizedArgs)`
 
-- `newMain` can optionally return anything that can be cast to `int`. In this case, `argparse` will return that value from `CLI` API
-  or from injected `main` function in case of `CLI.main`.
+- `newMain` can optionally return `int` value. In this case, `argparse` will return that value from `main` function.
 
 > If `newMain` has only one parameter, `argparse` will error out when command line contains unrecognized arguments.
 >

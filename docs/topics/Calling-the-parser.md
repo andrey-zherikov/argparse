@@ -24,7 +24,7 @@ an object that contains parsed arguments.
   mean that `argparse` will parse known arguments only and all unknown ones will be passed into the second parameter of
   `newMain` function. If `newMain` function doesn’t have such parameter, then `argparse` will error out if there is an
   unknown argument provided in command line.
-- Optionally `newMain` can return a result that can be cast to `int`. In this case, this result will be returned from
+- Optionally `newMain` can return an `int`. In this case, this result will be returned from
   standard `main` function.
 
 **Usage examples:**
@@ -32,31 +32,6 @@ an object that contains parsed arguments.
 <code-block src="code_snippets/call_parser1.d" lang="c++"/>
 
 <code-block src="code_snippets/call_parser2.d" lang="c++"/>
-
-
-## Call parser with custom `main` function
-
-In the case when wrapping of standard `main` function does not fit the needs (e.g., some initialization has to be done before parsing
-the command line), `argparse` offers `CLI!(...).parseArgs` function:
-
-`int parseArgs(alias newMain)(string[] args, COMMAND initialValue = COMMAND.init)`
-
-**Parameters:**
-
-- `newMain` – function that’s called with object of type `COMMAND` as a first parameter that is filled with the data parsed from
-  command line; optionally it can take `string[]` as a second parameter which will contain unknown arguments
-  (see [Wrapper for main function](#wrapper-for-main-function) section for details).
-- `args` – raw command line arguments (excluding `argv[0]` – first command line argument in `main` function).
-- `initialValue` – initial value for the object passed to `newMain` function.
-
-**Return value:**
-
-If there is an error happened during the parsing, then non-zero value is returned. In case of no error, if `newMain`
-function returns a value that can be cast to `int`, then this value is returned, or `0` otherwise.
-
-**Usage example:**
-
-<code-block src="code_snippets/call_parser3.d" lang="c++"/>
 
 
 ## Low-level calling of parser
