@@ -214,54 +214,58 @@ unittest
 {
     static struct Args {}
 
-    Args initValue;
+    auto test(alias F)()
+    {
+        mixin CLI!Args.main!F;
 
-    enum Config cfg = { errorHandler: (string s) {} };
-
-    assert(CLI!(cfg, Args).parseArgs([], (cmd      ) {}) == 0);
-    assert(CLI!(cfg, Args).parseArgs([], (cmd, args) {}) == 0);
-    assert(CLI!(cfg, Args).parseArgs([], (cmd      ) => 123) == 123);
-    assert(CLI!(cfg, Args).parseArgs([], (cmd, args) => 123) == 123);
-
-    assert(CLI!(cfg, Args).parseArgs([], (cmd      ) {}, initValue) == 0);
-    assert(CLI!(cfg, Args).parseArgs([], (cmd, args) {}, initValue) == 0);
-    assert(CLI!(cfg, Args).parseArgs([], (cmd      ) => 123, initValue) == 123);
-    assert(CLI!(cfg, Args).parseArgs([], (cmd, args) => 123, initValue) == 123);
-
-    // Ensure that CLI.main is compilable
-    { mixin CLI!(cfg, Args).main!((_                  ){}); }
-    { mixin CLI!(cfg, Args).main!((_, string[] unknown){}); }
-    { mixin CLI!(cfg, Args).main!((_                  ){ return 123; }); }
-    { mixin CLI!(cfg, Args).main!((_, string[] unknown){ return 123; }); }
-}
-
-// Ensure that CLI works with non-copyable structs
-unittest
-{
-    static struct Args {
-        this(int) {}
+        return main([]);
     }
 
-    //Args initValue;
-    auto initValue = Args(0);
+    assert(test!(function(_         ){}) == 0);
+    assert(test!(function(_, unknown){}) == 0);
+    assert(test!(function(_         ) => 123) == 123);
+    assert(test!(function(_, unknown) => 123) == 123);
 
-    enum Config cfg = { errorHandler: (string s) {} };
+    assert(test!(function(ref _         ){}) == 0);
+    assert(test!(function(ref _, unknown){}) == 0);
+    assert(test!(function(ref _         ) => 123) == 123);
+    assert(test!(function(ref _, unknown) => 123) == 123);
 
-    assert(CLI!(cfg, Args).parseArgs([], (ref _                  ){}) == 0);
-    assert(CLI!(cfg, Args).parseArgs([], (ref _, string[] unknown){}) == 0);
-    assert(CLI!(cfg, Args).parseArgs([], (ref _                  ){ return 123; }) == 123);
-    assert(CLI!(cfg, Args).parseArgs([], (ref _, string[] unknown){ return 123; }) == 123);
+    assert(test!(delegate(_         ){}) == 0);
+    assert(test!(delegate(_, unknown){}) == 0);
+    assert(test!(delegate(_         ) => 123) == 123);
+    assert(test!(delegate(_, unknown) => 123) == 123);
 
-    assert(CLI!(cfg, Args).parseArgs([], (ref _                  ){}, initValue) == 0);
-    assert(CLI!(cfg, Args).parseArgs([], (ref _, string[] unknown){}, initValue) == 0);
-    assert(CLI!(cfg, Args).parseArgs([], (ref _                  ){ return 123; }, initValue) == 123);
-    assert(CLI!(cfg, Args).parseArgs([], (ref _, string[] unknown){ return 123; }, initValue) == 123);
+    assert(test!(delegate(ref _         ){}) == 0);
+    assert(test!(delegate(ref _, unknown){}) == 0);
+    assert(test!(delegate(ref _         ) => 123) == 123);
+    assert(test!(delegate(ref _, unknown) => 123) == 123);
+}
 
-    // Ensure that CLI.main is compilable
-    { mixin CLI!(cfg, Args).main!((ref _                  ){}); }
-    { mixin CLI!(cfg, Args).main!((ref _, string[] unknown){}); }
-    { mixin CLI!(cfg, Args).main!((ref _                  ){ return 123; }); }
-    { mixin CLI!(cfg, Args).main!((ref _, string[] unknown){ return 123; }); }
+unittest
+{
+    // Ensure that CLI.main works with non-copyable structs
+    static struct Args {
+        @disable this(ref Args);
+        @disable void opAssign(ref Args);
+    }
+
+    auto test(alias F)()
+    {
+        mixin CLI!Args.main!F;
+
+        return main([]);
+    }
+
+    assert(test!(function(ref _         ){}) == 0);
+    assert(test!(function(ref _, unknown){}) == 0);
+    assert(test!(function(ref _         ) => 123) == 123);
+    assert(test!(function(ref _, unknown) => 123) == 123);
+
+    assert(test!(delegate(ref _         ){}) == 0);
+    assert(test!(delegate(ref _, unknown){}) == 0);
+    assert(test!(delegate(ref _         ) => 123) == 123);
+    assert(test!(delegate(ref _, unknown) => 123) == 123);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
