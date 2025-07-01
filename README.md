@@ -62,7 +62,8 @@
     SubCommand!(CMD1, CMD2, Default!CMD3) cmd;
   ```
 
-* `@TrailingArguments` UDA is removed: all command line parameters that appear after double-dash `--` are considered as positional arguments. So if those parameters are to be parsed, use `@PositionalArgument` instead of `@TrailingArguments`.
+* `@TrailingArguments` UDA is removed: all command line parameters that appear after double-dash `--` are considered as positional arguments.
+  So if those parameters are to be parsed, use `@PositionalArgument` instead of `@TrailingArguments`.
 
 * Functions for parsing customization (`PreValidation`, `Parse`, `Validation` and `Action`) now accept functions as runtime parameters instead of template arguments
 
@@ -122,6 +123,9 @@
   ```d
     .AllowedValues("value1", "value2")
   ```
+
+* `parseArgs` template functions that received `newMain` template argument was removed. One should use either `main` template mixin
+  or non-templated `Result parseArgs(ref COMMAND receiver, string[] args)` function.
 
 * Dropped support for DMD-2.099.
 
