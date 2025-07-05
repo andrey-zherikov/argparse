@@ -138,7 +138,7 @@ template CLI(Config config, COMMAND)
         // If we weren't, that would lead to infinite template recursion.
         auto res = CLI!(config, Complete!COMMAND).parseArgs(comp, args);
         if (!res)
-        return res.exitCode;
+            return res.exitCode;
 
         comp.cmd.match!(_ => _.execute!(config, COMMAND));
 
@@ -166,6 +166,7 @@ template CLI(Config config, COMMAND)
         {
             int main(string[] argv)
             {
+                argv = argv[1..$];
                 COMMAND value;
 
                 static if (is(typeof(newMain(value, argv))))
@@ -212,34 +213,54 @@ alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS);
 
 unittest
 {
-    static struct Args {}
+    static struct Args {
+        string s;
+    }
 
     auto test(alias F)()
     {
         mixin CLI!Args.main!F;
 
-        return main([]);
+        return main(["executable","-s","1"]); // argv[0] is executable
     }
 
-    assert(test!(function(_         ){}) == 0);
-    assert(test!(function(_, unknown){}) == 0);
-    assert(test!(function(_         ) => 123) == 123);
-    assert(test!(function(_, unknown) => 123) == 123);
+    assert(test!(function(_){assert(_ == Args("1"));}) == 0);
+    assert(test!(function(_){assert(_ == Args("1")); return 123;}) == 123);
 
-    assert(test!(function(ref _         ){}) == 0);
-    assert(test!(function(ref _, unknown){}) == 0);
-    assert(test!(function(ref _         ) => 123) == 123);
-    assert(test!(function(ref _, unknown) => 123) == 123);
+    assert(test!(function(ref _){assert(_ == Args("1"));}) == 0);
+    assert(test!(function(ref _){assert(_ == Args("1")); return 123;}) == 123);
 
-    assert(test!(delegate(_         ){}) == 0);
-    assert(test!(delegate(_, unknown){}) == 0);
-    assert(test!(delegate(_         ) => 123) == 123);
-    assert(test!(delegate(_, unknown) => 123) == 123);
+    assert(test!(delegate(_){assert(_ == Args("1"));}) == 0);
+    assert(test!(delegate(_){assert(_ == Args("1")); return 123;}) == 123);
 
-    assert(test!(delegate(ref _         ){}) == 0);
-    assert(test!(delegate(ref _, unknown){}) == 0);
-    assert(test!(delegate(ref _         ) => 123) == 123);
-    assert(test!(delegate(ref _, unknown) => 123) == 123);
+    assert(test!(delegate(ref _){assert(_ == Args("1"));}) == 0);
+    assert(test!(delegate(ref _){assert(_ == Args("1")); return 123;}) == 123);
+}
+
+unittest
+{
+    static struct Args {
+        string s;
+    }
+
+    auto test(alias F)()
+    {
+        mixin CLI!Args.main!F;
+
+        return main(["executable","-s","1","u"]); // argv[0] is executable
+    }
+
+    assert(test!(function(_, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(function(_, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
+
+    assert(test!(function(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(function(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
+
+    assert(test!(delegate(_, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(delegate(_, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
+
+    assert(test!(delegate(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(delegate(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
 }
 
 unittest
@@ -248,24 +269,46 @@ unittest
     static struct Args {
         @disable this(ref Args);
         @disable void opAssign(ref Args);
+
+        string s;
     }
 
     auto test(alias F)()
     {
         mixin CLI!Args.main!F;
 
-        return main([]);
+        return main(["executable","-s","1"]); // argv[0] is executable
     }
 
-    assert(test!(function(ref _         ){}) == 0);
-    assert(test!(function(ref _, unknown){}) == 0);
-    assert(test!(function(ref _         ) => 123) == 123);
-    assert(test!(function(ref _, unknown) => 123) == 123);
+    assert(test!(function(ref _){assert(_ == Args("1"));}) == 0);
+    assert(test!(function(ref _){assert(_ == Args("1")); return 123;}) == 123);
 
-    assert(test!(delegate(ref _         ){}) == 0);
-    assert(test!(delegate(ref _, unknown){}) == 0);
-    assert(test!(delegate(ref _         ) => 123) == 123);
-    assert(test!(delegate(ref _, unknown) => 123) == 123);
+    assert(test!(delegate(ref _){assert(_ == Args("1"));}) == 0);
+    assert(test!(delegate(ref _){assert(_ == Args("1")); return 123;}) == 123);
+}
+
+unittest
+{
+    // Ensure that CLI.main works with non-copyable structs
+    static struct Args {
+        @disable this(ref Args);
+        @disable void opAssign(ref Args);
+
+        string s;
+    }
+
+    auto test(alias F)()
+    {
+        mixin CLI!Args.main!F;
+
+        return main(["executable","-s","1","u"]); // argv[0] is executable
+    }
+
+    assert(test!(function(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(function(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
+
+    assert(test!(delegate(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(delegate(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
