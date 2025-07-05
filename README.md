@@ -131,13 +131,26 @@
 
 ### Enhancements and bug fixes
 
+* Parsing procedure follows [POSIX.1-2024](https://pubs.opengroup.org/onlinepubs/9799919799/) meaning that `argparse` now
+  allows at most one value per appearance of named argument in command line. This means that `prog --param value1 value2`
+  is not working anymore by default - `--param` must be repeated: `prog --param value1 --param value2`.
+  However, `prog --param value1,value2` still works.
+  
+  To make `argparse` 2.* behave like 1.*, one should set `Config.variadicNamedArgument` to true.
+  See [documentation](https://andrey-zherikov.github.io/argparse/config.html#variadicNamedArgument) for details.
+
 * Fix for `Command()` UDA: `ArrayIndexError` is not thrown anymore.
+
 * Error messages are printed with `Config.styling` and now have the same styling as help text.
+
 * New `errorMessagePrefix` member in `Config.styling` that determines the style of "Error:" prefix in error messages. This prefix is printed in red by default.
+
 * New checks:
   * Argument is not allowed to be in multiple argument groups.
   * Subcommand name can't start with `Config.shortNamePrefix` (dash `-` by default) or `Config.longNamePrefix` (double-dash `--` by default).
+
 * Functions for parsing customization (`PreValidation`, `Parse`, `Validation` and `Action`) can now return `Result` through `Result.Success` or `Result.Error` and provide error message if needed.
+
 * Fixes for bundling of single-letter arguments.
   For example, the following cases are supported for `bool b; string s;` arguments:
   * `./prog -b -s=abc`
@@ -145,15 +158,20 @@
   * `./prog -b -sabc`
   * `./prog -bsabc`
   * `./prog -bs=abc`
+
 * Fixes for parsing of multiple values. Only these formats are supported:
   * `./prog --arg value1 value2 value3`
   * `./prog --arg=value1,value2,value3`
+
 * Removed support for delegate in `Config.errorHandler`, `Description`, `ShortDescription`, `Usage` and `Epilog` because of compiler's `closures are not yet supported in CTFE`.
+
 * Long and short names of arguments are now separated:
   * Short names are single-character names by default. This can be overridden by explicitly specifying short and long names in `NamedArgument` UDA.
   * Short names can be specified with short prefix only (e.g. `-`).
   * Long names can be specified with long prefix only (e.g. `--`).
+
 * Added new `Config.assignKeyValueChar` parameter to customize assign character in `key=value` syntax for arguments with associative array type.
+
 * Added support of `@PositionalArgument` without explicit position. In this case positions are determined in the order of declarations of members.
 
 ### Other changes

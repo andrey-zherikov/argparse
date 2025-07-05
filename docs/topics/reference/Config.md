@@ -56,8 +56,8 @@ Example:
 
 ## Variadic named arguments {id="variadicNamedArgument"}
 
-`Config.variadicNamedArgument` flag controls whether named arguments should be follow POSIX guidelines which allows
-only one value per named argument: `-a value1 -a value2`.
+`Config.variadicNamedArgument` flag controls whether named arguments should be follow [POSIX.1-2024](https://pubs.opengroup.org/onlinepubs/9799919799/)
+guidelines which allows only one value per named argument: `-a value1 -a value2`.
 
 Setting this flag to `true` allows multiple values to be passed to a named argument: `-a value1 value2`.
 
