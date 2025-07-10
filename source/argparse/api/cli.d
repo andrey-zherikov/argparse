@@ -90,7 +90,7 @@ template CLI(Config config, COMMAND)
 {
     static Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
     {
-        auto res = callParser!(config, false)(receiver, args, unrecognizedArgs);
+        auto res = callParser!config(receiver, args, unrecognizedArgs);
 
         if(!res && res.errorMsg.length > 0)
             onError!config(res.errorMsg);
