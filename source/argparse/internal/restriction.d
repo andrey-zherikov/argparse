@@ -7,6 +7,36 @@ import argparse.internal.arguments: ArgumentInfo;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private auto CheckNumberOfValues(const Config config, const ArgumentInfo info, size_t index)
+{
+    return (in size_t[size_t] cliArgs)
+    {
+        return (index in cliArgs) ?
+            info.checkValuesCount(&config, info.displayName, cliArgs[index]) :
+            Result.Success;
+    };
+}
+
+unittest
+{
+    ArgumentInfo info;
+    info.displayNames = ["-foo"];
+    info.minValuesCount = 2;
+    info.maxValuesCount = 4;
+
+    auto f = CheckNumberOfValues(Config.init, info, 0);
+
+    assert(f((size_t[size_t]).init));
+    assert(f([1:3]));
+
+    assert(f([0:1]).isError("Argument","expected at least 2 values"));
+    assert(f([0:2]));
+    assert(f([0:3]));
+    assert(f([0:4]));
+    assert(f([0:5]).isError("Argument","expected at most 4 values"));
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private auto RequiredArg(const Config config, const ArgumentInfo info, size_t index)
 {
@@ -225,6 +255,9 @@ package struct Restrictions
         static foreach(argIndex, info; infos)
             static if(info.memberSymbol !is null)   // to skip HelpArgumentUDA
             {
+                if(config.variadicNamedArgument)
+                    checks ~= CheckNumberOfValues(config, info, argIndex);
+
                 static if(info.required)
                     checks ~= RequiredArg(config, info, argIndex);
 
