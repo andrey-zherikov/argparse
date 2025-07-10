@@ -10,6 +10,7 @@ import argparse.api.ansi: ansiStylingArgument;
 import argparse.internal.arguments: ArgumentInfo;
 import argparse.internal.command: Command, createCommand;
 import argparse.internal.commandinfo: getTopLevelCommandInfo;
+import argparse.internal.commandstack;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -513,12 +514,7 @@ private struct Parser
     Config config;
     string[] unrecognizedArgs;
 
-    size_t idxNextPositional = 0;
-
-    size_t[] idxPositionalStack;
-    Command[] cmdStack;
-
-    invariant(cmdStack.length >= idxPositionalStack.length);
+    CommandStack cmdStack;
 
     ///////////////////////////////////////////////////////////////////////
 
@@ -526,9 +522,6 @@ private struct Parser
     {
         if(!res)
             return res;
-
-        if(a.info.positional)
-            idxNextPositional++;
 
         return Result.Success;
     }
@@ -603,20 +596,13 @@ private struct Parser
                     return res;
             }
         }
-        foreach(ref cmd; cmdStack)
-        {
-            auto res = cmd.checkRestrictions();
-            if(!res)
-                return res;
-        }
 
-        return Result.Success;
+        return cmdStack.checkRestrictions();
     }
 
     void addCommand(Command cmd)
     {
-        cmdStack ~= cmd;
-        idxPositionalStack ~= idxNextPositional;
+        cmdStack.addCommand(cmd);
     }
 }
 
