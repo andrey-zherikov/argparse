@@ -69,19 +69,11 @@ private struct Parser
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
+private Result callParser(bool completionMode)(Config config, CommandStack cmdStack, string[] args, out string[] unrecognizedArgs)
 {
-    import argparse.ansi: detectSupport;
+    ansiStylingArgument.isEnabled = config.detectAnsiSupport();
 
-    auto cfg = config;
-    if(cfg.stylingMode == Config.StylingMode.autodetect)
-        cfg.stylingMode = detectSupport() ? Config.StylingMode.on : Config.StylingMode.off;
-
-    ansiStylingArgument.isEnabled = cfg.stylingMode == Config.StylingMode.on;
-
-    auto cmdStack = createCommandStack!config(receiver);
-
-    Parser parser = { cfg, &cmdStack };
+    Parser parser = { config, &cmdStack };
 
     auto res = parser.parseAll!completionMode(args);
 
@@ -92,6 +84,11 @@ package(argparse) Result callParser(Config config, bool completionMode, COMMAND)
     }
 
     return res;
+}
+
+package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
+{
+    return callParser!completionMode(config, createCommandStack!config(receiver), args, unrecognizedArgs);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
