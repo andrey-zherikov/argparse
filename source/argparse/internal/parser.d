@@ -69,16 +69,19 @@ private struct Parser
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private Result callParser(bool completionMode)(
-    Config config, Command cmd, string[] args, out string[] unrecognizedArgs,
-)
+package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 {
-    ansiStylingArgument.isEnabled = config.stylingMode == Config.StylingMode.on;
+    import argparse.ansi: detectSupport;
 
-    CommandStack cmdStack;
-    cmdStack.addCommand(cmd);
+    auto cfg = config;
+    if(cfg.stylingMode == Config.StylingMode.autodetect)
+        cfg.stylingMode = detectSupport() ? Config.StylingMode.on : Config.StylingMode.off;
 
-    Parser parser = { config, &cmdStack };
+    ansiStylingArgument.isEnabled = cfg.stylingMode == Config.StylingMode.on;
+
+    auto cmdStack = createCommandStack!config(receiver);
+
+    Parser parser = { cfg, &cmdStack };
 
     auto res = parser.parseAll!completionMode(args);
 
@@ -89,38 +92,6 @@ private Result callParser(bool completionMode)(
     }
 
     return res;
-}
-
-package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
-if(config.stylingMode != Config.StylingMode.autodetect)
-{
-    return callParser!completionMode(
-        config, createCommand!config(receiver, getTopLevelCommandInfo!COMMAND(config)), args, unrecognizedArgs,
-    );
-}
-
-private auto enableStyling(Config config, bool enable)
-{
-    config.stylingMode = enable ? Config.StylingMode.on : Config.StylingMode.off;
-    return config;
-}
-
-unittest
-{
-    assert(enableStyling(Config.init, true).stylingMode == Config.StylingMode.on);
-    assert(enableStyling(Config.init, false).stylingMode == Config.StylingMode.off);
-}
-
-package(argparse) Result callParser(Config config, bool completionMode, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
-if(config.stylingMode == Config.StylingMode.autodetect)
-{
-    import argparse.ansi: detectSupport;
-
-
-    if(detectSupport())
-        return callParser!(enableStyling(config, true), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
-    else
-        return callParser!(enableStyling(config, false), completionMode, COMMAND)(receiver, args, unrecognizedArgs);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
