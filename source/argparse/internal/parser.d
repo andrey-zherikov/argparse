@@ -13,79 +13,34 @@ import argparse.internal.commandinfo: getTopLevelCommandInfo;
 import argparse.internal.commandstack;
 import argparse.internal.tokenizer;
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package struct Parser
-{
-    Config config;
-    CommandStack* cmdStack;
-
-    string[] unrecognizedArgs;
-
-    ///////////////////////////////////////////////////////////////////////
-
-    auto parseAll(bool completionMode)(string[] args)
-    {
-        import std.sumtype : match;
-
-        static if(completionMode)
-        {
-            auto tok = Tokenizer(config, args[0..$-1], cmdStack);
-
-            foreach(entry; tok)
-            {
-                entry
-                    .match!(
-                        (ref SubCommand c) { cmdStack.addCommand(c.cmdInit()); },
-                        (ref _) {}
-                );
-            }
-
-            // Provide suggestions for the last argument only
-            auto res = Result.Success;
-            res.suggestions = cmdStack.getSuggestions(args[$-1]);
-            return res;
-        }
-        else
-        {
-            auto tok = Tokenizer(config, args, cmdStack);
-
-            foreach(entry; tok)
-            {
-                auto res = entry
-                    .match!(
-                        (Argument a) => a.parse(),
-                        (ref SubCommand c) { cmdStack.addCommand(c.cmdInit()); return Result.Success; },
-                        (ref Unknown u) { unrecognizedArgs ~= u.value; return Result.Success; }
-                    );
-                if (!res)
-                    return res;
-            }
-
-            return cmdStack.checkRestrictions();
-        }
-    }
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private Result callParser(Config config, CommandStack cmdStack, string[] args, out string[] unrecognizedArgs)
+private Result parseArgs(Config config, CommandStack cmdStack, string[] args, out string[] unrecognizedArgs)
 {
     ansiStylingArgument.isEnabled = config.detectAnsiSupport();
 
-    Parser parser = { config, &cmdStack };
+    auto tok = Tokenizer(config, args, &cmdStack);
 
-    auto res = parser.parseAll!false(args);
+    foreach(entry; Tokenizer(config, args, &cmdStack))
+    {
+        import std.sumtype : match;
 
-    if(res)
-        unrecognizedArgs = parser.unrecognizedArgs;
+        auto res = entry.match!(
+                (ref Argument a) => a.parse(),
+                (ref SubCommand c) { cmdStack.addCommand(c.cmdInit()); return Result.Success; },
+                (ref Unknown u) { unrecognizedArgs ~= u.value; return Result.Success; }
+            );
+        if (!res)
+            return res;
+    }
 
-    return res;
+    return cmdStack.checkRestrictions();
 }
 
 package(argparse) Result callParser(Config config, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 {
-    return callParser(config, createCommandStack!config(receiver), args, unrecognizedArgs);
+    return parseArgs(config, createCommandStack!config(receiver), args, unrecognizedArgs);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
