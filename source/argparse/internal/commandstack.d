@@ -38,12 +38,13 @@ package struct CommandStack
         idxPositionalStack ~= idxNextPositional;
     }
 
-    const(string)[] getSuggestions(string arg)
+    string[] getSuggestions(string arg) const
     {
+        import std.algorithm: map, sort, uniq;
+        import std.array: array;
         import std.range: join;
-        import std.algorithm : map;
 
-        return stack.map!((ref _) => _.suggestions(arg)).join;
+        return stack.map!((ref _) => _.suggestions(arg)).join.sort.uniq.array;
     }
 
     auto checkRestrictions()

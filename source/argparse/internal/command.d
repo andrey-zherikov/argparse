@@ -152,7 +152,7 @@ package struct Command
 
 
 
-    const(string)[] suggestions(string prefix) const
+    string[] suggestions(string prefix) const
     {
         import std.range: chain;
         import std.algorithm: filter, map;
