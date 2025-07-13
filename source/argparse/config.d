@@ -96,6 +96,15 @@ struct Config
     enum StylingMode { autodetect, on, off }
     StylingMode stylingMode = StylingMode.autodetect;
 
+    package bool detectAnsiSupport()
+    {
+        import argparse.ansi: detectSupport;
+
+        if(stylingMode == StylingMode.autodetect)
+            stylingMode = detectSupport() ? StylingMode.on : StylingMode.off;
+
+        return stylingMode == StylingMode.on;
+    }
 
     /**
        Function that processes error messages if they happen during argument parsing.

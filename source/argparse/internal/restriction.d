@@ -7,10 +7,40 @@ import argparse.internal.arguments: ArgumentInfo;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private auto CheckNumberOfValues(const Config config, const ArgumentInfo info, size_t index)
+{
+    return (in size_t[size_t] cliArgs)
+    {
+        return (index in cliArgs) ?
+            info.checkValuesCount(&config, info.displayName, cliArgs[index]) :
+            Result.Success;
+    };
+}
+
+unittest
+{
+    ArgumentInfo info;
+    info.displayNames = ["-foo"];
+    info.minValuesCount = 2;
+    info.maxValuesCount = 4;
+
+    auto f = CheckNumberOfValues(Config.init, info, 0);
+
+    assert(f((size_t[size_t]).init));
+    assert(f([1:3]));
+
+    assert(f([0:1]).isError("Argument","expected at least 2 values"));
+    assert(f([0:2]));
+    assert(f([0:3]));
+    assert(f([0:4]));
+    assert(f([0:5]).isError("Argument","expected at most 4 values"));
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private auto RequiredArg(const Config config, const ArgumentInfo info, size_t index)
 {
-    return (in bool[size_t] cliArgs)
+    return (in size_t[size_t] cliArgs)
     {
         return (index in cliArgs) ?
             Result.Success :
@@ -22,18 +52,18 @@ unittest
 {
     auto f = RequiredArg(Config.init, ArgumentInfo([],[],[""]), 0);
 
-    assert(f((bool[size_t]).init).isError("argument is required"));
+    assert(f((size_t[size_t]).init).isError("argument is required"));
 
-    assert(f([1:true]).isError("argument is required"));
+    assert(f([1:1]).isError("argument is required"));
 
-    assert(f([0:true]));
+    assert(f([0:1]));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private auto RequiredTogether(const Config config, const(ArgumentInfo)[] allArgs)
 {
-    return (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
+    return (in size_t[size_t] cliArgs, in size_t[] restrictionArgs)
     {
         size_t foundIndex = size_t.max;
         size_t missedIndex = size_t.max;
@@ -62,19 +92,19 @@ unittest
 {
     auto f = RequiredTogether(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
-    assert(f((bool[size_t]).init, [0,1]));
+    assert(f((size_t[size_t]).init, [0,1]));
 
-    assert(f([0:true], [0,1]).isError("Missed argument","--a"));
-    assert(f([1:true], [0,1]).isError("Missed argument","--b"));
+    assert(f([0:1], [0,1]).isError("Missed argument","--a"));
+    assert(f([1:1], [0,1]).isError("Missed argument","--b"));
 
-    assert(f([0:true, 1:true], [0,1]));
+    assert(f([0:1, 1:1], [0,1]));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private auto RequiredAnyOf(const Config config, const(ArgumentInfo)[] allArgs)
 {
-    return (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
+    return (in size_t[size_t] cliArgs, in size_t[] restrictionArgs)
     {
         import std.algorithm: map;
         import std.array: join;
@@ -93,20 +123,20 @@ unittest
 {
     auto f = RequiredAnyOf(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
-    assert(f((bool[size_t]).init, [0,1]).isError("One of the following arguments is required","--a","--b"));
-    assert(f([2:true], [0,1]).isError("One of the following arguments is required","--a","--b"));
+    assert(f((size_t[size_t]).init, [0,1]).isError("One of the following arguments is required","--a","--b"));
+    assert(f([2:1], [0,1]).isError("One of the following arguments is required","--a","--b"));
 
-    assert(f([0:true], [0,1]));
-    assert(f([1:true], [0,1]));
+    assert(f([0:1], [0,1]));
+    assert(f([1:1], [0,1]));
 
-    assert(f([0:true, 1:true], [0,1]));
+    assert(f([0:1, 1:1], [0,1]));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private auto MutuallyExclusive(const Config config, const(ArgumentInfo)[] allArgs)
 {
-    return (in bool[size_t] cliArgs, in size_t[] restrictionArgs)
+    return (in size_t[size_t] cliArgs, in size_t[] restrictionArgs)
     {
         size_t foundIndex = size_t.max;
 
@@ -129,16 +159,16 @@ unittest
 {
     auto f = MutuallyExclusive(Config.init, [ArgumentInfo([],[],["--a"]), ArgumentInfo([],[],["--b"]), ArgumentInfo([],[],["--c"])]);
 
-    assert(f((bool[size_t]).init, [0,1]));
+    assert(f((size_t[size_t]).init, [0,1]));
 
-    assert(f([0:true], [0,1]));
-    assert(f([1:true], [0,1]));
-    assert(f([2:true], [0,1]));
+    assert(f([0:1], [0,1]));
+    assert(f([1:1], [0,1]));
+    assert(f([2:1], [0,1]));
 
-    assert(f([0:true, 2:true], [0,1]));
-    assert(f([1:true, 2:true], [0,1]));
+    assert(f([0:1, 2:1], [0,1]));
+    assert(f([1:1, 2:1], [0,1]));
 
-    assert(f([0:true, 1:true], [0,1]).isError("is not allowed with argument","--a","--b"));
+    assert(f([0:1, 1:1], [0,1]).isError("is not allowed with argument","--a","--b"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -155,7 +185,7 @@ package(argparse) struct RestrictionGroup
     private size_t[] argIndex;
 
 
-    private Result delegate(in bool[size_t] cliArgs, in size_t[] argIndex)[] checks;
+    private Result delegate(in size_t[size_t] cliArgs, in size_t[] argIndex)[] checks;
 
     private void initialize(ref const Config config, const(ArgumentInfo)[] infos)
     {
@@ -169,7 +199,7 @@ package(argparse) struct RestrictionGroup
         }
     }
 
-    private Result check(in bool[size_t] cliArgs) const
+    private Result check(in size_t[size_t] cliArgs) const
     {
         foreach(check; checks)
         {
@@ -215,7 +245,7 @@ unittest
 
 package struct Restrictions
 {
-    private Result delegate(in bool[size_t] cliArgs)[] checks;
+    private Result delegate(in size_t[size_t] cliArgs)[] checks;
     private RestrictionGroup[] groups;
     private size_t[string] groupsByLocation;
 
@@ -225,6 +255,9 @@ package struct Restrictions
         static foreach(argIndex, info; infos)
             static if(info.memberSymbol !is null)   // to skip HelpArgumentUDA
             {
+                if(config.variadicNamedArgument)
+                    checks ~= CheckNumberOfValues(config, info, argIndex);
+
                 static if(info.required)
                     checks ~= RequiredArg(config, info, argIndex);
 
@@ -246,7 +279,7 @@ package struct Restrictions
     }
 
 
-    package Result check(in bool[size_t] cliArgs) const
+    package Result check(in size_t[size_t] cliArgs) const
     {
         foreach(check; checks)
         {

@@ -117,7 +117,7 @@ package struct Command
     {
         return (stack, ref param)
         {
-            idxParsedArgs[index] = true;
+            idxParsedArgs[index] += param.value.length;
             return funcs[index](stack, param);
         };
     }
@@ -152,7 +152,7 @@ package struct Command
 
 
 
-    const(string)[] suggestions(string prefix) const
+    string[] suggestions(string prefix) const
     {
         import std.range: chain;
         import std.algorithm: filter, map;
@@ -169,7 +169,7 @@ package struct Command
 
     Arguments arguments;
 
-    bool[size_t] idxParsedArgs;
+    size_t[size_t] idxParsedArgs;
 
     Restrictions restrictions;
 
