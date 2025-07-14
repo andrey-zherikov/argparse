@@ -163,12 +163,18 @@
   * `./prog --arg value1 value2 value3`
   * `./prog --arg=value1,value2,value3`
 
-* Removed support for delegate in `Config.errorHandler`, `Description`, `ShortDescription`, `Usage` and `Epilog` because of compiler's `closures are not yet supported in CTFE`.
+* Values of multi-value positional argument can now be interleaved with named arguments.
+  For example, the following is the same when `arg1` and `arg2` are values for single `string[] args` positional argument:
+  * `--flag arg1 arg2`
+  * `arg1 --flag arg2`
+  * `arg1 arg2 --flag`
 
 * Long and short names of arguments are now separated:
   * Short names are single-character names by default. This can be overridden by explicitly specifying short and long names in `NamedArgument` UDA.
   * Short names can be specified with short prefix only (e.g. `-`).
   * Long names can be specified with long prefix only (e.g. `--`).
+
+* Removed support for delegate in `Config.errorHandler`, `Description`, `ShortDescription`, `Usage` and `Epilog` because of compiler's `closures are not yet supported in CTFE`.
 
 * Added new `Config.assignKeyValueChar` parameter to customize assign character in `key=value` syntax for arguments with associative array type.
 

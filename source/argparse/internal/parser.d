@@ -176,17 +176,15 @@ unittest
         Args args;
         string[] unrecognizedArgs;
         assert(callParser!(Config.init)(args, ["file1", "-f", "file2", "target"], unrecognizedArgs));
-        import std.stdio;stderr.writeln(unrecognizedArgs, args);
-        //assert(unrecognizedArgs == []);
-        //assert(args == Args(true,  ["file1", "file2", "target"]));
+        assert(unrecognizedArgs == []);
+        assert(args == Args(true,  ["file1", "file2", "target"]));
     }
     {
         Args args;
         string[] unrecognizedArgs;
         assert(callParser!(Config.init)(args, ["file1", "file2", "-f", "target"], unrecognizedArgs));
-        import std.stdio;stderr.writeln(unrecognizedArgs, args);
-        //assert(unrecognizedArgs == []);
-        //assert(args == Args(true,  ["file1", "file2", "target"]));
+        assert(unrecognizedArgs == []);
+        assert(args == Args(true,  ["file1", "file2", "target"]));
     }
     {
         Args args;

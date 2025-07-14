@@ -141,15 +141,6 @@ package struct Command
         return Argument(res.arg, getParseFunc(parseFuncs, res.index), getParseFunc(completeFuncs, res.index));
     }
 
-    auto findPositionalArgument(size_t position)
-    {
-        auto res = arguments.findPositionalArgument(position);
-        if(!res.arg)
-            return Argument.init;
-
-        return Argument(res.arg, getParseFunc(parseFuncs, res.index), getParseFunc(completeFuncs, res.index));
-    }
-
 
 
     string[] suggestions(string prefix) const
@@ -170,6 +161,31 @@ package struct Command
     Arguments arguments;
 
     size_t[size_t] idxParsedArgs;
+    size_t idxParsingPositional;
+
+    auto getNextPositionalArgument()
+    {
+        alias tryIndex = (index)
+        {
+            auto res = arguments.findPositionalArgument(index);
+            if(!res.arg)
+                return Argument.init;
+
+            // Argument can't accept more values
+            if(idxParsedArgs.get(res.index, 0) >= res.arg.maxValuesCount.get)
+                return Argument.init;
+
+            return Argument(res.arg, getParseFunc(parseFuncs, res.index), getParseFunc(completeFuncs, res.index));
+        };
+
+        // Try current argument. If it doesn't work, try the next one
+        auto res = tryIndex(idxParsingPositional);
+        if(!res)
+            res = tryIndex(++idxParsingPositional);
+
+        return res;
+    }
+
 
     Restrictions restrictions;
 
