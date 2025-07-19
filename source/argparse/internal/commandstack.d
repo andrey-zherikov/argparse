@@ -23,19 +23,16 @@ package struct CommandStack
 {
     Command[] stack;
 
-    size_t[] idxPositionalStack;
-    size_t idxNextPositional = 0;
+    size_t idxCurPositionalCmd;
 
     private this(Command cmd)
     {
         stack = [cmd];
-        idxPositionalStack = [0];
     }
 
     void addCommand(Command cmd)
     {
         stack ~= cmd;
-        idxPositionalStack ~= idxNextPositional;
     }
 
     string[] getSuggestions(string arg) const
@@ -89,38 +86,31 @@ package struct CommandStack
     FindResult getNextPositionalArgument(bool lookInDefaultSubCommands)
     {
         // Look up in current command stack
-        // Actual stack can be longer than the one we looked up through last time
-        // because parsing of named argument can add default commands into it
-        for(auto stackSize = idxPositionalStack.length; stackSize <= stack.length; ++stackSize)
+        while(true)
         {
-            if(idxPositionalStack.length < stackSize)
-                idxPositionalStack ~= idxNextPositional;
-
-            auto newStack = stack[0..stackSize];
-
-            auto res = newStack.back.findPositionalArgument(idxNextPositional - idxPositionalStack[$-1]);
+            auto res = stack[idxCurPositionalCmd].getNextPositionalArgument();
             if(res)
-            {
-                idxNextPositional++;
-                return FindResult(res, newStack);
-            }
+                return FindResult(res, stack[0..idxCurPositionalCmd+1]);
+
+            if(idxCurPositionalCmd == stack.length-1)
+                break;
+
+            ++idxCurPositionalCmd;
         }
 
         if(lookInDefaultSubCommands)
         {
-            for(auto newStack = stack[], posStack = idxPositionalStack; newStack.back.defaultSubCommand !is null;)
+            for(auto newStack = stack[]; newStack.back.defaultSubCommand !is null;)
             {
                 newStack ~= newStack.back.defaultSubCommand();
-                posStack ~= idxNextPositional;
 
-                auto res = newStack.back.findPositionalArgument(0);  // position is always 0 in new sub command
+                auto res = newStack.back.getNextPositionalArgument();
                 if(res)
                 {
                     // update stack
                     stack = newStack;
-                    idxPositionalStack = posStack;
+                    idxCurPositionalCmd = stack.length-1;
 
-                    idxNextPositional++;
                     return FindResult(res, newStack);
                 }
             }
