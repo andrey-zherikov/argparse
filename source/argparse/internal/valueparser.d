@@ -10,7 +10,6 @@ import argparse.internal.novalueactionfunc;
 import argparse.internal.parsefunc;
 import argparse.internal.validationfunc;
 
-import std.meta: AliasSeq;
 import std.traits;
 
 
@@ -42,43 +41,79 @@ package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, V
     auto change(ParsingStep step, F)(F newFunc)
     {
         // Changing a function can change our `PARSE` and/or `RECEIVER`
-        static if(step == ParsingStep.parse)
+        static if(step == ParsingStep.preProcess)
+        {
+            return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
+                (newFunc, preValidate, parse, validate, action, noValueAction);
+        }
+        else static if(step == ParsingStep.preValidate)
+        {
+            return ValueParser!(PARSE, RECEIVER, F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
+                (preProcess, newFunc, parse, validate, action, noValueAction);
+        }
+        else static if(step == ParsingStep.parse)
+        {
             alias PARSE = Parameters!F[0];
+            return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
+                (preProcess, preValidate, newFunc, validate, action, noValueAction);
+        }
         else static if(step == ParsingStep.validate)
         {
             static if(is(Parameters!F[0] == Param!PARSE, PARSE)) {}
+            return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, F, ACTION_F, NO_VALUE_ACTION_F)
+                (preProcess, preValidate, parse, newFunc, action, noValueAction);
         }
-        else static if(step >= ParsingStep.action)
+        else static if(step == ParsingStep.action)
         {
             alias RECEIVER = Parameters!F[0];
-            static if(step == ParsingStep.action && is(Parameters!F[1] == Param!PARSE, PARSE)) {}
+            static if(is(Parameters!F[1] == Param!PARSE, PARSE)) {}
+            return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, F, NO_VALUE_ACTION_F)
+                (preProcess, preValidate, parse, validate, newFunc, noValueAction);
         }
-
-        alias newFuncs = AliasSeq!(this.tupleof[0 .. step], newFunc, this.tupleof[step + 1 .. $]);
-        return ValueParser!(PARSE, RECEIVER, typeof(newFuncs[1 .. $]))(newFuncs);
+        else static if(step == ParsingStep.noValueAction)
+        {
+            alias RECEIVER = Parameters!F[0];
+            return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, F)
+                (preProcess, preValidate, parse, validate, action, newFunc);
+        }
     }
 
-    auto addDefaults(OTHER_PARSE, OTHER_RECEIVER, OTHER_F...)(ValueParser!(OTHER_PARSE, OTHER_RECEIVER, OTHER_F) other)
+    auto addDefaults(OTHER_PARSE, OTHER_RECEIVER, OTHER_PRE_VALIDATE_F, OTHER_PARSE_F, OTHER_VALIDATE_F, OTHER_ACTION_F, OTHER_NO_VALUE_ACTION_F)(
+        ValueParser!(OTHER_PARSE, OTHER_RECEIVER, OTHER_PRE_VALIDATE_F, OTHER_PARSE_F, OTHER_VALIDATE_F, OTHER_ACTION_F, OTHER_NO_VALUE_ACTION_F) other)
     {
         static if(is(PARSE == void))
             alias PARSE = OTHER_PARSE;
         static if(is(RECEIVER == void))
             alias RECEIVER = OTHER_RECEIVER;
         static if(is(PRE_VALIDATE_F == byte)) // `byte` means "default"
+        {
+            alias PRE_VALIDATE_F = OTHER_PRE_VALIDATE_F;
             auto preValidate = other.preValidate;
+        }
         static if(is(PARSE_F == byte))
+        {
+            alias PARSE_F = OTHER_PARSE_F;
             auto parse = other.parse;
+        }
         static if(is(VALIDATE_F == byte))
+        {
+            alias VALIDATE_F = OTHER_VALIDATE_F;
             auto validate = other.validate;
+        }
         static if(is(ACTION_F == byte))
+        {
+            alias ACTION_F = OTHER_ACTION_F;
             auto action = other.action;
+        }
         static if(is(NO_VALUE_ACTION_F == byte))
+        {
+            alias NO_VALUE_ACTION_F = OTHER_NO_VALUE_ACTION_F;
             auto noValueAction = other.noValueAction;
+        }
 
-        alias newFuncs = AliasSeq!(preValidate, parse, validate, action, noValueAction);
-        return ValueParser!(PARSE, RECEIVER, typeof(newFuncs))(
+        return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)(
             preProcess is defaultPreProcessFunc ? other.preProcess : preProcess,
-            newFuncs,
+            preValidate, parse, validate, action, noValueAction
         );
     }
 }
