@@ -26,12 +26,84 @@ package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, V
 {
     // We could have assigned `defaultPreProcessFunc` to `preProcess`, but we would lose `__traits(isZeroInit)`
     // and not really gain anything
-    void function(ref RawParam) preProcess;
-    PRE_VALIDATE_F preValidate;
-    PARSE_F parse;
-    VALIDATE_F validate;
-    ACTION_F action;
-    NO_VALUE_ACTION_F noValueAction;
+    //////////////////////////
+    /// pre process
+    private void function(ref RawParam param) preProcess;
+
+    auto changePreProcess(void function(ref RawParam param) func)
+    {
+        preProcess = func;
+        return this;
+    }
+
+    //////////////////////////
+    /// pre validation
+    private ValidationFunc!string preValidate;
+
+    auto changePreValidation(ValidationFunc!string func)
+    {
+        return ValueParser!(PARSE, RECEIVER, typeof(func), PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
+            (preProcess, func, parse, validate, action, noValueAction);
+    }
+
+    //////////////////////////
+    /// parse
+    static if(!is(PARSE_F == byte)) // TODO: PARSE == void. 7/25/2025 8:13 PM
+        private ParseFunc!PARSE parse;
+    else
+        private typeof(null) parse;
+
+    auto changeParse(P)(ParseFunc!P func) const
+    if(is(PARSE == void) || is(PARSE == P))
+    {
+        return ValueParser!(P, RECEIVER, PRE_VALIDATE_F, typeof(func), VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
+            (preProcess, preValidate, func, validate, action, noValueAction);
+    }
+
+    //////////////////////////
+    /// validation
+    static if(!is(VALIDATE_F == byte)) // TODO: PARSE == void. 7/25/2025 8:13 PM
+        private ValidationFunc!PARSE validate;
+    else
+        private typeof(null) validate;
+
+    auto changeValidation(P)(ValidationFunc!P func) const
+    if(is(PARSE == void) || is(PARSE == P))
+    {
+        return ValueParser!(P, RECEIVER, PRE_VALIDATE_F, PARSE_F, typeof(func), ACTION_F, NO_VALUE_ACTION_F)
+            (preProcess, preValidate, parse, func, action, noValueAction);
+    }
+
+    //////////////////////////
+    /// action
+    static if(!is(ACTION_F == byte)) // TODO: if(!is(PARSE == void) && !is(RECEIVER == void)) . 7/25/2025 8:19 PM
+        private ActionFunc!(RECEIVER, PARSE) action;
+    else
+        private typeof(null) action;
+
+    auto changeAction(P, R)(ActionFunc!(R, P) func) const
+    if((is(PARSE == void) || is(PARSE == P)) &&
+        (is(RECEIVER == void) || is(RECEIVER == R)))
+    {
+        return ValueParser!(P, R, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, typeof(func), NO_VALUE_ACTION_F)
+            (preProcess, preValidate, parse, validate, func, noValueAction);
+    }
+
+
+    //////////////////////////
+    /// noValueAction
+    static if(!is(NO_VALUE_ACTION_F == byte)) // TODO: if(!is(RECEIVER == void)). 7/25/2025 8:21 PM
+        private NoValueActionFunc!RECEIVER noValueAction;
+    else
+        private typeof(null) noValueAction;
+
+    auto changeNoValueAction(R)(NoValueActionFunc!R func) const
+    if(is(RECEIVER == void) || is(RECEIVER == R))
+    {
+        return ValueParser!(PARSE, R, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, typeof(func))
+            (preProcess, preValidate, parse, validate, action, func);
+    }
+
 
     // TODO: Figure out what this thing is doing here
     alias typeDefaults = TypedValueParser;
@@ -43,38 +115,27 @@ package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, V
         // Changing a function can change our `PARSE` and/or `RECEIVER`
         static if(step == ParsingStep.preProcess)
         {
-            return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
-                (newFunc, preValidate, parse, validate, action, noValueAction);
+            return changePreProcess(newFunc);
         }
         else static if(step == ParsingStep.preValidate)
         {
-            return ValueParser!(PARSE, RECEIVER, F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
-                (preProcess, newFunc, parse, validate, action, noValueAction);
+            return changePreValidation(newFunc);
         }
         else static if(step == ParsingStep.parse)
         {
-            alias PARSE = Parameters!F[0];
-            return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
-                (preProcess, preValidate, newFunc, validate, action, noValueAction);
+            return changeParse(newFunc);
         }
         else static if(step == ParsingStep.validate)
         {
-            static if(is(Parameters!F[0] == Param!PARSE, PARSE)) {}
-            return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, F, ACTION_F, NO_VALUE_ACTION_F)
-                (preProcess, preValidate, parse, newFunc, action, noValueAction);
+            return changeValidation(newFunc);
         }
         else static if(step == ParsingStep.action)
         {
-            alias RECEIVER = Parameters!F[0];
-            static if(is(Parameters!F[1] == Param!PARSE, PARSE)) {}
-            return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, F, NO_VALUE_ACTION_F)
-                (preProcess, preValidate, parse, validate, newFunc, noValueAction);
+            return changeAction(newFunc);
         }
         else static if(step == ParsingStep.noValueAction)
         {
-            alias RECEIVER = Parameters!F[0];
-            return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, F)
-                (preProcess, preValidate, parse, validate, action, newFunc);
+            return changeNoValueAction(newFunc);
         }
     }
 
