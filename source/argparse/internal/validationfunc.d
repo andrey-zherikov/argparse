@@ -3,74 +3,134 @@ module argparse.internal.validationfunc;
 import argparse.config;
 import argparse.param;
 import argparse.result;
+import argparse.internal.calldispatcher;
 import argparse.internal.errorhelpers;
 
 import std.conv: to;
+import std.traits;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private struct FuncValidator(T, int strategy, F)
+private struct Handler(TYPE)
 {
-    F func;
-
-    Result opCall(Param!T param) const
+    static Result opCall(bool function(TYPE value) func, Param!TYPE param)
     {
-        static if(strategy == 0)
-            return func(param) ? Result.Success : invalidValueError(param);
-        else static if(strategy == 1)
-            return func(param.value);
-        else static if(strategy == 2)
-            return func(param.value) ? Result.Success : invalidValueError(param);
-        else static if(strategy == 3 || strategy == 4)
-        {
-            T[1] values = [param.value];
-            auto arrParam = Param!(T[])(param.config, param.name, values[]);
+        return func(param.value) ? Result.Success : invalidValueError(param);
+    }
+    static Result opCall(Result function(TYPE value) func, Param!TYPE param)
+    {
+        return func(param.value);
+    }
+    static Result opCall(bool function(Param!TYPE param) func, Param!TYPE param)
+    {
+        return func(param) ? Result.Success : invalidValueError(param);
+    }
+    static Result opCall(Result function(Param!TYPE param) func, Param!TYPE param)
+    {
+        return func(param);
+    }
+    static Result opCall(bool function(Param!(TYPE[]) param) func, Param!TYPE param)
+    {
+        return func(Param!(TYPE[])(param.config, param.name, [param.value])) ? Result.Success : invalidValueError(param);
+    }
+    static Result opCall(Result function(Param!(TYPE[]) param) func, Param!TYPE param)
+    {
+        return func(Param!(TYPE[])(param.config, param.name, [param.value]));
+    }
+    static Result opCall(const ref ValidationFunc!TYPE.ValueInList func, Param!TYPE param)
+    {
+        return func(param);
+    }
 
-            static if(strategy == 3)
-                return func(arrParam);
-            else
-                return func(arrParam) ? Result.Success : invalidValueError(param);
-        }
-        else
+    static if(isArray!TYPE)
+    {
+        static Result opCall(bool function(ForeachType!TYPE value) func, Param!TYPE param)
         {
             foreach(value; param.value)
-                static if(strategy == 5)
-                {
-                    Result res = func(value);
-                    if(!res)
-                        return res;
-                }
-                else
-                    if(!func(value))
-                        return invalidValueError(param);
+                if(!func(value))
+                    return invalidValueError(param);
+            return Result.Success;
+        }
+        static Result opCall(Result function(ForeachType!TYPE value) func, Param!TYPE param)
+        {
+            foreach (value; param.value)
+            {
+                Result res = func(value);
+                if (!res)
+                    return res;
+            }
             return Result.Success;
         }
     }
 }
 
-private auto toFuncValidator(T, int strategy, F)(F func)
+// bool validate(T value)
+// bool validate(T[] value)
+// bool validate(Param!T param)
+// Result validate(T value)
+// Result validate(T[] value)
+// Result validate(Param!T param)
+package(argparse) struct ValidationFunc(TYPE)
 {
-    FuncValidator!(T, strategy, F) val = { func };
-    return val;
-}
-
-package(argparse)
-{
-    // These overloads also force functions to drop their attributes, reducing the variety of types we have to handle
-    auto ValidationFunc(T)(Result function(Param!T) func)     { return func; }
-    auto ValidationFunc(T)(bool   function(Param!T) func)     { return func.toFuncValidator!(T, 0); }
-    auto ValidationFunc(T)(Result function(T) func)           { return func.toFuncValidator!(T, 1); }
-    auto ValidationFunc(T)(bool   function(T) func)           { return func.toFuncValidator!(T, 2); }
-    auto ValidationFunc(T)(Result function(Param!(T[])) func) { return func.toFuncValidator!(T, 3); }
-    auto ValidationFunc(T)(bool   function(Param!(T[])) func) { return func.toFuncValidator!(T, 4); }
-    auto ValidationFunc(T : U[], U)(Result function(U) func)  { return func.toFuncValidator!(T, 5); }
-    auto ValidationFunc(T : U[], U)(bool function(U) func)    { return func.toFuncValidator!(T, 6); }
-
-    auto ValidationFunc(T, F)(F obj)
-    if(!is(typeof(*obj) == function) && is(typeof(obj(Param!T.init)) : Result))
+    private struct ValueInList
     {
-        return obj;
+        bool[TYPE] values;
+
+        this(TYPE[] values)
+        {
+            foreach(v; values)
+                this.values[v.to!(immutable(TYPE))] = false;
+        }
+
+
+        Result opCall(Param!TYPE param) const
+        {
+            if(!(param.value in values))
+            {
+                import std.algorithm : map;
+                import std.array : join;
+
+                auto valueStyle = param.isNamedArg ? param.config.styling.namedArgumentValue : param.config.styling.positionalArgumentValue;
+
+                string valuesList = values.keys.map!(_ => valueStyle(_.to!string)).join(",");
+
+                return invalidValueError(param,
+                    "\nValid argument values are: " ~ valuesList);
+            }
+
+            return Result.Success;
+        }
+    }
+
+    alias CD = CallDispatcher!(Handler!TYPE);
+    CD dispatcher;
+
+    static foreach(T; CD.TYPES)
+    this(T f)
+    {
+        dispatcher = CD(f);
+    }
+
+    bool opCast(T : bool)() const
+    {
+        return dispatcher != CD.init;
+    }
+
+    Result opCall(Param!TYPE param) const
+    {
+        return dispatcher.opCall(param);
+    }
+
+    Result opCall(Param!(TYPE[]) param) const
+    {
+        foreach(ref value; param.value)
+        {
+            auto res = opCall(Param!TYPE(param.config, param.name, value));
+            if(!res)
+                return res;
+        }
+        return Result.Success;
     }
 }
 
@@ -192,44 +252,25 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private struct ListValidator(TYPE)
+package enum Pass(TYPE) = ValidationFunc!TYPE((TYPE _) => true);
+
+unittest
 {
-    bool[TYPE] values;
-
-    Result opCall(Param!TYPE param) const
-    {
-        if(!(param.value in values))
-        {
-            import std.algorithm : map;
-            import std.array : join;
-
-            auto valueStyle = param.isNamedArg ? (
-                param.config.styling.namedArgumentValue
-            ) : param.config.styling.positionalArgumentValue;
-
-            string valuesList = values.keys.map!(_ => valueStyle(_.to!string)).join(",");
-
-            return invalidValueError(param,
-                "\nValid argument values are: " ~ valuesList);
-        }
-
-        return Result.Success;
-    }
+    assert(Pass!int(Param!int.init));
+    assert(Pass!string(Param!string.init));
 }
 
-package(argparse) auto ValueInList(TYPE)(const(TYPE)[] values...)
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package(argparse) auto ValueInList(TYPE)(TYPE[] values...)
 {
-    ListValidator!TYPE result;
-
-    foreach(v; values)
-        result.values[v.to!(immutable TYPE)] = false;
-
-    return result;
+    alias VF = ValidationFunc!TYPE;
+    return VF(VF.ValueInList(values));
 }
 
 unittest
 {
-    immutable values = ["a","b","c"];
+    enum values = ["a","b","c"];
 
     import argparse.config;
     Config config;
@@ -237,8 +278,8 @@ unittest
     assert(ValueInList(values)(Param!string(&config, "", "b")));
     assert(!ValueInList(values)(Param!string(&config, "", "d")));
 
-    assert(ValueInList(values).validateAll(RawParam(&config, "", ["b"])));
-    assert(ValueInList(values).validateAll(RawParam(&config, "", ["b","a"])));
-    assert(!ValueInList(values).validateAll(RawParam(&config, "", ["d"])));
-    assert(!ValueInList(values).validateAll(RawParam(&config, "", ["b","d"])));
+    assert(ValueInList(values)(RawParam(&config, "", ["b"])));
+    assert(ValueInList(values)(RawParam(&config, "", ["b","a"])));
+    assert(!ValueInList(values)(RawParam(&config, "", ["d"])));
+    assert(!ValueInList(values)(RawParam(&config, "", ["b","d"])));
 }
