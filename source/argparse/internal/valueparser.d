@@ -108,37 +108,6 @@ package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, V
     // TODO: Figure out what this thing is doing here
     alias typeDefaults = TypedValueParser;
 
-    // TODO: We should ensure elsewhere that this substitution does not violate the type system. The compiler will catch
-    // the error eventually, but if we check ourselves, we can provide far more relevant error message.
-    auto change(ParsingStep step, F)(F newFunc)
-    {
-        // Changing a function can change our `PARSE` and/or `RECEIVER`
-        static if(step == ParsingStep.preProcess)
-        {
-            return changePreProcess(newFunc);
-        }
-        else static if(step == ParsingStep.preValidate)
-        {
-            return changePreValidation(newFunc);
-        }
-        else static if(step == ParsingStep.parse)
-        {
-            return changeParse(newFunc);
-        }
-        else static if(step == ParsingStep.validate)
-        {
-            return changeValidation(newFunc);
-        }
-        else static if(step == ParsingStep.action)
-        {
-            return changeAction(newFunc);
-        }
-        else static if(step == ParsingStep.noValueAction)
-        {
-            return changeNoValueAction(newFunc);
-        }
-    }
-
     auto addDefaults(OTHER_PARSE, OTHER_RECEIVER, OTHER_PRE_VALIDATE_F, OTHER_PARSE_F, OTHER_VALIDATE_F, OTHER_ACTION_F, OTHER_NO_VALUE_ACTION_F)(
         ValueParser!(OTHER_PARSE, OTHER_RECEIVER, OTHER_PRE_VALIDATE_F, OTHER_PARSE_F, OTHER_VALIDATE_F, OTHER_ACTION_F, OTHER_NO_VALUE_ACTION_F) other)
     {
@@ -190,8 +159,8 @@ package(argparse) enum defaultValueParser(PARSE, RECEIVER) =
 unittest
 {
     auto vp = defaultValueParser!(void, void)
-        .change!(ParsingStep.preValidate)(ValidationFunc!string((string s) => Result.Error("test error")))
-        .change!(ParsingStep.parse)(ParseFunc!int((ref int i, RawParam p) => Result.Error("test error")));
+        .changePreValidation(ValidationFunc!string((string s) => Result.Error("test error")))
+        .changeParse(ParseFunc!int((ref int i, RawParam p) => Result.Error("test error")));
     int receiver;
     assert(vp.preValidate(Param!string(null, "", "")).isError("test error"));
     assert(vp.parse(receiver, RawParam(null,"",[""])).isError("test error"));
@@ -200,10 +169,10 @@ unittest
 unittest
 {
     auto vp1 = defaultValueParser!(void, void)
-        .change!(ParsingStep.preValidate)(ValidationFunc!string((string s) => Result.Error("a")));
+        .changePreValidation(ValidationFunc!string((string s) => Result.Error("a")));
     auto vp2 = defaultValueParser!(void, void)
-        .change!(ParsingStep.preValidate)(ValidationFunc!string((string s) => Result.Error("b")))
-        .change!(ParsingStep.validate)(ValidationFunc!int((int s) => Result.Error("c")));
+        .changePreValidation(ValidationFunc!string((string s) => Result.Error("b")))
+        .changeValidation(ValidationFunc!int((int s) => Result.Error("c")));
 
     auto vp3 = vp1.addDefaults(vp2);
     assert(vp3.preValidate is vp1.preValidate);
@@ -273,10 +242,10 @@ unittest
 {
     int receiver;
     auto vp = defaultValueParser!(void, int)
-        .change!(ParsingStep.preValidate)(ValidationFunc!string((string s) =>
+        .changePreValidation(ValidationFunc!string((string s) =>
             s.length ? Result.Success : Result.Error("prevalidation failed")
         ))
-        .change!(ParsingStep.validate)(ValidationFunc!int((int x) => Result.Error("main validation failed")));
+        .changeValidation(ValidationFunc!int((int x) => Result.Error("main validation failed")));
     assert(vp.parseParameter(receiver, RawParam(null,"",[""])).isError("prevalidation failed"));
     assert(vp.parseParameter(receiver, RawParam(null,"",["a"])).isError("main validation failed"));
 }
@@ -303,20 +272,20 @@ if(!is(T == void))
     static if(is(T == enum))
     {
         enum TypedValueParser = defaultValueParser!(T, T)
-            .change!(ParsingStep.preValidate)(ValueInList(getEnumValues!T))
-            .change!(ParsingStep.parse)(ParseFunc!T((string _) => getEnumValue!T(_)));
+            .changePreValidation(ValueInList(getEnumValues!T))
+            .changeParse(ParseFunc!T((string _) => getEnumValue!T(_)));
     }
     else static if(isSomeString!T || isNumeric!T)
     {
         enum TypedValueParser = defaultValueParser!(T, T)
-            .change!(ParsingStep.parse)(Convert!T);
+            .changeParse(Convert!T);
     }
     else static if(isBoolean!T)
     {
         enum TypedValueParser = defaultValueParser!(T, T)
-            .change!(ParsingStep.preProcess)(&preProcessBool)
-            .change!(ParsingStep.preValidate)(ValueInList("true","yes","y","false","no","n"))
-            .change!(ParsingStep.parse)(ParseFunc!T((string value)
+            .changePreProcess(&preProcessBool)
+            .changePreValidation(ValueInList("true","yes","y","false","no","n"))
+            .changeParse(ParseFunc!T((string value)
             {
                 switch(value)
                 {
@@ -324,12 +293,12 @@ if(!is(T == void))
                     default:                 return false;
                 }
             }))
-            .change!(ParsingStep.noValueAction)(SetValue(true));
+            .changeNoValueAction(SetValue(true));
     }
     else static if(isSomeChar!T)
     {
         enum TypedValueParser = defaultValueParser!(T, T)
-            .change!(ParsingStep.parse)(ParseFunc!T((string value)
+            .changeParse(ParseFunc!T((string value)
             {
                 return value.length > 0 ? value[0].to!T : T.init;
             }));
@@ -365,16 +334,16 @@ if(!is(T == void))
                 enum action = Assign!T;
 
             enum TypedValueParser = defaultValueParser!(T, T)
-                .change!(ParsingStep.parse)(parseValue!T)
-                .change!(ParsingStep.action)(action)
-                .change!(ParsingStep.noValueAction)(NoValueActionFunc!T((ref _1, _2) => Result.Success));
+                .changeParse(parseValue!T)
+                .changeAction(action)
+                .changeNoValueAction(NoValueActionFunc!T((ref _1, _2) => Result.Success));
         }
         else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
         {
             enum TypedValueParser = defaultValueParser!(TElement, T)
-                .change!(ParsingStep.parse)(parseValue!TElement)
-                .change!(ParsingStep.action)(Extend!T)
-                .change!(ParsingStep.noValueAction)(NoValueActionFunc!T((ref T receiver, _) { receiver ~= TElement.init; return Result.Success; }));
+                .changeParse(parseValue!TElement)
+                .changeAction(Extend!T)
+                .changeNoValueAction(NoValueActionFunc!T((ref T receiver, _) { receiver ~= TElement.init; return Result.Success; }));
         }
         else
             static assert(false, "Multi-dimentional arrays are not supported: " ~ T.stringof);
@@ -383,8 +352,8 @@ if(!is(T == void))
     {
         import std.string : indexOf;
         enum TypedValueParser = defaultValueParser!(string[], T)
-            .change!(ParsingStep.parse)(PassThrough)
-            .change!(ParsingStep.action)(ActionFunc!(T,string[])((ref T receiver, RawParam param)
+            .changeParse(PassThrough)
+            .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
             {
                 alias K = KeyType!T;
                 alias V = ValueType!T;
@@ -409,19 +378,19 @@ if(!is(T == void))
                 }
                 return Result.Success;
             }))
-            .change!(ParsingStep.noValueAction)(NoValueActionFunc!T((ref _1, _2) => Result.Success));
+            .changeNoValueAction(NoValueActionFunc!T((ref _1, _2) => Result.Success));
     }
     else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
         enum TypedValueParser = defaultValueParser!(string[], T)
-            .change!(ParsingStep.parse)(PassThrough)
-            .change!(ParsingStep.action)(CallFunction!T)
-            .change!(ParsingStep.noValueAction)(CallFunctionNoParam!T);
+            .changeParse(PassThrough)
+            .changeAction(CallFunction!T)
+            .changeNoValueAction(CallFunctionNoParam!T);
     }
     else
     {
         enum TypedValueParser = defaultValueParser!(T, T)
-            .change!(ParsingStep.action)(Assign!T);
+            .changeAction(Assign!T);
     }
 }
 

@@ -236,16 +236,16 @@ auto PreValidation(T, RETURN, VALUE)(ArgumentUDA!T uda, RETURN function(VALUE va
 if((is(string : VALUE) || is(string[] : VALUE) || is(RawParam : VALUE)) &&
     (is(RETURN == bool) || is(RETURN == Result)))
 {
-    auto desc = createArgumentUDA(uda.info, uda.valueParser.change!(ParsingStep.preValidate)(ValidationFunc!string(func)));
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changePreValidation(ValidationFunc!string(func)));
 
     return desc;
 }
 
 ///////////////////////////
 
-private auto ParseImpl(RECEIVER, T, F)(ArgumentUDA!T uda, F func)
+private auto ParseImpl(RECEIVER, T)(ArgumentUDA!T uda, ParseFunc!RECEIVER func)
 {
-    auto desc = createArgumentUDA(uda.info, uda.valueParser.change!(ParsingStep.parse)(func));
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeParse(func));
 
     static if(is(RECEIVER == string))
         desc.info.minValuesCount = desc.info.maxValuesCount = 1;
@@ -278,7 +278,7 @@ if(is(RETURN == bool) || is(RETURN == Result))
     static if(!is(VALUE == Param!TYPE, TYPE))
         alias TYPE = VALUE;
 
-    auto desc = createArgumentUDA(uda.info, uda.valueParser.change!(ParsingStep.validate)(ValidationFunc!TYPE(func)));
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeValidation(ValidationFunc!TYPE(func)));
 
     return desc;
 }
@@ -291,22 +291,22 @@ if(is(RETURN == void) || is(RETURN == bool) || is(RETURN == Result))
     static if(!is(VALUE == Param!TYPE, TYPE))
         alias TYPE = VALUE;
 
-    auto desc = createArgumentUDA(uda.info, uda.valueParser.change!(ParsingStep.action)(ActionFunc!(RECEIVER, TYPE)(func)));
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeAction(ActionFunc!(RECEIVER, TYPE)(func)));
 
     return desc;
 }
 
 ///////////////////////////
-private auto ActionNoValueImpl(T, F)(ArgumentUDA!T uda, F func)
+private auto ActionNoValueImpl(T, RECEIVER)(ArgumentUDA!T uda, NoValueActionFunc!RECEIVER func)
 {
-    auto desc = createArgumentUDA(uda.info, uda.valueParser.change!(ParsingStep.noValueAction)(func));
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeNoValueAction(func));
     desc.info.minValuesCount = 0;
     return desc;
 }
 
 package auto ActionNoValue(T, RECEIVER)(ArgumentUDA!T uda, Result function(ref RECEIVER receiver, Param!void param) func)
 {
-    return ActionNoValueImpl(uda, func);
+    return ActionNoValueImpl(uda, NoValueActionFunc!RECEIVER(func));
 }
 
 ///////////////////////////
@@ -350,7 +350,7 @@ unittest
 
 auto AllowedValues(TYPE, T)(ArgumentUDA!T uda, TYPE[] values...)
 {
-    auto desc = createArgumentUDA(uda.info, uda.valueParser.change!(ParsingStep.validate)(ValueInList(values)));
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeValidation(ValueInList(values)));
     if(desc.info.placeholder.length == 0)
         desc.info.placeholder = formatAllowedValues(values);
 
