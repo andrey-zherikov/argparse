@@ -7,16 +7,57 @@ import argparse.internal.errorhelpers;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package(argparse)
+private struct ValueSetter(VALUE)
 {
-    // This overload also forces functions to drop their attributes, reducing the variety of types we have to handle
-    auto NoValueActionFunc(T)(Result function(ref T, Param!void) func) { return func; }
+    VALUE value;
 
-    auto NoValueActionFunc(T, F)(F obj)
-    if(!is(typeof(*obj) == function) && is(typeof({ T receiver; return obj(receiver, Param!void.init); }()) : Result))
+    Result opCall(ref VALUE receiver, Param!void) const
     {
-        return obj;
+        import std.conv: to;
+
+        receiver = value.to!VALUE;
+
+        return Result.Success;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package(argparse) struct NoValueActionFunc(RECEIVER)
+{
+    union
+    {
+        Result function(ref RECEIVER, Param!void) func;
+        ValueSetter!RECEIVER setter;
+    }
+    size_t selection = -1;
+    
+
+    this(Result function(ref RECEIVER, Param!void) f)
+    {
+        func = f;
+        selection = 0;
+    }
+
+    this(ValueSetter!RECEIVER s)
+    {
+        setter = s;
+        selection = 1;
+    }
+
+    bool opCast(T : bool)() const
+    {
+        return selection != -1;
+    }
+
+    Result opCall(ref RECEIVER receiver, Param!void param) const
+    {
+        switch(selection)
+        {
+            case 0: return func(receiver, param);
+            case 1: return setter(receiver, param);
+            default: assert(false);
+        }
     }
 }
 
@@ -41,21 +82,11 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private struct ValueSetter(RECEIVER)
-{
-    RECEIVER value;
-
-    Result opCall(ref RECEIVER receiver, Param!void) const
-    {
-        receiver = value;
-        return Result.Success;
-    }
-}
-
 package(argparse) auto SetValue(VALUE)(VALUE value)
 {
-    ValueSetter!VALUE vs = { value };
-    return vs;
+    ValueSetter!VALUE setter = { value };
+
+    return NoValueActionFunc!VALUE(setter);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
