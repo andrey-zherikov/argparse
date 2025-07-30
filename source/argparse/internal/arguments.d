@@ -17,31 +17,27 @@ package(argparse) struct ArgumentInfo
     string[] longNames;
     string[] displayNames;    // names prefixed with Config.shortNamePrefix and Config.longNamePrefix
 
+    string[] namesToSplit;
+
+    LazyString description;
+    string placeholder;
+    string memberSymbol;
+
+    Nullable!uint position;
+    Nullable!size_t minValuesCount;
+    Nullable!size_t maxValuesCount;
+
     bool caseSensitiveShortName = true;
     bool caseSensitiveLongName = true;
-
-    string[] namesToSplit;
+    bool hidden = false;      // if true then this argument is not printed on help page
+    bool required;
+    bool isBooleanFlag = false;
+    bool positional;
 
     string displayName() const
     {
         return displayNames[0];
     }
-
-    LazyString description;
-    string placeholder;
-
-    string memberSymbol;
-
-    bool hidden = false;      // if true then this argument is not printed on help page
-
-    bool required;
-
-    Nullable!uint position;
-
-    bool positional;
-
-    Nullable!size_t minValuesCount;
-    Nullable!size_t maxValuesCount;
 
     auto checkValuesCount(const Config* config, string paramName, size_t numValues) const
     {
@@ -67,8 +63,6 @@ package(argparse) struct ArgumentInfo
 
         return Result.Success;
     }
-
-    bool isBooleanFlag = false;
 }
 
 unittest
