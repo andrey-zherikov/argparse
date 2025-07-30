@@ -22,6 +22,7 @@ package(argparse) struct ArgumentInfo
     LazyString description;
     string placeholder;
     string memberSymbol;
+    string envVar;
 
     Nullable!uint position;
     Nullable!size_t minValuesCount;

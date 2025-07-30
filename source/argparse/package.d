@@ -907,3 +907,51 @@ unittest
         "  -d D\n"~
         "  -h, --help    Show this help message and exit\n\n");
 }
+
+// https://github.com/andrey-zherikov/argparse/issues/231
+unittest {
+    import std.process : environment;
+
+    // Test an optional named argument
+    @(Command("Program1"))
+    struct Program1
+    {
+        @(NamedArgument(`user`).EnvFallback(`ARGPARSE_USERNAME`))
+        string username;
+    }
+
+    Program1 p1;
+    assert(CLI!Program1.parseArgs(p1, []));
+    assert(p1.username is null);
+    environment[`ARGPARSE_USERNAME`] = "John F. Doe";
+    assert(CLI!Program1.parseArgs(p1, []));
+    assert(p1.username == "John F. Doe");
+    p1 = Program1.init;
+    assert(CLI!Program1.parseArgs(p1, [`--user`, `Billy Joel`]));
+    assert(p1.username == "Billy Joel");
+    version (none) {
+        // Uncomment after fixing:
+        // https://github.com/andrey-zherikov/argparse/issues/219
+        environment[`ARGPARSE_USERNAME`] = "";
+        assert(CLI!Program1.parseArgs(p1, []));
+        assert(p1.username !is null);
+    }
+    environment.remove(`ARGPARSE_USERNAME`);
+
+    // Test a required Positional Argument
+    @(Command("Program2"))
+    struct Program2
+    {
+        @(PositionalArgument().EnvFallback(`ARGPARSE_REQUIRED_USERNAME`))
+        string username;
+    }
+    Program2 p2;
+    assert(!CLI!Program2.parseArgs(p2, []));
+    assert(p2.username is null);
+    environment[`ARGPARSE_REQUIRED_USERNAME`] = "RequiredUsername";
+    assert(CLI!Program2.parseArgs(p2, []));
+    assert(p2.username == "RequiredUsername");
+    assert(CLI!Program2.parseArgs(p2, ["CLIUsername"]));
+    assert(p2.username == "CLIUsername");
+    environment.remove(`ARGPARSE_REQUIRED_USERNAME`);
+}

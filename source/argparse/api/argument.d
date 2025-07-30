@@ -84,6 +84,23 @@ auto ref MaxNumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t max)
     return uda;
 }
 
+/**
+ * If no argument is provided on the command-line, falls back to the value of
+ * the environment variable `variable`.
+ *
+ * Use it to provide a fallback mechanism for some variables, for example:
+ * ```
+ * @(NamedArgument("host").EnvFallback("GITHUB_SERVER"))
+ * public string host = "https://my-default.example.com";
+ * ```
+ * The user can provide a `--host VALUE` argument, set the `GITHUB_SERVER`
+ * environment variable, or use the default.
+ */
+auto ref EnvFallback(T)(auto ref ArgumentUDA!T uda, string variable)
+{
+    uda.info.envVar = variable;
+    return uda;
+}
 
 unittest
 {

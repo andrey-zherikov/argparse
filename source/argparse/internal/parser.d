@@ -35,7 +35,7 @@ private Result parseArgs(Config config, CommandStack cmdStack, string[] args, ou
             return res;
     }
 
-    return cmdStack.checkRestrictions();
+    return cmdStack.finalize(config);
 }
 
 package(argparse) Result callParser(Config config, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)

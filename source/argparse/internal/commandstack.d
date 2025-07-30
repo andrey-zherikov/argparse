@@ -44,11 +44,11 @@ package struct CommandStack
         return stack.map!((ref _) => _.suggestions(arg)).join.sort.uniq.array;
     }
 
-    auto checkRestrictions()
+    auto finalize(const Config config)
     {
         foreach(ref cmd; stack)
         {
-            auto res = cmd.checkRestrictions();
+            auto res = cmd.finalize(config, this);
             if(!res)
                 return res;
         }
