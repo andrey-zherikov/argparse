@@ -7,6 +7,7 @@ import argparse.api.subcommand: match;
 import argparse.internal.arguments: Arguments, ArgumentInfo;
 import argparse.internal.argumentudahelpers: getMemberArgumentUDA;
 import argparse.internal.commandinfo;
+import argparse.internal.commandstack : CommandStack;
 import argparse.internal.restriction;
 import argparse.internal.typetraits;
 
@@ -203,8 +204,23 @@ package struct Command
         return idx != size_t(-1) ? subCommandCreate[idx] : null;
     }
 
-    Result checkRestrictions() const
+    Result finalize(const Config config, CommandStack cmdStack)
     {
+        // https://github.com/andrey-zherikov/argparse/issues/231
+        foreach (idx, argInfo; this.arguments.info) {
+            // if argument was not provided in command line and has environment variable fallback
+            if (idx !in this.idxParsedArgs && argInfo.envVar.length) {
+                import std.process : environment;
+                auto value = environment.get(argInfo.envVar);
+                // The value might exist but be empty, in which case
+                // we still want to take it into account
+                // https://github.com/andrey-zherikov/argparse/issues/219
+                if (value !is null) {
+                    auto param = RawParam(&config, argInfo.displayName, [value]);
+                    this.getParseFunc(this.parseFuncs, idx)(cmdStack.stack, param);
+                }
+            }
+        }
         return restrictions.check(idxParsedArgs);
     }
 }

@@ -180,6 +180,9 @@
 
 * Added support of `@PositionalArgument` without explicit position. In this case positions are determined in the order of declarations of members.
 
+* Added support for environment fallback, so adding `EnvFallback("VAR")` to an argument would automatically populate the argument with the content
+  of the `VAR` environment variable if nothing is provided on the command line.
+
 ### Other changes
 
 * Removed dependency on `std.regex`.
