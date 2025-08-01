@@ -5,7 +5,7 @@ import argparse.result;
 
 import argparse.internal.arguments: ArgumentInfo;
 import argparse.internal.argumentuda: ArgumentUDA, createArgumentUDA;
-import argparse.internal.valueparser: ValueParser, defaultValueParser;
+import argparse.internal.valueparser: ValueParser;
 import argparse.internal.actionfunc;
 import argparse.internal.novalueactionfunc;
 import argparse.internal.parsefunc;
@@ -85,8 +85,7 @@ auto ref MaxNumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t max)
 
 unittest
 {
-    enum p = defaultValueParser!(void, void);
-    ArgumentUDA!(typeof(p)) arg = { ArgumentInfo.init, p };
+    ArgumentUDA!(ValueParser!(void, void)) arg;
     assert(!arg.info.hidden);
     assert(!arg.info.required);
     assert(arg.info.minValuesCount.isNull);
@@ -119,16 +118,14 @@ unittest
 
 auto PositionalArgument()
 {
-    enum p = defaultValueParser!(void, void);
-    auto arg = ArgumentUDA!(typeof(p))(ArgumentInfo.init, p).Required();
+    auto arg = ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo.init).Required();
     arg.info.positional = true;
     return arg;
 }
 
 auto PositionalArgument(uint position)
 {
-    enum p = defaultValueParser!(void, void);
-    auto arg = ArgumentUDA!(typeof(p))(ArgumentInfo.init, p).Required();
+    auto arg = ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo.init).Required();
     arg.info.position = position;
     arg.info.positional = true;
     return arg;
@@ -141,8 +138,7 @@ auto PositionalArgument(uint position, string placeholder)
 
 auto NamedArgument(string[] shortNames, string[] longNames)
 {
-    enum p = defaultValueParser!(void, void);
-    return ArgumentUDA!(typeof(p))(ArgumentInfo(shortNames, longNames), p).Optional();
+    return ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo(shortNames, longNames)).Optional();
 }
 
 auto NamedArgument(string[] names...)
@@ -217,14 +213,14 @@ auto ForceNoValue(VALUE, T)(ArgumentUDA!T uda, VALUE valueToUse)
 unittest
 {
     auto uda = NamedArgument.AllowNoValue("value");
-    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(void, string, F)), F...));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, string))));
     assert(uda.info.minValuesCount == 0);
 }
 
 unittest
 {
     auto uda = NamedArgument.ForceNoValue("value");
-    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(void, string, F)), F...));
+    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, string))));
     assert(uda.info.minValuesCount == 0);
     assert(uda.info.maxValuesCount == 0);
 }

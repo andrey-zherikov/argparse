@@ -149,16 +149,9 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
     }
 }
 
-// We use `byte` as a placeholder for function types because it, unlike `void`, can be stored in a struct without
-// introducing special cases (e.g., `auto f = p.validate;` just works). Yes, `ValueParser.sizeof` is then larger than
-// theoretically possible (+24 bytes in the worst case), but this doesn't matter much: parsers are only used in UDAs
-// so the compiler is always able to allocate memory for them statically. (Instead of `byte`, we could have chosen
-// `typeof(null)`, which is more intuitive but occupies a whole machine word.)
-package(argparse) enum defaultValueParser(PARSE, RECEIVER) = ValueParser!(PARSE, RECEIVER).init;
-
 unittest
 {
-    auto vp = defaultValueParser!(void, void)
+    auto vp = ValueParser!(void, void).init
         .changePreValidation(ValidationFunc!string((string s) => Result.Error("test error")))
         .changeParse(ParseFunc!int((ref int i, RawParam p) => Result.Error("test error")));
     int receiver;
@@ -168,9 +161,9 @@ unittest
 
 unittest
 {
-    auto vp1 = defaultValueParser!(void, void)
+    auto vp1 = ValueParser!(void, void).init
         .changePreValidation(ValidationFunc!string((string s) => Result.Error("a")));
-    auto vp2 = defaultValueParser!(void, void)
+    auto vp2 = ValueParser!(void, void).init
         .changePreValidation(ValidationFunc!string((string s) => Result.Error("b")))
         .changeValidation(ValidationFunc!int((int s) => Result.Error("c")));
 
@@ -251,7 +244,7 @@ package(argparse) Result parseParameter(PARSE, RECEIVER)(
 unittest
 {
     int receiver;
-    auto vp = defaultValueParser!(void, int)
+    auto vp = ValueParser!(void, int).init
         .changePreValidation(ValidationFunc!string((string s) =>
             s.length ? Result.Success : Result.Error("prevalidation failed")
         ))
@@ -269,18 +262,18 @@ if(!is(T == void))
 
     static if(is(T == enum))
     {
-        enum TypedValueParser = defaultValueParser!(T, T)
+        enum TypedValueParser = ValueParser!(T, T).init
             .changePreValidation(ValueInList(getEnumValues!T))
             .changeParse(ParseFunc!T((string _) => getEnumValue!T(_)));
     }
     else static if(isSomeString!T || isNumeric!T)
     {
-        enum TypedValueParser = defaultValueParser!(T, T)
+        enum TypedValueParser = ValueParser!(T, T).init
             .changeParse(Convert!T);
     }
     else static if(isBoolean!T)
     {
-        enum TypedValueParser = defaultValueParser!(T, T)
+        enum TypedValueParser = ValueParser!(T, T).init
             .changePreProcess((ref RawParam param)
             {
                 import std.algorithm.iteration: map;
@@ -305,7 +298,7 @@ if(!is(T == void))
     }
     else static if(isSomeChar!T)
     {
-        enum TypedValueParser = defaultValueParser!(T, T)
+        enum TypedValueParser = ValueParser!(T, T).init
             .changeParse(ParseFunc!T((string value)
             {
                 return value.length > 0 ? value[0].to!T : T.init;
@@ -341,14 +334,14 @@ if(!is(T == void))
             else
                 enum action = Assign!T;
 
-            enum TypedValueParser = defaultValueParser!(T, T)
+            enum TypedValueParser = ValueParser!(T, T).init
                 .changeParse(parseValue!T)
                 .changeAction(action)
                 .changeNoValueAction(NoValueActionFunc!T((ref _1, _2) => Result.Success));
         }
         else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
         {
-            enum TypedValueParser = defaultValueParser!(TElement, T)
+            enum TypedValueParser = ValueParser!(TElement, T).init
                 .changeParse(parseValue!TElement)
                 .changeAction(Extend!T)
                 .changeNoValueAction(NoValueActionFunc!T((ref T receiver, _) { receiver ~= TElement.init; return Result.Success; }));
@@ -359,7 +352,7 @@ if(!is(T == void))
     else static if(isAssociativeArray!T)
     {
         import std.string : indexOf;
-        enum TypedValueParser = defaultValueParser!(string[], T)
+        enum TypedValueParser = ValueParser!(string[], T).init
             .changeParse(PassThrough)
             .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
             {
@@ -390,14 +383,14 @@ if(!is(T == void))
     }
     else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
-        enum TypedValueParser = defaultValueParser!(string[], T)
+        enum TypedValueParser = ValueParser!(string[], T).init
             .changeParse(PassThrough)
             .changeAction(CallFunction!T)
             .changeNoValueAction(CallFunctionNoParam!T);
     }
     else
     {
-        enum TypedValueParser = defaultValueParser!(T, T)
+        enum TypedValueParser = ValueParser!(T, T).init
             .changeAction(Assign!T);
     }
 }
