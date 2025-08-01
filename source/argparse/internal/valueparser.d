@@ -15,12 +15,8 @@ import std.traits;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private enum void function(ref RawParam) defaultPreProcessFunc = (ref _) {};
-
 package(argparse) struct ValueParser(PARSE, RECEIVER)
 {
-    // We could have assigned `defaultPreProcessFunc` to `preProcess`, but we would lose `__traits(isZeroInit)`
-    // and not really gain anything
     //////////////////////////
     /// pre process
     private void function(ref RawParam param) preProcess;
@@ -131,7 +127,7 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
             alias RECEIVER = OTHER_RECEIVER;
 
         auto vp = ValueParser!(PARSE, RECEIVER)(
-            preProcess is defaultPreProcessFunc ? other.preProcess : preProcess,
+            preProcess ? preProcess : other.preProcess,
             preValidate ? preValidate : other.preValidate);
 
         auto choose(LHS, RHS)(RHS rhs, LHS lhs)
@@ -158,7 +154,7 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
 // theoretically possible (+24 bytes in the worst case), but this doesn't matter much: parsers are only used in UDAs
 // so the compiler is always able to allocate memory for them statically. (Instead of `byte`, we could have chosen
 // `typeof(null)`, which is more intuitive but occupies a whole machine word.)
-package(argparse) enum defaultValueParser(PARSE, RECEIVER) = ValueParser!(PARSE, RECEIVER)(defaultPreProcessFunc);
+package(argparse) enum defaultValueParser(PARSE, RECEIVER) = ValueParser!(PARSE, RECEIVER).init;
 
 unittest
 {
@@ -192,8 +188,6 @@ package(argparse) Result parseParameter(PARSE, RECEIVER)(
     ref RECEIVER receiver,
     RawParam rawParam,
 )
-in(parser.preProcess !is null)
-do
 {
     if(rawParam.value.length == 0)
     {
@@ -268,18 +262,6 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private void preProcessBool(ref RawParam param)
-{
-    import std.algorithm.iteration: map;
-    import std.array: array;
-    import std.ascii: toLower;
-    import std.string: representation;
-
-    // convert values to lower case and replace "" with "y"
-    foreach(ref value; param.value)
-        value = value.length == 0 ? "y" : value.representation.map!(_ => immutable char(_.toLower)).array;
-}
-
 private template TypedValueParser(T)
 if(!is(T == void))
 {
@@ -299,7 +281,17 @@ if(!is(T == void))
     else static if(isBoolean!T)
     {
         enum TypedValueParser = defaultValueParser!(T, T)
-            .changePreProcess(&preProcessBool)
+            .changePreProcess((ref RawParam param)
+            {
+                import std.algorithm.iteration: map;
+                import std.array: array;
+                import std.ascii: toLower;
+                import std.string: representation;
+
+                // convert values to lower case and replace "" with "y"
+                foreach(ref value; param.value)
+                    value = value.length == 0 ? "y" : value.representation.map!(_ => immutable char(_.toLower)).array;
+            })
             .changePreValidation(ValueInList("true","yes","y","false","no","n"))
             .changeParse(ParseFunc!T((string value)
             {
