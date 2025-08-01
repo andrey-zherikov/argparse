@@ -243,7 +243,7 @@ if((is(string : VALUE) || is(string[] : VALUE) || is(RawParam : VALUE)) &&
 
 ///////////////////////////
 
-private auto ParseImpl(RECEIVER, T)(ArgumentUDA!T uda, ParseFunc!RECEIVER func)
+private auto ParseImpl(T, RECEIVER)(ArgumentUDA!T uda, ParseFunc!RECEIVER func)
 {
     auto desc = createArgumentUDA(uda.info, uda.valueParser.changeParse(func));
 
@@ -261,13 +261,13 @@ private auto ParseImpl(RECEIVER, T)(ArgumentUDA!T uda, ParseFunc!RECEIVER func)
 auto Parse(T, RECEIVER, VALUE)(ArgumentUDA!T uda, RECEIVER function(VALUE value) func)
 if((is(string : VALUE) || is(string[] : VALUE) || is(RawParam : VALUE)))
 {
-    return ParseImpl!RECEIVER(uda, ParseFunc!RECEIVER(func));
+    return ParseImpl(uda, ParseFunc!RECEIVER(func));
 }
 
 auto Parse(T, RETURN, RECEIVER)(ArgumentUDA!T uda, RETURN function(ref RECEIVER receiver, RawParam param) func)
 if(is(RETURN == void) || is(RETURN == bool) || is(RETURN == Result))
 {
-    return ParseImpl!RECEIVER(uda, ParseFunc!RECEIVER(func));
+    return ParseImpl(uda, ParseFunc!RECEIVER(func));
 }
 
 ///////////////////////////
