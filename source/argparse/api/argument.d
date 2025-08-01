@@ -5,7 +5,7 @@ import argparse.result;
 
 import argparse.internal.arguments: ArgumentInfo;
 import argparse.internal.argumentuda: ArgumentUDA, createArgumentUDA;
-import argparse.internal.valueparser: ParsingStep, ValueParser, defaultValueParser;
+import argparse.internal.valueparser: ValueParser, defaultValueParser;
 import argparse.internal.actionfunc;
 import argparse.internal.novalueactionfunc;
 import argparse.internal.parsefunc;

@@ -17,11 +17,6 @@ import std.traits;
 
 private enum void function(ref RawParam) defaultPreProcessFunc = (ref _) {};
 
-package(argparse) enum ParsingStep
-{
-    preProcess, preValidate, parse, validate, action, noValueAction
-}
-
 package(argparse) struct ValueParser(PARSE, RECEIVER)
 {
     // We could have assigned `defaultPreProcessFunc` to `preProcess`, but we would lose `__traits(isZeroInit)`
