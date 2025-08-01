@@ -154,16 +154,6 @@ unittest
     assert(fa(Param!(int[])(&config, "", [13, -1])));
 }
 
-package(argparse) Result validateAll(V, T)(const V validate, Param!(T[]) param) {
-    foreach(ref value; param.value)
-    {
-        auto res = validate(Param!T(param.config, param.name, value));
-        if(!res)
-            return res;
-    }
-    return Result.Success;
-}
-
 unittest
 {
     auto test(T, F)(F func, T[] values)

@@ -198,7 +198,7 @@ package(argparse) Result parseParameter(PARSE, RECEIVER)(
 
     if(parser.preValidate)
     {
-        res = validateAll(parser.preValidate, rawParam); // Be careful not to use UFCS
+        res = parser.preValidate(rawParam);
         if(!res)
             return res;
     }
