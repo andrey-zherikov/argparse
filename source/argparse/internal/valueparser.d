@@ -22,7 +22,7 @@ package(argparse) enum ParsingStep
     preProcess, preValidate, parse, validate, action, noValueAction
 }
 
-package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
+package(argparse) struct ValueParser(PARSE, RECEIVER)
 {
     // We could have assigned `defaultPreProcessFunc` to `preProcess`, but we would lose `__traits(isZeroInit)`
     // and not really gain anything
@@ -42,13 +42,13 @@ package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, V
 
     auto changePreValidation(ValidationFunc!string func)
     {
-        return ValueParser!(PARSE, RECEIVER, typeof(func), PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
-            (preProcess, func, parse, validate, action, noValueAction);
+        preValidate = func;
+        return this;
     }
 
     //////////////////////////
     /// parse
-    static if(!is(PARSE_F == byte)) // TODO: PARSE == void. 7/25/2025 8:13 PM
+    static if(!is(PARSE == void))
         private ParseFunc!PARSE parse;
     else
         private typeof(null) parse;
@@ -56,13 +56,18 @@ package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, V
     auto changeParse(P)(ParseFunc!P func) const
     if(is(PARSE == void) || is(PARSE == P))
     {
-        return ValueParser!(P, RECEIVER, PRE_VALIDATE_F, typeof(func), VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)
-            (preProcess, preValidate, func, validate, action, noValueAction);
+        auto vp = ValueParser!(P, RECEIVER)(preProcess: preProcess, preValidate: preValidate, parse: func);
+
+        static if(is(typeof(validate) : typeof(vp.validate)))           vp.validate = validate;
+        static if(is(typeof(action) : typeof(vp.action)))               vp.action = action;
+        static if(is(typeof(noValueAction) : typeof(vp.noValueAction))) vp.noValueAction = noValueAction;
+
+        return vp;
     }
 
     //////////////////////////
     /// validation
-    static if(!is(VALIDATE_F == byte)) // TODO: PARSE == void. 7/25/2025 8:13 PM
+    static if(!is(PARSE == void))
         private ValidationFunc!PARSE validate;
     else
         private typeof(null) validate;
@@ -70,13 +75,18 @@ package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, V
     auto changeValidation(P)(ValidationFunc!P func) const
     if(is(PARSE == void) || is(PARSE == P))
     {
-        return ValueParser!(P, RECEIVER, PRE_VALIDATE_F, PARSE_F, typeof(func), ACTION_F, NO_VALUE_ACTION_F)
-            (preProcess, preValidate, parse, func, action, noValueAction);
+        auto vp = ValueParser!(P, RECEIVER)(preProcess: preProcess, preValidate: preValidate, validate: func);
+
+        static if(is(typeof(parse) : typeof(vp.parse)))                 vp.parse = parse;
+        static if(is(typeof(action) : typeof(vp.action)))               vp.action = action;
+        static if(is(typeof(noValueAction) : typeof(vp.noValueAction))) vp.noValueAction = noValueAction;
+
+        return vp;
     }
 
     //////////////////////////
     /// action
-    static if(!is(ACTION_F == byte)) // TODO: if(!is(PARSE == void) && !is(RECEIVER == void)) . 7/25/2025 8:19 PM
+    static if(!is(PARSE == void) && !is(RECEIVER == void))
         private ActionFunc!(RECEIVER, PARSE) action;
     else
         private typeof(null) action;
@@ -85,14 +95,19 @@ package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, V
     if((is(PARSE == void) || is(PARSE == P)) &&
         (is(RECEIVER == void) || is(RECEIVER == R)))
     {
-        return ValueParser!(P, R, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, typeof(func), NO_VALUE_ACTION_F)
-            (preProcess, preValidate, parse, validate, func, noValueAction);
+        auto vp = ValueParser!(P, R)(preProcess: preProcess, preValidate: preValidate, action: func);
+
+        static if(is(typeof(parse) : typeof(vp.parse)))                 vp.parse = parse;
+        static if(is(typeof(validate) : typeof(vp.validate)))           vp.validate = validate;
+        static if(is(typeof(noValueAction) : typeof(vp.noValueAction))) vp.noValueAction = noValueAction;
+
+        return vp;
     }
 
 
     //////////////////////////
     /// noValueAction
-    static if(!is(NO_VALUE_ACTION_F == byte)) // TODO: if(!is(RECEIVER == void)). 7/25/2025 8:21 PM
+    static if(!is(RECEIVER == void))
         private NoValueActionFunc!RECEIVER noValueAction;
     else
         private typeof(null) noValueAction;
@@ -100,51 +115,46 @@ package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, V
     auto changeNoValueAction(R)(NoValueActionFunc!R func) const
     if(is(RECEIVER == void) || is(RECEIVER == R))
     {
-        return ValueParser!(PARSE, R, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, typeof(func))
-            (preProcess, preValidate, parse, validate, action, func);
+        auto vp = ValueParser!(PARSE, R)(preProcess: preProcess, preValidate: preValidate, noValueAction: func);
+
+        static if(is(typeof(parse) : typeof(vp.parse)))                 vp.parse = parse;
+        static if(is(typeof(validate) : typeof(vp.validate)))           vp.validate = validate;
+        static if(is(typeof(action) : typeof(vp.action)))               vp.action = action;
+
+        return vp;
     }
 
 
     // TODO: Figure out what this thing is doing here
     alias typeDefaults = TypedValueParser;
 
-    auto addDefaults(OTHER_PARSE, OTHER_RECEIVER, OTHER_PRE_VALIDATE_F, OTHER_PARSE_F, OTHER_VALIDATE_F, OTHER_ACTION_F, OTHER_NO_VALUE_ACTION_F)(
-        ValueParser!(OTHER_PARSE, OTHER_RECEIVER, OTHER_PRE_VALIDATE_F, OTHER_PARSE_F, OTHER_VALIDATE_F, OTHER_ACTION_F, OTHER_NO_VALUE_ACTION_F) other)
+    auto addDefaults(OTHER_PARSE, OTHER_RECEIVER)(ValueParser!(OTHER_PARSE, OTHER_RECEIVER) other)
     {
         static if(is(PARSE == void))
             alias PARSE = OTHER_PARSE;
         static if(is(RECEIVER == void))
             alias RECEIVER = OTHER_RECEIVER;
-        static if(is(PRE_VALIDATE_F == byte)) // `byte` means "default"
+
+        auto vp = ValueParser!(PARSE, RECEIVER)(
+            preProcess is defaultPreProcessFunc ? other.preProcess : preProcess,
+            preValidate ? preValidate : other.preValidate);
+
+        auto choose(LHS, RHS)(RHS rhs, LHS lhs)
         {
-            alias PRE_VALIDATE_F = OTHER_PRE_VALIDATE_F;
-            auto preValidate = other.preValidate;
-        }
-        static if(is(PARSE_F == byte))
-        {
-            alias PARSE_F = OTHER_PARSE_F;
-            auto parse = other.parse;
-        }
-        static if(is(VALIDATE_F == byte))
-        {
-            alias VALIDATE_F = OTHER_VALIDATE_F;
-            auto validate = other.validate;
-        }
-        static if(is(ACTION_F == byte))
-        {
-            alias ACTION_F = OTHER_ACTION_F;
-            auto action = other.action;
-        }
-        static if(is(NO_VALUE_ACTION_F == byte))
-        {
-            alias NO_VALUE_ACTION_F = OTHER_NO_VALUE_ACTION_F;
-            auto noValueAction = other.noValueAction;
+            static if(is(RHS == LHS))
+                return rhs ? rhs : lhs;
+            static if(is(RHS == typeof(null)))
+                return lhs;
+            else
+                return rhs;
         }
 
-        return ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)(
-            preProcess is defaultPreProcessFunc ? other.preProcess : preProcess,
-            preValidate, parse, validate, action, noValueAction
-        );
+        vp.parse         = choose(parse,         other.parse);
+        vp.validate      = choose(validate,      other.validate);
+        vp.action        = choose(action,        other.action);
+        vp.noValueAction = choose(noValueAction, other.noValueAction);
+
+        return vp;
     }
 }
 
@@ -153,8 +163,7 @@ package(argparse) struct ValueParser(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, V
 // theoretically possible (+24 bytes in the worst case), but this doesn't matter much: parsers are only used in UDAs
 // so the compiler is always able to allocate memory for them statically. (Instead of `byte`, we could have chosen
 // `typeof(null)`, which is more intuitive but occupies a whole machine word.)
-package(argparse) enum defaultValueParser(PARSE, RECEIVER) =
-    ValueParser!(PARSE, RECEIVER, byte, byte, byte, byte, byte)(defaultPreProcessFunc);
+package(argparse) enum defaultValueParser(PARSE, RECEIVER) = ValueParser!(PARSE, RECEIVER)(defaultPreProcessFunc);
 
 unittest
 {
@@ -183,8 +192,8 @@ unittest
 
 // Declared as a free function to avoid instantiating it for intermediate, incompletely built parsers, which
 // are not used to parse anything
-package(argparse) Result parseParameter(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F)(
-    ValueParser!(PARSE, RECEIVER, PRE_VALIDATE_F, PARSE_F, VALIDATE_F, ACTION_F, NO_VALUE_ACTION_F) parser,
+package(argparse) Result parseParameter(PARSE, RECEIVER)(
+    ValueParser!(PARSE, RECEIVER) parser,
     ref RECEIVER receiver,
     RawParam rawParam,
 )
@@ -194,16 +203,18 @@ do
     if(rawParam.value.length == 0)
     {
         auto param = Param!void(rawParam.config, rawParam.name);
-        static if(is(NO_VALUE_ACTION_F == byte))
-            return processingError(param); // Default no-value action
-        else
+        if(parser.noValueAction)
             return parser.noValueAction(receiver, param);
+        else
+            return processingError(param); // Default no-value action
     }
 
-    parser.preProcess(rawParam);
+    if(parser.preProcess)
+        parser.preProcess(rawParam);
+
     Result res;
 
-    static if(!is(PRE_VALIDATE_F == byte))
+    if(parser.preValidate)
     {
         res = validateAll(parser.preValidate, rawParam); // Be careful not to use UFCS
         if(!res)
@@ -212,25 +223,35 @@ do
 
     auto parsedParam = Param!PARSE(rawParam.config, rawParam.name);
 
-    static if(!is(PARSE_F == byte))
+    static if(!is(typeof(parser.parse) == typeof(null)))// TODO: . 7/29/2025 11:11 PM
+    if(parser.parse) // TODO: . 7/30/2025 12:26 AM
     {
         res = parser.parse(parsedParam.value, rawParam);
         if(!res)
             return res;
     }
 
-    static if(!is(VALIDATE_F == byte))
+    static if(!is(typeof(parser.validate) == typeof(null)))// TODO: . 7/29/2025 11:11 PM
+    if(parser.validate)
     {
         res = parser.validate(parsedParam);
         if(!res)
             return res;
     }
 
-    static if(!is(ACTION_F == byte))
+    static if(!is(typeof(parser.action) == typeof(null)))// TODO: . 7/29/2025 11:11 PM
     {
-        res = parser.action(receiver, parsedParam);
-        if(!res)
-            return res;
+        if (parser.action)
+        {
+            res = parser.action(receiver, parsedParam);
+            if(!res)
+                return res;
+        }
+        else
+        {
+            static if(is(RECEIVER == PARSE))
+                receiver = parsedParam.value;
+        }
     }
     else static if(is(RECEIVER == PARSE)) // Default action
         receiver = parsedParam.value;
