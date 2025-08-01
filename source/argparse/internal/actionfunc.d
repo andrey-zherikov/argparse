@@ -60,6 +60,11 @@ package(argparse) struct ActionFunc(RECEIVER, PARSE)
             dispatcher = CD(f);
         }
 
+    bool opCast(T : bool)() const
+    {
+        return cast(bool) dispatcher;
+    }
+
     auto opCall(ref RECEIVER receiver, Param!PARSE param) const
     {
         return dispatcher.opCall(receiver, param);
