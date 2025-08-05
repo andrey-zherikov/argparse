@@ -310,13 +310,13 @@ package auto ActionNoValue(T, RECEIVER)(ArgumentUDA!T uda, Result function(ref R
 unittest
 {
     auto uda = NamedArgument.PreValidation((RawParam _) => true);
-    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(void, void, F)), F...));
+    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(void, void))));
 }
 
 unittest
 {
     auto uda = NamedArgument.Parse((string _) => _);
-    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string, void, F)), F...));
+    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string, void))));
     assert(uda.info.minValuesCount == 1);
     assert(uda.info.maxValuesCount == 1);
 }
@@ -324,7 +324,7 @@ unittest
 unittest
 {
     auto uda = NamedArgument.Parse((string[] _) => _);
-    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string[], void, F)), F...));
+    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string[], void))));
     assert(uda.info.minValuesCount == 0);
     assert(uda.info.maxValuesCount == size_t.max);
 }
@@ -332,13 +332,13 @@ unittest
 unittest
 {
     auto uda = NamedArgument.Validation((RawParam _) => true);
-    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string[], void, F)), F...));
+    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string[], void))));
 }
 
 unittest
 {
     auto uda = NamedArgument.Action((ref string _1, RawParam _2) {});
-    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string[], string, F)), F...));
+    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string[], string))));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

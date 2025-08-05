@@ -95,7 +95,6 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
         return vp;
     }
 
-
     //////////////////////////
     /// noValueAction
     static if(!is(RECEIVER == void))
@@ -181,6 +180,7 @@ package(argparse) Result parseParameter(PARSE, RECEIVER)(
     ref RECEIVER receiver,
     RawParam rawParam,
 )
+if(!is(PARSE == void) && !is(RECEIVER == void))
 {
     if(rawParam.value.length == 0)
     {
@@ -205,15 +205,11 @@ package(argparse) Result parseParameter(PARSE, RECEIVER)(
 
     auto parsedParam = Param!PARSE(rawParam.config, rawParam.name);
 
-    static if(!is(typeof(parser.parse) == typeof(null)))// TODO: . 7/29/2025 11:11 PM
-    if(parser.parse) // TODO: . 7/30/2025 12:26 AM
-    {
-        res = parser.parse(parsedParam.value, rawParam);
-        if(!res)
-            return res;
-    }
+    assert(parser.parse);
+    res = parser.parse(parsedParam.value, rawParam);
+    if(!res)
+        return res;
 
-    static if(!is(typeof(parser.validate) == typeof(null)))// TODO: . 7/29/2025 11:11 PM
     if(parser.validate)
     {
         res = parser.validate(parsedParam);
@@ -221,34 +217,23 @@ package(argparse) Result parseParameter(PARSE, RECEIVER)(
             return res;
     }
 
-    static if(!is(typeof(parser.action) == typeof(null)))// TODO: . 7/29/2025 11:11 PM
-    {
-        if (parser.action)
-        {
-            res = parser.action(receiver, parsedParam);
-            if(!res)
-                return res;
-        }
-        else
-        {
-            static if(is(RECEIVER == PARSE))
-                receiver = parsedParam.value;
-        }
-    }
-    else static if(is(RECEIVER == PARSE)) // Default action
-        receiver = parsedParam.value;
+    assert(parser.action);
+    res = parser.action(receiver, parsedParam);
+    if(!res)
+        return res;
 
     return Result.Success;
 }
 
 unittest
 {
-    int receiver;
-    auto vp = ValueParser!(void, int).init
+    string receiver;
+    auto vp = ValueParser!(void, string).init
         .changePreValidation(ValidationFunc!string((string s) =>
             s.length ? Result.Success : Result.Error("prevalidation failed")
         ))
-        .changeValidation(ValidationFunc!int((int x) => Result.Error("main validation failed")));
+        .changeParse(ParseFunc!string(_ => _))
+        .changeValidation(ValidationFunc!string((string _) => Result.Error("main validation failed")));
     assert(vp.parseParameter(receiver, RawParam(null,"",[""])).isError("prevalidation failed"));
     assert(vp.parseParameter(receiver, RawParam(null,"",["a"])).isError("main validation failed"));
 }
@@ -264,12 +249,14 @@ if(!is(T == void))
     {
         enum TypedValueParser = ValueParser!(T, T).init
             .changePreValidation(ValueInList(getEnumValues!T))
-            .changeParse(ParseFunc!T((string _) => getEnumValue!T(_)));
+            .changeParse(ParseFunc!T((string _) => getEnumValue!T(_)))
+            .changeAction(Assign!T);
     }
     else static if(isSomeString!T || isNumeric!T)
     {
         enum TypedValueParser = ValueParser!(T, T).init
-            .changeParse(Convert!T);
+            .changeParse(Convert!T)
+            .changeAction(Assign!T);
     }
     else static if(isBoolean!T)
     {
@@ -294,6 +281,7 @@ if(!is(T == void))
                     default:                 return false;
                 }
             }))
+            .changeAction(Assign!T)
             .changeNoValueAction(SetValue(true));
     }
     else static if(isSomeChar!T)
@@ -302,7 +290,8 @@ if(!is(T == void))
             .changeParse(ParseFunc!T((string value)
             {
                 return value.length > 0 ? value[0].to!T : T.init;
-            }));
+            }))
+            .changeAction(Assign!T);
     }
     else static if(isArray!T)
     {
