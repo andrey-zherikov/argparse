@@ -51,13 +51,7 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
     auto changeParse(P)(ParseFunc!P func) const
     if(is(PARSE == void) || is(PARSE == P))
     {
-        auto vp = ValueParser!(P, RECEIVER)(preProcess: preProcess, preValidate: preValidate, parse: func);
-
-        static if(is(typeof(validate) : typeof(vp.validate)))           vp.validate = validate;
-        static if(is(typeof(action) : typeof(vp.action)))               vp.action = action;
-        static if(is(typeof(noValueAction) : typeof(vp.noValueAction))) vp.noValueAction = noValueAction;
-
-        return vp;
+        return ValueParser!(P, RECEIVER)( parse: func ).addDefaults(this);
     }
 
     //////////////////////////
@@ -70,13 +64,7 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
     auto changeValidation(P)(ValidationFunc!P func) const
     if(is(PARSE == void) || is(PARSE == P))
     {
-        auto vp = ValueParser!(P, RECEIVER)(preProcess: preProcess, preValidate: preValidate, validate: func);
-
-        static if(is(typeof(parse) : typeof(vp.parse)))                 vp.parse = parse;
-        static if(is(typeof(action) : typeof(vp.action)))               vp.action = action;
-        static if(is(typeof(noValueAction) : typeof(vp.noValueAction))) vp.noValueAction = noValueAction;
-
-        return vp;
+        return ValueParser!(P, RECEIVER)( validate: func ).addDefaults(this);
     }
 
     //////////////////////////
@@ -90,13 +78,7 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
     if((is(PARSE == void) || is(PARSE == P)) &&
         (is(RECEIVER == void) || is(RECEIVER == R)))
     {
-        auto vp = ValueParser!(P, R)(preProcess: preProcess, preValidate: preValidate, action: func);
-
-        static if(is(typeof(parse) : typeof(vp.parse)))                 vp.parse = parse;
-        static if(is(typeof(validate) : typeof(vp.validate)))           vp.validate = validate;
-        static if(is(typeof(noValueAction) : typeof(vp.noValueAction))) vp.noValueAction = noValueAction;
-
-        return vp;
+        return ValueParser!(P, R)( action: func ).addDefaults(this);
     }
 
     //////////////////////////
@@ -109,13 +91,7 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
     auto changeNoValueAction(R)(NoValueActionFunc!R func) const
     if(is(RECEIVER == void) || is(RECEIVER == R))
     {
-        auto vp = ValueParser!(PARSE, R)(preProcess: preProcess, preValidate: preValidate, noValueAction: func);
-
-        static if(is(typeof(parse) : typeof(vp.parse)))                 vp.parse = parse;
-        static if(is(typeof(validate) : typeof(vp.validate)))           vp.validate = validate;
-        static if(is(typeof(action) : typeof(vp.action)))               vp.action = action;
-
-        return vp;
+        return ValueParser!(PARSE, R)( noValueAction: func ).addDefaults(this);
     }
 
 
