@@ -15,6 +15,10 @@ import std.traits;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private struct Unavailable {}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 package(argparse) struct ValueParser(PARSE, RECEIVER)
 {
     //////////////////////////
@@ -42,7 +46,7 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
     static if(!is(PARSE == void))
         private ParseFunc!PARSE parse;
     else
-        private typeof(null) parse;
+        private Unavailable parse;
 
     auto changeParse(P)(ParseFunc!P func) const
     if(is(PARSE == void) || is(PARSE == P))
@@ -61,7 +65,7 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
     static if(!is(PARSE == void))
         private ValidationFunc!PARSE validate;
     else
-        private typeof(null) validate;
+        private Unavailable validate;
 
     auto changeValidation(P)(ValidationFunc!P func) const
     if(is(PARSE == void) || is(PARSE == P))
@@ -80,7 +84,7 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
     static if(!is(PARSE == void) && !is(RECEIVER == void))
         private ActionFunc!(RECEIVER, PARSE) action;
     else
-        private typeof(null) action;
+        private Unavailable action;
 
     auto changeAction(P, R)(ActionFunc!(R, P) func) const
     if((is(PARSE == void) || is(PARSE == P)) &&
@@ -100,7 +104,7 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
     static if(!is(RECEIVER == void))
         private NoValueActionFunc!RECEIVER noValueAction;
     else
-        private typeof(null) noValueAction;
+        private Unavailable noValueAction;
 
     auto changeNoValueAction(R)(NoValueActionFunc!R func) const
     if(is(RECEIVER == void) || is(RECEIVER == R))
@@ -128,10 +132,10 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
 
         auto choose(LHS, RHS)(RHS rhs, LHS lhs)
         {
-            static if(is(RHS == LHS))
-                return rhs ? rhs : lhs;
-            static if(is(RHS == typeof(null)))
+            static if(is(RHS == Unavailable))
                 return lhs;
+            else static if(is(RHS == LHS))
+                return rhs ? rhs : lhs;
             else
                 return rhs;
         }
