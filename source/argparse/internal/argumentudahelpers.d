@@ -93,11 +93,11 @@ package auto getMemberArgumentUDA(TYPE, string symbol)(const Config config)
         enum memberUDA = NamedArgument();
 
     static if(typeUDAs.length > 0)
-        enum initUDA = memberUDA.addDefaults(typeUDAs[0]);
+        enum initUDA = memberUDA.addDefaultUDA(typeUDAs[0]).addTypeDefaults!MemberType;
     else
-        enum initUDA = memberUDA;
+        enum initUDA = memberUDA.addTypeDefaults!MemberType;
 
-    auto result = initUDA.addReceiverTypeDefaults!MemberType;
+    auto result = initUDA;
 
     result.info = result.info.finalize!MemberType(config, symbol);
 

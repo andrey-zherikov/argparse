@@ -115,9 +115,6 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
     }
 
 
-    // TODO: Figure out what this thing is doing here
-    alias typeDefaults = TypedValueParser;
-
     auto addDefaults(OTHER_PARSE, OTHER_RECEIVER)(ValueParser!(OTHER_PARSE, OTHER_RECEIVER) other)
     {
         static if(is(PARSE == void))
@@ -145,6 +142,11 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
         vp.noValueAction = choose(noValueAction, other.noValueAction);
 
         return vp;
+    }
+
+    auto addTypeDefaults(TYPE)()
+    {
+        return addDefaults(TypedValueParser!TYPE);
     }
 }
 
