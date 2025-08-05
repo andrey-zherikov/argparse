@@ -157,11 +157,17 @@ unittest
 
 // Declared as a free function to avoid instantiating it for intermediate, incompletely built parsers, which
 // are not used to parse anything
-package(argparse) Result parseParameter(PARSE, RECEIVER)(
-    ValueParser!(PARSE, RECEIVER) parser,
-    ref RECEIVER receiver,
-    RawParam rawParam,
-)
+//
+// Procedure to process (parse) the values to an argument of type RECEIVER
+//  - if there is a value(s):
+//      - pre validate raw strings
+//      - parse raw strings
+//      - validate parsed values
+//      - action with values
+//  - if there is no value:
+//      - action if no value
+// Requirement: rawValues.length must be correct
+package(argparse) Result parseParameter(PARSE, RECEIVER)(ValueParser!(PARSE, RECEIVER) parser, ref RECEIVER receiver, RawParam rawParam)
 if(!is(PARSE == void) && !is(RECEIVER == void))
 {
     if(rawParam.value.length == 0)
