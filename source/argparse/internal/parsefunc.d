@@ -145,15 +145,3 @@ unittest
     assert(testErr!int("unknown").isError());
     assert(testErr!bool("unknown").isError());
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package enum PassThrough = ParseFunc!(string[])((string[] _) => _);
-
-unittest
-{
-    Config config;
-    string[] s;
-    PassThrough(s, Param!(string[])(&config,"",["7","8"]));
-    assert(s == ["7","8"]);
-}

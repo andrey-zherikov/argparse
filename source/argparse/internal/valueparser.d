@@ -338,7 +338,7 @@ if(!is(T == void))
         import std.string : indexOf;
 
         enum TypedValueParser = ValueParser!(string[], T).init
-            .changeParse(PassThrough)
+            .changeParse(ParseFunc!(string[])((string[] _) => _))
             .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
             {
                 alias K = KeyType!T;
@@ -370,7 +370,7 @@ if(!is(T == void))
     else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
         enum TypedValueParser = ValueParser!(string[], T).init
-            .changeParse(PassThrough)
+            .changeParse(ParseFunc!(string[])((string[] _) => _))
             .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
             {
                 auto parseInto(DEST)(ref DEST dest)
