@@ -1,16 +1,20 @@
 module argparse.internal.completer;
 
 import argparse.config;
+import argparse.result;
+import argparse.api.ansi: ansiStylingArgument;
 import argparse.api.argument: NamedArgument, PositionalArgument, Description, Optional;
 import argparse.api.command: Command, Description, ShortDescription;
 import argparse.api.restriction: MutuallyExclusive;
 import argparse.api.subcommand: SubCommand, Default;
 import argparse.internal.commandinfo: CommandInfo;
-import argparse.internal.parser: callParser;
+import argparse.internal.commandstack;
+import argparse.internal.tokenizer: Tokenizer, SubCommandToken = SubCommand;
 
 import std.traits: getUDAs;
 
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private string defaultCommandName(COMMAND)()
 {
@@ -43,21 +47,6 @@ unittest
     struct T {}
 
     assert(defaultCommandName!T == Runtime.args[0].baseName);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-package(argparse) string[] completeArgs(Config config, COMMAND)(string[] args)
-{
-    import std.algorithm: sort, uniq;
-    import std.array: array;
-
-    COMMAND dummy;
-    string[] unrecognizedArgs;
-
-    auto res = callParser!(config, true)(dummy, args.length == 0 ? [""] : args, unrecognizedArgs);
-
-    return res ? res.suggestions.dup.sort.uniq.array : [];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -205,3 +194,33 @@ package(argparse) struct Complete(COMMAND)
 
     SubCommand!(InitCmd, Default!CompleteCmd) cmd;
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private string[] completeArgs(Config config, CommandStack cmdStack, string[] args)
+{
+    ansiStylingArgument.isEnabled = config.detectAnsiSupport();
+
+    // Ignore last argument while processing command line
+    foreach(entry; Tokenizer(config, args[0..$-1], &cmdStack))
+    {
+        import std.sumtype: match;
+
+        // Process subcommands only and ignore everything else
+        entry.match!(
+                (ref SubCommandToken c) { cmdStack.addCommand(c.cmdInit()); },
+                (ref _) {}
+            );
+    }
+
+    // Provide suggestions for the last argument only
+    return cmdStack.getSuggestions(args[$-1]);
+}
+
+package(argparse) string[] completeArgs(Config config, COMMAND)(string[] args)
+{
+    COMMAND dummy;
+
+    return completeArgs(config, createCommandStack!config(dummy), args.length == 0 ? [""] : args);
+}
+

@@ -2,10 +2,10 @@ import argparse;
 
 struct Params1
 {
-    @PositionalArgument(0)
+    @PositionalArgument
     string firstName;
 
-    @PositionalArgument(1, "lastName")
+    @PositionalArgument("lastName")
     string arg;
 }
 

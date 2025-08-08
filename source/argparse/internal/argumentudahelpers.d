@@ -3,22 +3,40 @@ module argparse.internal.argumentudahelpers;
 import argparse.api.argument: NamedArgument, PositionalArgument;
 import argparse.config;
 import argparse.internal.argumentuda: ArgumentUDA;
+import argparse.param;
 
-// `@NamedArgument` and `@PositionalArgument` attach the functions as UDAs, but we should treat it the same as `@NamedArgument()`.
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// `@NamedArgument` and `@PositionalArgument` (without parens) attach the functions as UDAs,
+// but we should treat it the same as `@NamedArgument()`/`@PositionalArgument()`.
 package enum isArgumentUDA(alias _ : NamedArgument) = true;
 package enum isArgumentUDA(alias _ : PositionalArgument) = true;
 package enum isArgumentUDA(alias uda) = is(typeof(uda) == ArgumentUDA!T, T);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private template defaultValuesCount(T)
 {
     import std.traits;
 
-    static if(isBoolean!T)
+    static if(isBoolean!T ||
+              // ... function()
+              is(T == R function(), R) ||
+              is(T == R delegate(), R) ||
+              is(T == void function()) ||
+              is(T == void delegate()))
     {
         enum min = 0;
         enum max = 0;
     }
-    else static if(isSomeString!T || isScalarType!T)
+    else static if(isSomeString!T ||
+                   isScalarType!T ||
+                   // ... function(string value)
+                   is(T == R function(string), R) ||
+                   is(T == R delegate(string), R) ||
+                   is(T == void function(string)) ||
+                   is(T == void delegate(string)))
     {
         enum min = 1;
         enum max = 1;
@@ -28,43 +46,67 @@ private template defaultValuesCount(T)
         enum min = T.length;
         enum max = T.length;
     }
-    else static if(isArray!T || isAssociativeArray!T)
+    else static if(isArray!T ||
+                   isAssociativeArray!T ||
+                   // ... function(string[] value)
+                   is(T == R function(string[]), R) ||
+                   is(T == R delegate(string[]), R) ||
+                   is(T == void function(string[])) ||
+                   is(T == void delegate(string[])) ||
+                   // ... function(RawParam value)
+                   is(T == R function(RawParam), R) ||
+                   is(T == R delegate(RawParam), R) ||
+                   is(T == void function(RawParam)) ||
+                   is(T == void delegate(RawParam)))
     {
         enum min = 1;
         enum max = size_t.max;
     }
-    else static if(is(T == function) || is(T == delegate))
-    {
-        // ... function()
-        static if(__traits(compiles, T()))
-        {
-            enum min = 0;
-            enum max = 0;
-        }
-            // ... function(string value)
-        else static if(__traits(compiles, T(string.init)))
-        {
-            enum min = 1;
-            enum max = 1;
-        }
-            // ... function(string[] value)
-        else static if(__traits(compiles, T(string[].init)))
-        {
-            enum min = 1;
-            enum max = size_t.max;
-        }
-            // ... function(RawParam param)
-        else static if(__traits(compiles, T(RawParam.init)))
-        {
-            enum min = 1;
-            enum max = size_t.max;
-        }
-        else
-            static assert(false, "Unsupported callback: " ~ T.stringof);
-    }
     else
         static assert(false, "Type is not supported: " ~ T.stringof);
 }
+
+unittest
+{
+    struct T
+    {
+        bool        b;
+        string      s;
+        int         i;
+        int[7]      sa;
+        int[]       da;
+        int[string] aa;
+        void f();
+        void fs(string);
+        void fa(string[]);
+        void fp(RawParam);
+        int g();
+        int gs(string);
+        int ga(string[]);
+        int gp(RawParam);
+    }
+    void test(T)(size_t min, size_t max)
+    {
+        assert(defaultValuesCount!T.min == min);
+        assert(defaultValuesCount!T.max == max);
+    }
+    test!(typeof(T.b))(0, 0);
+    test!(typeof(T.s))(1, 1);
+    test!(typeof(T.i))(1, 1);
+    test!(typeof(T.sa))(7, 7);
+    test!(typeof(T.da))(1, size_t.max);
+    test!(typeof(T.aa))(1, size_t.max);
+    test!(typeof(&T.f))(0, 0);
+    test!(typeof(&T.fs))(1, 1);
+    test!(typeof(&T.fa))(1, size_t.max);
+    test!(typeof(&T.fp))(1, size_t.max);
+    test!(typeof(&T.g))(0, 0);
+    test!(typeof(&T.gs))(1, 1);
+    test!(typeof(&T.ga))(1, size_t.max);
+    test!(typeof(&T.gp))(1, size_t.max);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package auto getMemberArgumentUDA(TYPE, string symbol)(const Config config)
 {

@@ -7,6 +7,7 @@ import argparse.api.subcommand: match;
 import argparse.internal.arguments: Arguments, ArgumentInfo;
 import argparse.internal.argumentudahelpers: getMemberArgumentUDA;
 import argparse.internal.commandinfo;
+import argparse.internal.commandstack : CommandStack;
 import argparse.internal.restriction;
 import argparse.internal.typetraits;
 
@@ -75,25 +76,6 @@ private Result ArgumentCompleteFunction(alias uda, RECEIVER)(const Command[] cmd
 
 unittest
 {
-    struct T { string a; }
-
-    auto test(string[] values)
-    {
-        T t;
-        Config cfg;
-        auto param = RawParam(&cfg, "a", values);
-
-        enum uda = getMemberArgumentUDA!(T, "a")(Config.init);
-
-        return ArgumentParsingFunction!uda([], t, param);
-    }
-
-    assert(test(["raw-value"]));
-    assert(!test(["value1","value2"]));
-}
-
-unittest
-{
     struct T
     {
         void func() { throw new Exception("My Message."); }
@@ -136,7 +118,7 @@ package struct Command
     {
         return (stack, ref param)
         {
-            idxParsedArgs[index] = true;
+            idxParsedArgs[index] += param.value.length;
             return funcs[index](stack, param);
         };
     }
@@ -160,18 +142,9 @@ package struct Command
         return Argument(res.arg, getParseFunc(parseFuncs, res.index), getParseFunc(completeFuncs, res.index));
     }
 
-    auto findPositionalArgument(size_t position)
-    {
-        auto res = arguments.findPositionalArgument(position);
-        if(!res.arg)
-            return Argument.init;
-
-        return Argument(res.arg, getParseFunc(parseFuncs, res.index), getParseFunc(completeFuncs, res.index));
-    }
 
 
-
-    const(string)[] suggestions(string prefix) const
+    string[] suggestions(string prefix) const
     {
         import std.range: chain;
         import std.algorithm: filter, map;
@@ -188,7 +161,32 @@ package struct Command
 
     Arguments arguments;
 
-    bool[size_t] idxParsedArgs;
+    size_t[size_t] idxParsedArgs;
+    size_t idxParsingPositional;
+
+    auto getNextPositionalArgument()
+    {
+        alias tryIndex = (index)
+        {
+            auto res = arguments.findPositionalArgument(index);
+            if(!res.arg)
+                return Argument.init;
+
+            // Argument can't accept more values
+            if(idxParsedArgs.get(res.index, 0) >= res.arg.maxValuesCount.get)
+                return Argument.init;
+
+            return Argument(res.arg, getParseFunc(parseFuncs, res.index), getParseFunc(completeFuncs, res.index));
+        };
+
+        // Try current argument. If it doesn't work, try the next one
+        auto res = tryIndex(idxParsingPositional);
+        if(!res)
+            res = tryIndex(++idxParsingPositional);
+
+        return res;
+    }
+
 
     Restrictions restrictions;
 
@@ -206,8 +204,23 @@ package struct Command
         return idx != size_t(-1) ? subCommandCreate[idx] : null;
     }
 
-    Result checkRestrictions() const
+    Result finalize(const Config config, CommandStack cmdStack)
     {
+        // https://github.com/andrey-zherikov/argparse/issues/231
+        foreach (idx, argInfo; this.arguments.info) {
+            // if argument was not provided in command line and has environment variable fallback
+            if (idx !in this.idxParsedArgs && argInfo.envVar.length) {
+                import std.process : environment;
+                auto value = environment.get(argInfo.envVar);
+                // The value might exist but be empty, in which case
+                // we still want to take it into account
+                // https://github.com/andrey-zherikov/argparse/issues/219
+                if (value !is null) {
+                    auto param = RawParam(&config, argInfo.displayName, [value]);
+                    this.getParseFunc(this.parseFuncs, idx)(cmdStack.stack, param);
+                }
+            }
+        }
         return restrictions.check(idxParsedArgs);
     }
 }

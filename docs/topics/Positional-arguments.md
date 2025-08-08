@@ -5,6 +5,7 @@ using `PositionalArgument` UDA. It has the following parameters:
 
 ```c++
 PositionalArgument()
+PositionalArgument(string placeholder)
 PositionalArgument(uint position)
 PositionalArgument(uint position, string placeholder)
 ```

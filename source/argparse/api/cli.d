@@ -90,7 +90,7 @@ template CLI(Config config, COMMAND)
 {
     static Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
     {
-        auto res = callParser!(config, false)(receiver, args, unrecognizedArgs);
+        auto res = callParser!config(receiver, args, unrecognizedArgs);
 
         if(!res && res.errorMsg.length > 0)
             onError!config(res.errorMsg);
@@ -121,42 +121,6 @@ template CLI(Config config, COMMAND)
         return res;
     }
 
-    static int parseArgs(alias newMain)(string[] args, auto ref COMMAND initialValue = COMMAND.init)
-    if(__traits(compiles, { newMain(initialValue); }))
-    {
-        alias value = initialValue;
-
-        auto res = parseArgs(value, args);
-        if(!res)
-            return res.exitCode;
-
-        static if(__traits(compiles, { int a = cast(int) newMain(value); }))
-            return cast(int) newMain(value);
-        else
-        {
-            newMain(value);
-            return 0;
-        }
-    }
-
-    static int parseArgs(alias newMain)(string[] args, auto ref COMMAND initialValue = COMMAND.init)
-    if(__traits(compiles, { newMain(initialValue, string[].init); }))
-    {
-        alias value = initialValue;
-
-        auto res = parseKnownArgs(value, args);
-        if(!res)
-            return res.exitCode;
-
-        static if(__traits(compiles, { int a = cast(int) newMain(value, args); }))
-            return cast(int) newMain(value, args);
-        else
-        {
-            newMain(value, args);
-            return 0;
-        }
-    }
-
     // This is a template to avoid compiling it unless it is actually used.
     string[] completeArgs()(string[] args)
     {
@@ -168,11 +132,17 @@ template CLI(Config config, COMMAND)
     {
         import argparse.api.subcommand: match;
 
+        Complete!COMMAND comp;
+
         // We are able to instantiate `CLI` with different arguments solely because we reside in a templated function.
         // If we weren't, that would lead to infinite template recursion.
-        return CLI!(config, Complete!COMMAND).parseArgs!(comp =>
-            comp.cmd.match!(_ => _.execute!(config, COMMAND))
-        )(args);
+        auto res = CLI!(config, Complete!COMMAND).parseArgs(comp, args);
+        if (!res)
+            return res.exitCode;
+
+        comp.cmd.match!(_ => _.execute!(config, COMMAND));
+
+        return 0;
     }
 
     template mainComplete()
@@ -183,17 +153,55 @@ template CLI(Config config, COMMAND)
         }
     }
 
-    template main(alias newMain)
+    version(argparse_completion)
     {
-        version(argparse_completion)
+        template main(alias newMain)
         {
             mixin CLI!(config, COMMAND).mainComplete;
         }
-        else
+    }
+    else
+    {
+        template main(alias newMain)
         {
             int main(string[] argv)
             {
-                return CLI!(config, COMMAND).parseArgs!(newMain)(argv[1..$]);
+                argv = argv[1..$];
+                COMMAND value;
+
+                static if (is(typeof(newMain(value, argv))))
+                {
+                    // newMain has two parameters so parse only known arguments
+                    auto res = CLI!(config, COMMAND).parseKnownArgs(value, argv);
+                }
+                else
+                {
+                    // Assume newMain has one parameter, so strictly parse command line
+                    auto res = CLI!(config, COMMAND).parseArgs(value, argv);
+                }
+
+                if (!res)
+                    return res.exitCode;
+
+                // call newMain
+                static if (is(typeof(newMain(value, argv)) == void))
+                {
+                    newMain(value, argv);
+                    return 0;
+                }
+                else static if (is(typeof(newMain(value, argv))))
+                {
+                    return newMain(value, argv);
+                }
+                else static if (is(typeof(newMain(value)) == void))
+                {
+                    newMain(value);
+                    return 0;
+                }
+                else
+                {
+                    return newMain(value);
+                }
             }
         }
     }
@@ -205,57 +213,102 @@ alias CLI(COMMANDS...) = CLI!(Config.init, COMMANDS);
 
 unittest
 {
-    static struct Args {}
+    static struct Args {
+        string s;
+    }
 
-    Args initValue;
+    auto test(alias F)()
+    {
+        mixin CLI!Args.main!F;
 
-    enum Config cfg = { errorHandler: (string s) {} };
+        return main(["executable","-s","1"]); // argv[0] is executable
+    }
 
-    assert(CLI!(cfg, Args).parseArgs!((_                  ){})([]) == 0);
-    assert(CLI!(cfg, Args).parseArgs!((_, string[] unknown){})([]) == 0);
-    assert(CLI!(cfg, Args).parseArgs!((_                  ){ return 123; })([]) == 123);
-    assert(CLI!(cfg, Args).parseArgs!((_, string[] unknown){ return 123; })([]) == 123);
+    assert(test!(function(_){assert(_ == Args("1"));}) == 0);
+    assert(test!(function(_){assert(_ == Args("1")); return 123;}) == 123);
 
-    assert(CLI!(cfg, Args).parseArgs!((_                  ){})([], initValue) == 0);
-    assert(CLI!(cfg, Args).parseArgs!((_, string[] unknown){})([], initValue) == 0);
-    assert(CLI!(cfg, Args).parseArgs!((_                  ){ return 123; })([], initValue) == 123);
-    assert(CLI!(cfg, Args).parseArgs!((_, string[] unknown){ return 123; })([], initValue) == 123);
+    assert(test!(function(ref _){assert(_ == Args("1"));}) == 0);
+    assert(test!(function(ref _){assert(_ == Args("1")); return 123;}) == 123);
 
-    // Ensure that CLI.main is compilable
-    { mixin CLI!(cfg, Args).main!((_                  ){}); }
-    { mixin CLI!(cfg, Args).main!((_, string[] unknown){}); }
-    { mixin CLI!(cfg, Args).main!((_                  ){ return 123; }); }
-    { mixin CLI!(cfg, Args).main!((_, string[] unknown){ return 123; }); }
+    assert(test!(delegate(_){assert(_ == Args("1"));}) == 0);
+    assert(test!(delegate(_){assert(_ == Args("1")); return 123;}) == 123);
+
+    assert(test!(delegate(ref _){assert(_ == Args("1"));}) == 0);
+    assert(test!(delegate(ref _){assert(_ == Args("1")); return 123;}) == 123);
 }
 
-// Ensure that CLI works with non-copyable structs
 unittest
 {
     static struct Args {
-        @disable this(ref Args);
-        this(int) {}
+        string s;
     }
 
-    //Args initValue;
-    auto initValue = Args(0);
+    auto test(alias F)()
+    {
+        mixin CLI!Args.main!F;
 
-    enum Config cfg = { errorHandler: (string s) {} };
+        return main(["executable","-s","1","u"]); // argv[0] is executable
+    }
 
-    assert(CLI!(cfg, Args).parseArgs!((ref _                  ){})([]) == 0);
-    assert(CLI!(cfg, Args).parseArgs!((ref _, string[] unknown){})([]) == 0);
-    assert(CLI!(cfg, Args).parseArgs!((ref _                  ){ return 123; })([]) == 123);
-    assert(CLI!(cfg, Args).parseArgs!((ref _, string[] unknown){ return 123; })([]) == 123);
+    assert(test!(function(_, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(function(_, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
 
-    assert(CLI!(cfg, Args).parseArgs!((ref _                  ){})([], initValue) == 0);
-    assert(CLI!(cfg, Args).parseArgs!((ref _, string[] unknown){})([], initValue) == 0);
-    assert(CLI!(cfg, Args).parseArgs!((ref _                  ){ return 123; })([], initValue) == 123);
-    assert(CLI!(cfg, Args).parseArgs!((ref _, string[] unknown){ return 123; })([], initValue) == 123);
+    assert(test!(function(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(function(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
 
-    // Ensure that CLI.main is compilable
-    { mixin CLI!(cfg, Args).main!((ref _                  ){}); }
-    { mixin CLI!(cfg, Args).main!((ref _, string[] unknown){}); }
-    { mixin CLI!(cfg, Args).main!((ref _                  ){ return 123; }); }
-    { mixin CLI!(cfg, Args).main!((ref _, string[] unknown){ return 123; }); }
+    assert(test!(delegate(_, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(delegate(_, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
+
+    assert(test!(delegate(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(delegate(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
+}
+
+unittest
+{
+    // Ensure that CLI.main works with non-copyable structs
+    static struct Args {
+        @disable this(ref Args);
+        @disable void opAssign(ref Args);
+
+        string s;
+    }
+
+    auto test(alias F)()
+    {
+        mixin CLI!Args.main!F;
+
+        return main(["executable","-s","1"]); // argv[0] is executable
+    }
+
+    assert(test!(function(ref _){assert(_ == Args("1"));}) == 0);
+    assert(test!(function(ref _){assert(_ == Args("1")); return 123;}) == 123);
+
+    assert(test!(delegate(ref _){assert(_ == Args("1"));}) == 0);
+    assert(test!(delegate(ref _){assert(_ == Args("1")); return 123;}) == 123);
+}
+
+unittest
+{
+    // Ensure that CLI.main works with non-copyable structs
+    static struct Args {
+        @disable this(ref Args);
+        @disable void opAssign(ref Args);
+
+        string s;
+    }
+
+    auto test(alias F)()
+    {
+        mixin CLI!Args.main!F;
+
+        return main(["executable","-s","1","u"]); // argv[0] is executable
+    }
+
+    assert(test!(function(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(function(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
+
+    assert(test!(delegate(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
+    assert(test!(delegate(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -268,10 +321,19 @@ unittest
         string[][]  b;
     }
 
-    assert(CLI!T.parseArgs!((T t) { assert(t.a == ["1","2","3","4","5"]); return 12345; })(["-a","1","2","3","-a","4","5"]) == 12345);
-    assert(CLI!T.parseArgs!((T t) { assert(t.a == ["1","2","3","4","5"]); return 12345; })(["-a=1,2,3","-a","4","5"]) == 12345);
-    assert(CLI!T.parseArgs!((T t) { assert(t.a == ["1,2,3","4","5"]); return 12345; })(["-a","1,2,3","-a","4","5"]) == 12345);
-    assert(CLI!T.parseArgs!((T t) { assert(t.b == [["1","2","3"],["4","5"]]); return 12345; })(["-b","1","2","3","-b","4","5"]) == 12345);
+    enum Config config = { variadicNamedArgument: true };
+
+    auto test(string[] args)
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, args));
+        return t;
+    }
+
+    assert(test(["-a","1","2","3","-a","4","5"]).a == ["1","2","3","4","5"]);
+    assert(test(["-a=1,2,3","-a","4","5"]).a == ["1","2","3","4","5"]);
+    assert(test(["-a","1,2,3","-a","4","5"]).a == ["1,2,3","4","5"]);
+    assert(test(["-b","1","2","3","-b","4","5"]).b == [["1","2","3"],["4","5"]]);
 }
 
 unittest
@@ -281,9 +343,19 @@ unittest
         int[string] a;
     }
 
-    assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); return 12345; })(["-a=foo=3","-a","boo=7"]) == 12345);
-    assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); return 12345; })(["-a=foo=3,boo=7"]) == 12345);
-    assert(CLI!T.parseArgs!((T t) { assert(t == T(["foo":3,"boo":7])); return 12345; })(["-a","foo=3","boo=7"]) == 12345);
+    auto test(Config config = Config.init)(string[] args)
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, args));
+        return t;
+    }
+
+    assert(test(["-a=foo=3","-a","boo=7"]) == T(["foo":3,"boo":7]));
+    assert(test(["-a=foo=3,boo=7"]) == T(["foo":3,"boo":7]));
+
+    enum Config config = { variadicNamedArgument: true };
+
+    assert(test!config(["-a","foo=3","boo=7"])== T(["foo":3,"boo":7]));
 }
 
 unittest
@@ -295,9 +367,18 @@ unittest
         Fruit a;
     }
 
-    assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.apple)); return 12345; })(["-a","apple"]) == 12345);
-    assert(CLI!T.parseArgs!((T t) { assert(t == T(T.Fruit.pear)); return 12345; })(["-a=pear"]) == 12345);
-    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-a", "kiwi"]) != 0);    // "kiwi" is not allowed
+    auto test(string[] args)
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, args));
+        return t;
+    }
+
+    assert(test(["-a","apple"]) == T(T.Fruit.apple));
+    assert(test(["-a=pear"]) == T(T.Fruit.pear));
+
+    T t;
+    assert(CLI!T.parseArgs(t, ["-a", "kiwi"]).isError("Invalid value","kiwi"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -312,8 +393,16 @@ unittest
 
     enum Config config = { caseSensitiveShortName: false, caseSensitiveLongName: false, caseSensitiveSubCommand: false };
 
-    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T("X", "FOO")); return 12345; })(["--Foo","FOO","-X","X"]) == 12345);
-    assert(CLI!(config, T).parseArgs!((T t) { assert(t == T("X", "FOO")); return 12345; })(["--FOo=FOO","-X=X"]) == 12345);
+    auto test(string[] args)
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, args));
+        return t;
+    }
+
+
+    assert(test(["--Foo","FOO","-X","X"]) == T("X", "FOO"));
+    assert(test(["--FOo=FOO","-X=X"]) == T("X", "FOO"));
 }
 
 unittest
@@ -343,93 +432,40 @@ unittest
     assert(test(["-a","-b","-c","foo"]) == T(true, true, "foo"));
 }
 
+unittest
+{
+    struct T
+    {
+        string c;
+    }
+
+    auto test(string[] args)
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, args));
+        return t;
+    }
+
+    assert(test(["-c","foo"]) == T("foo"));
+    assert(test(["-c=foo"])   == T("foo"));
+    assert(test(["-cfoo"])    == T("foo"));
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 unittest
 {
     struct T
     {
-        string a;
         static auto color = ansiStylingArgument;
     }
 
-    assert(CLI!T.parseArgs!((T t) { assert(false); })(["-g"]) != 0);
-    assert(CLI!T.parseArgs!((T t) { assert(t == T.init); return 12345; })([]) == 12345);
-    assert(CLI!T.parseArgs!((T t, string[] args) {
-        assert(t == T.init);
-        assert(args.length == 0);
-        return 12345;
-    })([]) == 12345);
-    assert(CLI!T.parseArgs!((T t, string[] args) {
-        assert(t == T("aa"));
-        assert(args == ["-g"]);
-        return 12345;
-    })(["-a","aa","-g"]) == 12345);
-    assert(CLI!T.parseArgs!((T t) {
-        assert(t.color);
-        return 12345;
-    })(["--color"]) == 12345);
-    assert(CLI!T.parseArgs!((T t) {
-        assert(!t.color);
-        return 12345;
-    })(["--color","never"]) == 12345);
-}
+    T t;
 
-unittest
-{
-    struct T
-    {
-        string a;
-        string b;
-    }
-
-    assert(CLI!T.parseArgs!((T t, string[] args) {
-        assert(t == T("A"));
-        assert(args == []);
-        return 12345;
-    })(["-a","A","--"]) == 12345);
-
-    {
-        T args;
-
-        assert(CLI!T.parseArgs(args, [ "-a", "A"]));
-        assert(CLI!T.parseArgs(args, [ "-b", "B"]));
-
-        assert(args == T("A","B"));
-    }
-}
-
-unittest
-{
-    struct T
-    {
-        string a;
-    }
-
-    import std.exception;
-
-    assert(collectExceptionMsg(
-        CLI!T.parseArgs!((T t, string[] args) {
-            assert(t == T.init);
-            assert(args.length == 0);
-            throw new Exception("My Message.");
-        })([]))
-    == "My Message.");
-    assert(collectExceptionMsg(
-        CLI!T.parseArgs!((T t, string[] args) {
-            assert(t == T("aa"));
-            assert(args == ["-g"]);
-            throw new Exception("My Message.");
-        })(["-a","aa","-g"]))
-    == "My Message.");
-    assert(CLI!T.parseArgs!((T t, string[] args) {
-        assert(t == T.init);
-        assert(args.length == 0);
-    })([]) == 0);
-    assert(CLI!T.parseArgs!((T t, string[] args) {
-        assert(t == T("aa"));
-        assert(args == ["-g"]);
-    })(["-a","aa","-g"]) == 0);
+    assert(CLI!T.parseArgs(t, ["--color"]));
+    assert(t.color);
+    assert(CLI!T.parseArgs(t, ["--color","never"]));
+    assert(!t.color);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

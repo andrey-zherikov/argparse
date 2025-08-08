@@ -61,6 +61,8 @@ auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t num)
 
 auto ref NumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t min, size_t max)
 {
+    assert(min <= max);
+
     uda.info.minValuesCount = min;
     uda.info.maxValuesCount = max;
     return uda;
@@ -82,6 +84,23 @@ auto ref MaxNumberOfValues(T)(auto ref ArgumentUDA!T uda, size_t max)
     return uda;
 }
 
+/**
+ * If no argument is provided on the command-line, falls back to the value of
+ * the environment variable `variable`.
+ *
+ * Use it to provide a fallback mechanism for some variables, for example:
+ * ```
+ * @(NamedArgument("host").EnvFallback("GITHUB_SERVER"))
+ * public string host = "https://my-default.example.com";
+ * ```
+ * The user can provide a `--host VALUE` argument, set the `GITHUB_SERVER`
+ * environment variable, or use the default.
+ */
+auto ref EnvFallback(T)(auto ref ArgumentUDA!T uda, string variable)
+{
+    uda.info.envVar = variable;
+    return uda;
+}
 
 unittest
 {
@@ -101,17 +120,17 @@ unittest
     arg = arg.Hidden.Required.NumberOfValues(10);
     assert(arg.info.hidden);
     assert(arg.info.required);
-    assert(arg.info.minValuesCount.get == 10);
-    assert(arg.info.maxValuesCount.get == 10);
+    assert(arg.info.minValuesCount == 10);
+    assert(arg.info.maxValuesCount == 10);
 
     arg = arg.Optional.NumberOfValues(20,30);
     assert(!arg.info.required);
-    assert(arg.info.minValuesCount.get == 20);
-    assert(arg.info.maxValuesCount.get == 30);
+    assert(arg.info.minValuesCount == 20);
+    assert(arg.info.maxValuesCount == 30);
 
     arg = arg.MinNumberOfValues(2).MaxNumberOfValues(3);
-    assert(arg.info.minValuesCount.get == 2);
-    assert(arg.info.maxValuesCount.get == 3);
+    assert(arg.info.minValuesCount == 2);
+    assert(arg.info.maxValuesCount == 3);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -121,6 +140,11 @@ auto PositionalArgument()
     auto arg = ArgumentUDA!(ValueParser!(void, void))(ArgumentInfo.init).Required();
     arg.info.positional = true;
     return arg;
+}
+
+auto PositionalArgument(string placeholder)
+{
+    return PositionalArgument().Placeholder(placeholder);
 }
 
 auto PositionalArgument(uint position)
@@ -150,10 +174,11 @@ auto NamedArgument(string[] names...)
 
 unittest
 {
-    auto arg = PositionalArgument();
+    auto arg = PositionalArgument("foo");
     assert(arg.info.required);
     assert(arg.info.positional);
     assert(arg.info.position.isNull);
+    assert(arg.info.placeholder == "foo");
 }
 
 unittest
