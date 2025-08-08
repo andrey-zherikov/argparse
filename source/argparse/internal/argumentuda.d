@@ -4,6 +4,7 @@ import argparse.config;
 import argparse.param;
 import argparse.result;
 import argparse.internal.arguments: ArgumentInfo;
+import argparse.internal.valueparser: parseParameter;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,7 +33,7 @@ package(argparse) struct ArgumentUDA(ValueParser)
         }
     }
 
-    package auto addDefaults(T)(ArgumentUDA!T uda)
+    package auto addDefaultUDA(T)(ArgumentUDA!T uda)
     {
         auto newInfo = info;
 
@@ -50,16 +51,12 @@ package(argparse) struct ArgumentUDA(ValueParser)
         return createArgumentUDA(newInfo, newValueParser);
     }
 
-    auto addReceiverTypeDefaults(T)()
+    auto addTypeDefaults(T)()
     {
         static assert(!is(T == P*, P));
 
-        static if(__traits(hasMember, valueParser, "typeDefaults"))
-        {
-            auto newValueParser = valueParser.addDefaults(valueParser.typeDefaults!T);
-
-            return createArgumentUDA(info, newValueParser);
-        }
+        static if(__traits(hasMember, valueParser, "addTypeDefaults"))
+            return createArgumentUDA(info, valueParser.addTypeDefaults!T);
         else
             return this;
     }
@@ -100,7 +97,7 @@ unittest
 
     {
         // values shouldn't be changed
-        auto res = arg1.addDefaults(arg2);
+        auto res = arg1.addDefaultUDA(arg2);
         assert(res.info.shortNames == ["a1", "b1"]);
         assert(res.info.longNames == ["aa1", "bb1"]);
         assert(res.info.placeholder == "ph1");
@@ -112,7 +109,7 @@ unittest
     }
 
     {    // values should be changed
-        auto res = ArgumentUDA!(S!"").init.addDefaults(arg1);
+        auto res = ArgumentUDA!(S!"").init.addDefaultUDA(arg1);
         assert(res.info.shortNames == ["a1", "b1"]);
         assert(res.info.longNames == ["aa1", "bb1"]);
         assert(res.info.placeholder == "ph1");

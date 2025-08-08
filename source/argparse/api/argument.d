@@ -254,7 +254,7 @@ unittest
 /// Parsing customization
 
 auto PreValidation(T, RETURN, VALUE)(ArgumentUDA!T uda, RETURN function(VALUE value) func)
-if((is(VALUE == string) || is(VALUE == string[]) || is(VALUE == RawParam)) &&
+if((is(string : VALUE) || is(string[] : VALUE) || is(RawParam : VALUE)) &&
     (is(RETURN == bool) || is(RETURN == Result)))
 {
     auto desc = createArgumentUDA(uda.info, uda.valueParser.changePreValidation(ValidationFunc!string(func)));
@@ -264,9 +264,9 @@ if((is(VALUE == string) || is(VALUE == string[]) || is(VALUE == RawParam)) &&
 
 ///////////////////////////
 
-private auto ParseImpl(T, RECEIVER)(ArgumentUDA!T uda, ParseFunc!RECEIVER func)
+private auto ParseImpl(RECEIVER, FUNC,T)(ArgumentUDA!T uda, FUNC func)
 {
-    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeParse(func));
+    auto desc = createArgumentUDA(uda.info, uda.valueParser.changeParse(ParseFunc!RECEIVER(func)));
 
     static if(is(RECEIVER == string))
         desc.info.minValuesCount = desc.info.maxValuesCount = 1;
@@ -280,15 +280,15 @@ private auto ParseImpl(T, RECEIVER)(ArgumentUDA!T uda, ParseFunc!RECEIVER func)
 }
 
 auto Parse(T, RECEIVER, VALUE)(ArgumentUDA!T uda, RECEIVER function(VALUE value) func)
-if((is(VALUE == string) || is(VALUE == string[]) || is(VALUE == RawParam)))
+if((is(string : VALUE) || is(string[] : VALUE) || is(RawParam : VALUE)))
 {
-    return ParseImpl(uda, ParseFunc!RECEIVER(func));
+    return ParseImpl!RECEIVER(uda, func);
 }
 
 auto Parse(T, RETURN, RECEIVER)(ArgumentUDA!T uda, RETURN function(ref RECEIVER receiver, RawParam param) func)
 if(is(RETURN == void) || is(RETURN == bool) || is(RETURN == Result))
 {
-    return ParseImpl(uda, ParseFunc!RECEIVER(func));
+    return ParseImpl!RECEIVER(uda, func);
 }
 
 ///////////////////////////
@@ -335,13 +335,13 @@ package auto ActionNoValue(T, RECEIVER)(ArgumentUDA!T uda, Result function(ref R
 unittest
 {
     auto uda = NamedArgument.PreValidation((RawParam _) => true);
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(void, void))));
+    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(void, void))));
 }
 
 unittest
 {
     auto uda = NamedArgument.Parse((string _) => _);
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, void)), alias P));
+    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string, void))));
     assert(uda.info.minValuesCount == 1);
     assert(uda.info.maxValuesCount == 1);
 }
@@ -349,7 +349,7 @@ unittest
 unittest
 {
     auto uda = NamedArgument.Parse((string[] _) => _);
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, void)), alias P));
+    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string[], void))));
     assert(uda.info.minValuesCount == 0);
     assert(uda.info.maxValuesCount == size_t.max);
 }
@@ -357,13 +357,13 @@ unittest
 unittest
 {
     auto uda = NamedArgument.Validation((RawParam _) => true);
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, void)), alias P));
+    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string[], void))));
 }
 
 unittest
 {
     auto uda = NamedArgument.Action((ref string _1, RawParam _2) {});
-    assert(is(typeof(uda) : ArgumentUDA!(ValueParser!(P, R)), alias P, alias R));
+    assert(is(typeof(uda) == ArgumentUDA!(ValueParser!(string[], string))));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

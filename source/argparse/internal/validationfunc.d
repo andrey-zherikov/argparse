@@ -3,10 +3,10 @@ module argparse.internal.validationfunc;
 import argparse.config;
 import argparse.param;
 import argparse.result;
+import argparse.internal.calldispatcher;
 import argparse.internal.errorhelpers;
 
-import std.conv;
-import std.sumtype;
+import std.conv: to;
 import std.traits;
 
 
@@ -103,36 +103,19 @@ package(argparse) struct ValidationFunc(TYPE)
         }
     }
 
+    alias CD = CallDispatcher!(Handler!TYPE);
+    CD dispatcher;
+    alias this = dispatcher;
 
-
-    import std.meta: AliasSeq;
-
-    alias getFirstParameter(T) = Unqual!(Parameters!T[0]);
-
-    alias TYPES = AliasSeq!(staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!TYPE, "opCall"))));
-
-    SumType!TYPES F;
-
-    static foreach(T; TYPES)
-    this(T func)
-    {
-        F = func;
-    }
-
-    static foreach(T; TYPES)
-    auto opAssign(T func)
-    {
-        F = func;
-    }
-
-    bool opCast(T : bool)() const
-    {
-        return F != typeof(F).init;
-    }
+    static foreach(T; CD.TYPES)
+        this(T f)
+        {
+            dispatcher = CD(f);
+        }
 
     Result opCall(Param!TYPE param) const
     {
-        return F.match!((const ref _) => Handler!TYPE(_, param));
+        return dispatcher.opCall(param);
     }
 
     Result opCall(Param!(TYPE[]) param) const
@@ -145,6 +128,26 @@ package(argparse) struct ValidationFunc(TYPE)
         }
         return Result.Success;
     }
+}
+
+unittest
+{
+    Config config;
+    auto fs = ValidationFunc!string((string s) => s.length > 0);
+    assert(!fs(Param!string(&config, "", "")));
+    assert(fs(Param!string(&config, "", "a")));
+
+    auto fsa = ValidationFunc!(string[2])((string s) => s.length > 0);
+    assert(!fsa(Param!(string[2])(&config, "", ["ab", ""])));
+    assert(fsa(Param!(string[2])(&config, "", ["a", "cd"])));
+
+    auto fi = ValidationFunc!int((int x) => bool(x & 0x1));
+    assert(!fi(Param!int(&config, "", 8)));
+    assert(fi(Param!int(&config, "", 13)));
+
+    auto fa = ValidationFunc!(int[])((int x) => bool(x & 0x1));
+    assert(!fa(Param!(int[])(&config, "", [3, 8])));
+    assert(fa(Param!(int[])(&config, "", [13, -1])));
 }
 
 unittest

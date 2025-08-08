@@ -3,10 +3,8 @@ module argparse.internal.parsefunc;
 import argparse.config;
 import argparse.param;
 import argparse.result;
+import argparse.internal.calldispatcher;
 import argparse.internal.errorhelpers;
-
-import std.traits;
-import std.sumtype;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,32 +52,15 @@ private struct Handler(TYPE)
 // void parse(ref T receiver, RawParam param)
 package(argparse) struct ParseFunc(RECEIVER)
 {
-    alias getFirstParameter(T) = Parameters!T[0];
-    alias TYPES = staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!RECEIVER, "opCall")));
+    alias CD = CallDispatcher!(Handler!RECEIVER);
+    CD dispatcher;
+    alias this = dispatcher;
 
-    SumType!TYPES F;
-
-    static foreach(T; TYPES)
-    this(T func)
-    {
-        F = func;
-    }
-
-    static foreach(T; TYPES)
-    auto opAssign(T func)
-    {
-        F = func;
-    }
-
-    bool opCast(T : bool)() const
-    {
-        return F != typeof(F).init;
-    }
-
-    Result opCall(ref RECEIVER receiver, RawParam param) const
-    {
-        return F.match!(_ => Handler!RECEIVER(_, receiver, param));
-    }
+    static foreach(T; CD.TYPES)
+        this(T f)
+        {
+            dispatcher = CD(f);
+        }
 }
 
 unittest
@@ -163,25 +144,4 @@ unittest
 
     assert(testErr!int("unknown").isError());
     assert(testErr!bool("unknown").isError());
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// has to do this way otherwise DMD compiler chokes - linker reports unresolved symbol for lambda:
-// Error: undefined reference to `pure nothrow @nogc @safe immutable(char)[][] argparse.internal.parsefunc.__lambda12(immutable(char)[][])`
-//       referenced from `pure nothrow @nogc @safe argparse.internal.valueparser.ValueParser!(immutable(char)[][], void delegate()).ValueParser argparse.internal.valueparser.ValueParser!(void, void).ValueParser.addReceiverTypeDefaults!(void delegate()).addReceiverTypeDefaults()`
-private enum PassThroughImpl(TYPE) = ParseFunc!TYPE
-    ((TYPE value)
-    {
-        return value;
-    });
-
-package enum PassThrough = PassThroughImpl!(string[]);
-
-unittest
-{
-    Config config;
-    string[] s;
-    PassThrough(s, Param!(string[])(&config,"",["7","8"]));
-    assert(s == ["7","8"]);
 }

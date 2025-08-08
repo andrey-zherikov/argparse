@@ -3,10 +3,10 @@ module argparse.internal.actionfunc;
 import argparse.config;
 import argparse.param;
 import argparse.result;
+import argparse.internal.calldispatcher;
 import argparse.internal.errorhelpers;
 
-import std.traits;
-import std.sumtype;
+import std.traits: ForeachType;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,33 +51,17 @@ private struct Handler(RECEIVER, PARSE)
 // Result action(ref T receiver, Param!ParseType param)
 package(argparse) struct ActionFunc(RECEIVER, PARSE)
 {
-    alias getFirstParameter(T) = Parameters!T[0];
-    alias TYPES = staticMap!(getFirstParameter, typeof(__traits(getOverloads, Handler!(RECEIVER, PARSE), "opCall")));
+    alias CD = CallDispatcher!(Handler!(RECEIVER, PARSE));
+    CD dispatcher;
+    alias this = dispatcher;
 
-    SumType!TYPES F;
-
-    static foreach(T; TYPES)
-    this(T func)
-    {
-        F = func;
-    }
-
-    static foreach(T; TYPES)
-    auto opAssign(T func)
-    {
-        F = func;
-    }
-
-    bool opCast(T : bool)() const
-    {
-        return F != typeof(F).init;
-    }
-
-    Result opCall(ref RECEIVER receiver, Param!PARSE param) const
-    {
-        return F.match!(_ => Handler!(RECEIVER, PARSE)(_, receiver, param));
-    }
+    static foreach(T; CD.TYPES)
+        this(T f)
+        {
+            dispatcher = CD(f);
+        }
 }
+
 
 unittest
 {

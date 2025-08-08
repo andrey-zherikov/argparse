@@ -5,60 +5,59 @@ import argparse.param;
 import argparse.result;
 import argparse.internal.errorhelpers;
 
-import std.meta;
-import std.traits;
-import std.sumtype;
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+private struct ValueSetter(VALUE)
+{
+    VALUE value;
+
+    Result opCall(ref VALUE receiver, Param!void) const
+    {
+        import std.conv: to;
+
+        receiver = value.to!VALUE;
+
+        return Result.Success;
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package(argparse) struct NoValueActionFunc(RECEIVER)
 {
-    private struct ProcessingError
+    union
     {
-        Result opCall(ref RECEIVER receiver, Param!void param) const
-        {
-            return processingError(param);
-        }
+        Result function(ref RECEIVER, Param!void) func;
+        ValueSetter!RECEIVER setter;
+    }
+    size_t selection = -1;
+    
+
+    this(Result function(ref RECEIVER, Param!void) f)
+    {
+        func = f;
+        selection = 0;
     }
 
-    private struct SetValue
+    this(ValueSetter!RECEIVER s)
     {
-        RECEIVER value;
-
-        this(RECEIVER v)
-        {
-            value = v;
-        }
-
-        Result opCall(ref RECEIVER receiver, Param!void param) const
-        {
-            import std.conv: to;
-
-            receiver = value.to!RECEIVER;
-
-            return Result.Success;
-        }
-    }
-
-    alias TYPES = AliasSeq!(ProcessingError, Result function(ref RECEIVER receiver, Param!void param), SetValue);
-
-    SumType!TYPES F;
-
-    static foreach(T; TYPES)
-    this(T func)
-    {
-        F = func;
+        setter = s;
+        selection = 1;
     }
 
     bool opCast(T : bool)() const
     {
-        return F != typeof(F).init;
+        return selection != -1;
     }
 
     Result opCall(ref RECEIVER receiver, Param!void param) const
     {
-        return F.match!(_ => _(receiver, param));
+        switch(selection)
+        {
+            case 0: return func(receiver, param);
+            case 1: return setter(receiver, param);
+            default: assert(false);
+        }
     }
 }
 
@@ -85,7 +84,9 @@ unittest
 
 package(argparse) auto SetValue(VALUE)(VALUE value)
 {
-    return NoValueActionFunc!VALUE(NoValueActionFunc!VALUE.SetValue(value));
+    ValueSetter!VALUE setter = { value };
+
+    return NoValueActionFunc!VALUE(setter);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
