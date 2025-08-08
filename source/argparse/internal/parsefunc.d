@@ -54,22 +54,13 @@ package(argparse) struct ParseFunc(RECEIVER)
 {
     alias CD = CallDispatcher!(Handler!RECEIVER);
     CD dispatcher;
+    alias this = dispatcher;
 
     static foreach(T; CD.TYPES)
         this(T f)
         {
             dispatcher = CD(f);
         }
-
-    bool opCast(T : bool)() const
-    {
-        return cast(bool) dispatcher;
-    }
-
-    auto opCall(ref RECEIVER receiver, RawParam param) const
-    {
-        return dispatcher.opCall(receiver, param);
-    }
 }
 
 unittest

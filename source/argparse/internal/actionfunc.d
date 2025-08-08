@@ -53,22 +53,13 @@ package(argparse) struct ActionFunc(RECEIVER, PARSE)
 {
     alias CD = CallDispatcher!(Handler!(RECEIVER, PARSE));
     CD dispatcher;
+    alias this = dispatcher;
 
     static foreach(T; CD.TYPES)
         this(T f)
         {
             dispatcher = CD(f);
         }
-
-    bool opCast(T : bool)() const
-    {
-        return cast(bool) dispatcher;
-    }
-
-    auto opCall(ref RECEIVER receiver, Param!PARSE param) const
-    {
-        return dispatcher.opCall(receiver, param);
-    }
 }
 
 

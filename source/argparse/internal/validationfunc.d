@@ -105,17 +105,13 @@ package(argparse) struct ValidationFunc(TYPE)
 
     alias CD = CallDispatcher!(Handler!TYPE);
     CD dispatcher;
+    alias this = dispatcher;
 
     static foreach(T; CD.TYPES)
-    this(T f)
-    {
-        dispatcher = CD(f);
-    }
-
-    bool opCast(T : bool)() const
-    {
-        return dispatcher != CD.init;
-    }
+        this(T f)
+        {
+            dispatcher = CD(f);
+        }
 
     Result opCall(Param!TYPE param) const
     {
