@@ -21,7 +21,7 @@ mixin CLI!Program.main!((prog)
 
     writeln("prog = ", prog);
 
-    prog.cmd.match!(
+    prog.cmd.matchCmd!(
         (.max)
         {
             import std.algorithm: maxElement;

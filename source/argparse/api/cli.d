@@ -69,7 +69,7 @@ template CLI(Config config, COMMANDS...)
 {
     template main(alias newMain)
     {
-        import argparse.api.subcommand: SubCommand, match;
+        import argparse.api.subcommand: SubCommand, matchCmd;
 
         private struct Program
         {
@@ -79,7 +79,7 @@ template CLI(Config config, COMMANDS...)
         private static auto forwardMain(Args...)(Program prog, auto ref Args args)
         {
             import core.lifetime: forward;
-            return prog.cmd.match!(_ => newMain(_, forward!args));
+            return prog.cmd.matchCmd!(_ => newMain(_, forward!args));
         }
 
         mixin CLI!(config, Program).main!forwardMain;
@@ -130,7 +130,7 @@ template CLI(Config config, COMMAND)
     // This is a template to avoid compiling it unless it is actually used.
     int complete()(string[] args)
     {
-        import argparse.api.subcommand: match;
+        import argparse.api.subcommand: matchCmd;
 
         Complete!COMMAND comp;
 
@@ -140,7 +140,7 @@ template CLI(Config config, COMMAND)
         if (!res)
             return res.exitCode;
 
-        comp.cmd.match!(_ => _.execute!(config, COMMAND));
+        comp.cmd.matchCmd!(_ => _.execute!(config, COMMAND));
 
         return 0;
     }

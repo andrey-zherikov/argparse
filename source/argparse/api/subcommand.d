@@ -65,7 +65,7 @@ if(Commands.length > 0)
         static if(Types.length == 1)
             return true;
         else
-            return this.match!((const ref T _) => true, (const ref _) => false);
+            return this.matchCmd!((const ref T _) => true, (const ref _) => false);
     }
 
     public bool isSet() const
@@ -81,9 +81,9 @@ if(Commands.length > 0)
 package(argparse) enum bool isSubCommand(T) = is(T : SubCommand!Args, Args...);
 
 
-public template match(handlers...)
+public template matchCmd(handlers...)
 {
-    auto ref match(Sub : const SubCommand!Args, Args...)(auto ref Sub sc)
+    auto ref matchCmd(Sub : const SubCommand!Args, Args...)(auto ref Sub sc)
     {
         static if(is(Sub.DefaultCommand))
             return sc.impl.sumtype_match!(handlers);
@@ -113,7 +113,7 @@ unittest
 
     immutable sub = SubCommand!(A)(A(1));
     static assert(isSubCommand!(typeof(sub)));
-    assert(sub.match!(_ => _.i) == 1);
+    assert(sub.matchCmd!(_ => _.i) == 1);
 }
 
 unittest
@@ -152,17 +152,17 @@ unittest
             {
                 // can assign a command
                 SUBCMD s;
-                assert(s.match!(_ => _.i) == 0);
+                assert(s.matchCmd!(_ => _.i) == 0);
 
                 s = CMD.init;
                 assert(s.isSet);
                 assert(s.isSetTo!CMD);
 
                 // match without returning value
-                s.match!((ref CMD _) { _.i = 123; },(_){});
+                s.matchCmd!((ref CMD _) { _.i = 123; },(_){});
 
                 // match with returning value
-                assert(s.match!(_ => _.i) == 123);
+                assert(s.matchCmd!(_ => _.i) == 123);
             }
         }
     }
