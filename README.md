@@ -183,6 +183,8 @@
 * Added support for environment fallback, so adding `EnvFallback("VAR")` to an argument would automatically populate the argument with the content
   of the `VAR` environment variable if nothing is provided on the command line.
 
+* Fix for empty argument values: they are now non-null empty strings (`""` instead of `string.init` before).
+
 ### Other changes
 
 * Removed dependency on `std.regex`.
