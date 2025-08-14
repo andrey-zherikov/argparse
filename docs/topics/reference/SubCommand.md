@@ -86,16 +86,16 @@ This struct has no members and is erased by `SubCommand` before passing to inter
 struct Default(COMMAND)
 ```
 
-## match
+## matchCmd
 
-`match` is a function template that is similar to the one from standard library but adapted to work with `SubCommand`.
+`matchCmd` is a function template that is similar to `std.sumtype.match` but adapted to work with `SubCommand`.
 
 **Signature**
 
 ```c++
-template match(handlers...)
+template matchCmd(handlers...)
 {
-  auto ref match(Sub : const SubCommand!Args, Args...)(auto ref Sub sc)
+  auto ref matchCmd(Sub : const SubCommand!Args, Args...)(auto ref Sub sc)
   ...
 }
 ```
@@ -104,7 +104,7 @@ template match(handlers...)
 
 - `handlers`
 
-  Functions that have the same meaning as for `match` function in standard library with an exception that they must not use `Default`
+  Functions that have the same meaning as for `matchCmd` function in standard library with an exception that they must not use `Default`
   type because the latter is erased by `SubCommand` (i.e. just use `T` instead of `Default!T` here).
 
 - `sc`
@@ -113,6 +113,6 @@ template match(handlers...)
 
 **Return value**
 
-- If `SubCommand` is set to any subcommand (or has default one) then function returns the result from `match` function from standard library.
-- Otherwise, `init` value of the type that would be returned from `match` function from standard library if that type is not `void`.
+- If `sc` is set to any subcommand (or has default one) then function returns the result from `std.sumtype.match` function.
+- Otherwise, `init` value of the type that would be returned from `std.sumtype.match` function if that type is not `void`.
 - Otherwise, this function has no return value (i.e. it's `void`).
