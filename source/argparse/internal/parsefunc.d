@@ -110,7 +110,10 @@ package enum Convert(TYPE) = ParseFunc!TYPE
             import std.conv: to;
 
             foreach (value; param.value)
-                receiver = value.length > 0 ? value.to!TYPE : TYPE.init;
+                static if(is(TYPE == typeof(value)))
+                    receiver = value;
+                else
+                    receiver = value.length > 0 ? value.to!TYPE : TYPE.init;
 
             return Result.Success;
         }
@@ -132,6 +135,8 @@ unittest
     assert(test!int("7") == 7);
     assert(test!string("7") == "7");
     assert(test!char("7") == '7');
+    assert(test!string("") == "");
+    assert(test!string("") !is null);
 }
 
 unittest
