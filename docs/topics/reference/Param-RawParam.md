@@ -10,9 +10,7 @@
 
 `Param` struct has the following fields:
 
-- `const(Config)*` `config`- The content is almost the same as the [`Config`](Config.md) object that was passed into [CLI API](CLI-API.md).
-  The only difference is in [`Config.stylingMode`](Config.md#stylingMode) - it is either `Config.StylingMode.on` or `Config.StylingMode.off`
-  based on [auto-detection](ANSI-coloring-and-styling.md#heuristic) results.
+- `const(Config)*` `config`- The content is the same as the [`Config`](Config.md) object that was passed into [CLI API](CLI-API.md).
 - `string` `name` – For named argument, it contains a name that is specified in command line exactly including prefix(es)
   ([`Config.shortNamePrefix`](Config.md#shortNamePrefix)/[`Config.longNamePrefix`](Config.md#longNamePrefix)).
   For positional arguments, it contains placeholder value.

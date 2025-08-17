@@ -337,7 +337,14 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package bool detectSupport()
+private enum STREAM { STDOUT, STDERR }
+
+package alias STDOUT = STREAM.STDOUT;
+package alias STDERR = STREAM.STDERR;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package bool detectSupport(STREAM stream)
 {
     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     // Heuristics section in README must be in sync with the code below
@@ -378,10 +385,10 @@ package bool detectSupport()
             return true;
 
         // ANSI escape sequences are supported since Windows10 v1511 so try to enable it
-        import core.sys.windows.winbase: GetStdHandle, STD_OUTPUT_HANDLE, INVALID_HANDLE_VALUE;
+        import core.sys.windows.winbase: GetStdHandle, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE, INVALID_HANDLE_VALUE;
         import core.sys.windows.wincon: GetConsoleMode, SetConsoleMode, ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
-        auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        auto handle = GetStdHandle(stream == STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
         if(!handle || handle == INVALID_HANDLE_VALUE)
             return false;
 
@@ -397,8 +404,8 @@ package bool detectSupport()
     else version(Posix)
     {
         // Is stdout redirected? No colors if so.
-        import core.sys.posix.unistd: isatty, STDOUT_FILENO;
-        return isatty(STDOUT_FILENO) == 1;
+        import core.sys.posix.unistd: isatty, STDOUT_FILENO, STDERR_FILENO;
+        return isatty(stream == STDOUT ? STDOUT_FILENO : STDERR_FILENO) == 1;
     }
     else
     {
@@ -448,7 +455,7 @@ unittest
         scope(exit)
             environment.remove(var);
 
-        return detectSupport();
+        return detectSupport(STDOUT);
     }
 
     // Force disable
@@ -462,7 +469,7 @@ unittest
     assert(detect("ConEmuANSI","ON"));
 
     // Default behavior
-    auto defaultVal = detectSupport();
+    auto defaultVal = detectSupport(STDOUT);
     assert(detect("CLICOLOR","1") == defaultVal);
     assert(detect("ConEmuANSI","") == defaultVal);
     assert(detect("CLICOLOR_FORCE","0") == defaultVal);
@@ -471,12 +478,12 @@ unittest
     {
         environment.remove("TERM");
 
-        assert(!detectSupport());
+        assert(!detectSupport(STDOUT));
 
         environment["TERM"] = "some cygwin flavor";
-        assert(detectSupport());
+        assert(detectSupport(STDOUT));
 
         environment["TERM"] = "xterm1";
-        assert(detectSupport());
+        assert(detectSupport(STDOUT));
     }
 }

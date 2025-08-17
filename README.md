@@ -34,9 +34,14 @@
 
   * `Config.namedArgChar` is replaced with `Config.shortNamePrefix` and `Config.longNamePrefix`.
 
+  * `Config.stylingMode` remains unchanged even if it was set to `autodetect`. One should check `ansiStylingArgument.stdoutStyling`
+    or `ansiStylingArgument.stderrStyling` to determine whether styling should be enabled.
+
 * `Style.namedArgumentName` is renamed to `Style.argumentName`.
 
-* Underlying type of `ansiStylingArgument` argument is changed. It can now be directly cast to boolean instead comparing against `Config.StylingMode`.
+* Underlying type of `ansiStylingArgument` argument is changed. It supports detection and tracking of styling for stdout and stderr
+  separately: use `ansiStylingArgument.stdoutStyling` and `ansiStylingArgument.stderrStyling` for this.
+  Also it can be cast to boolean which is an equivalent to `ansiStylingArgument.stdoutStyling`.
 
   So if you use it:
   ```d
@@ -49,6 +54,10 @@
   with
   ```d
     if(args.color)
+    // or
+    if(args.color.stdoutStyling)
+    // or
+    if(ansiStylingArgument.stdoutStyling)
   ```
 
 * `@SubCommands` UDA is removed. One should use `SubCommand` template instead of `SumType`

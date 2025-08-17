@@ -783,9 +783,9 @@ unittest
     T receiver;
     auto cmd = createCommand!(Config.init)(receiver, getTopLevelCommandInfo!T(Config.init));
 
-    auto isEnabled = ansiStylingArgument.isEnabled;
-    scope(exit) ansiStylingArgument.isEnabled = isEnabled;
-    ansiStylingArgument.isEnabled = false;
+    auto isEnabled = ansiStylingArgument.stdoutStyling;
+    scope(exit) ansiStylingArgument.stdoutStyling = isEnabled;
+    ansiStylingArgument.stdoutStyling = false;
 
     printHelp(_ => a.put(_), Config.init, cmd, [&cmd.arguments], "MYPROG");
 
@@ -839,9 +839,9 @@ unittest
     T receiver;
     auto cmd = createCommand!(Config.init)(receiver, getTopLevelCommandInfo!T(Config.init));
 
-    auto isEnabled = ansiStylingArgument.isEnabled;
-    scope(exit) ansiStylingArgument.isEnabled = isEnabled;
-    ansiStylingArgument.isEnabled = false;
+    auto isEnabled = ansiStylingArgument.stdoutStyling;
+    scope(exit) ansiStylingArgument.stdoutStyling = isEnabled;
+    ansiStylingArgument.stdoutStyling = false;
 
     printHelp(_ => a.put(_), Config.init, cmd, [&cmd.arguments], "MYPROG");
 
@@ -891,9 +891,9 @@ unittest
     T receiver;
     auto cmd = createCommand!(Config.init)(receiver, getTopLevelCommandInfo!T(Config.init));
 
-    auto isEnabled = ansiStylingArgument.isEnabled;
-    scope(exit) ansiStylingArgument.isEnabled = isEnabled;
-    ansiStylingArgument.isEnabled = false;
+    auto isEnabled = ansiStylingArgument.stdoutStyling;
+    scope(exit) ansiStylingArgument.stdoutStyling = isEnabled;
+    ansiStylingArgument.stdoutStyling = false;
 
     printHelp(_ => a.put(_), Config.init, cmd, [&cmd.arguments], "MYPROG");
 
