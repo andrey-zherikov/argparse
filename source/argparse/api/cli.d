@@ -27,7 +27,7 @@ private void onError(Config config, alias printer = defaultErrorPrinter)(string 
     else
         try
         {
-            if(ansiStylingArgument)
+            if(ansiStylingArgument.stderrStyling)
                 printer(config.styling.errorMessagePrefix("Error: "), message);
             else
                 printer("Error: ", message.getUnstyledText.joiner);
@@ -90,6 +90,8 @@ template CLI(Config config, COMMAND)
 {
     static Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
     {
+        ansiStylingArgument.initialize(config.stylingMode);
+
         auto res = .parseArgs!config(receiver, args, unrecognizedArgs);
 
         if(!res && res.errorMsg.length > 0)
@@ -124,6 +126,8 @@ template CLI(Config config, COMMAND)
     // This is a template to avoid compiling it unless it is actually used.
     string[] completeArgs()(string[] args)
     {
+        ansiStylingArgument.initialize(config.stylingMode);
+
         return .completeArgs!(config, COMMAND)(args);
     }
 

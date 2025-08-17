@@ -2,7 +2,6 @@ module argparse.internal.parser;
 
 import argparse.config;
 import argparse.result;
-import argparse.api.ansi: ansiStylingArgument;
 import argparse.internal.commandstack;
 import argparse.internal.tokenizer;
 
@@ -11,8 +10,6 @@ import argparse.internal.tokenizer;
 
 package(argparse) Result parseArgs(Config config, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 {
-    ansiStylingArgument.isEnabled = config.detectAnsiSupport();
-
     auto cmdStack = createCommandStack!config(receiver);
 
     foreach(entry; Tokenizer(config, args, &cmdStack))

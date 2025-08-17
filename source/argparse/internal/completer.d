@@ -2,7 +2,6 @@ module argparse.internal.completer;
 
 import argparse.config;
 import argparse.result;
-import argparse.api.ansi: ansiStylingArgument;
 import argparse.api.argument: NamedArgument, PositionalArgument, Description, Optional;
 import argparse.api.command: Command, Description, ShortDescription;
 import argparse.api.restriction: MutuallyExclusive;
@@ -199,8 +198,6 @@ package(argparse) struct Complete(COMMAND)
 
 package(argparse) string[] completeArgs(Config config, COMMAND)(string[] args)
 {
-    ansiStylingArgument.isEnabled = config.detectAnsiSupport();
-
     COMMAND dummy;
     auto cmdStack = createCommandStack!config(dummy);
 

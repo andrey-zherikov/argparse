@@ -60,7 +60,9 @@ Here is how help screen will look like:
 
 ## Enable/disable the styling
 
-By default `argparse` will try to detect whether ANSI styling is supported, and if so, it will apply styling to the help text.
+By default `argparse` will try to detect whether ANSI styling is supported, and if so, it will apply styling to the help text and error messages.
+Note that detection works for stdout and stderr separately so, for example, if stdout is redirected to a file (so stdout styling is disabled)
+then stderr output (eg. error messages) will still have styling applied.
 
 There is `Config.stylingMode` parameter that can be used to override default behavior:
 - If it’s set to `Config.StylingMode.on`, then styling is **always enabled**.
@@ -91,8 +93,8 @@ Below is the exact sequence of steps `argparse` uses to determine whether or not
 6. If environment variable `ANSICON` is defined (regardless of its value), then styling is **enabled**. See [here](https://github.com/adoxa/ansicon/blob/master/readme.txt) for details.
 7. **Windows only** (`version(Windows)`):
     1. If environment variable `TERM` contains `"cygwin"` or starts with `"xterm"`, then styling is **enabled**.
-    2. If `GetConsoleMode` call for `STD_OUTPUT_HANDLE` returns a mode that has `ENABLE_VIRTUAL_TERMINAL_PROCESSING` set, then styling is **enabled**.
-    3. If `SetConsoleMode` call for `STD_OUTPUT_HANDLE` with `ENABLE_VIRTUAL_TERMINAL_PROCESSING` mode was successful, then styling is **enabled**.
+    2. If `GetConsoleMode` call for `STD_OUTPUT_HANDLE`/`STD_ERROR_HANDLE` returns a mode that has `ENABLE_VIRTUAL_TERMINAL_PROCESSING` set, then styling is **enabled**.
+    3. If `SetConsoleMode` call for `STD_OUTPUT_HANDLE`/`STD_ERROR_HANDLE` with `ENABLE_VIRTUAL_TERMINAL_PROCESSING` mode was successful, then styling is **enabled**.
 8. **Posix only** (`version(Posix)`):
-    1. If `STDOUT` is **not** redirected, then styling is **enabled**.
+    1. If `STDOUT`/`STDERR` is **not** redirected (`isatty` returns 1), then styling is **enabled**.
 9. If none of the above applies, then styling is **disabled**.
