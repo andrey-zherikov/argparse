@@ -197,9 +197,16 @@ package(argparse) struct Complete(COMMAND)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private string[] completeArgs(Config config, CommandStack cmdStack, string[] args)
+package(argparse) string[] completeArgs(Config config, COMMAND)(string[] args)
 {
     ansiStylingArgument.isEnabled = config.detectAnsiSupport();
+
+    COMMAND dummy;
+    auto cmdStack = createCommandStack!config(dummy);
+
+    // if command line is empty then provide all suggestions
+    if(args.length == 0)
+        return cmdStack.getSuggestions("");
 
     // Ignore last argument while processing command line
     foreach(entry; Tokenizer(config, args[0..$-1], &cmdStack))
@@ -215,12 +222,5 @@ private string[] completeArgs(Config config, CommandStack cmdStack, string[] arg
 
     // Provide suggestions for the last argument only
     return cmdStack.getSuggestions(args[$-1]);
-}
-
-package(argparse) string[] completeArgs(Config config, COMMAND)(string[] args)
-{
-    COMMAND dummy;
-
-    return completeArgs(config, createCommandStack!config(dummy), args.length == 0 ? [""] : args);
 }
 
