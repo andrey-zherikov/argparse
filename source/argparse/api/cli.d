@@ -4,7 +4,7 @@ import argparse.config;
 import argparse.result;
 import argparse.api.ansi: ansiStylingArgument;
 import argparse.ansi: getUnstyledText;
-import argparse.internal.parser: callParser;
+import argparse.internal.parser: parseArgs;
 import argparse.internal.completer: completeArgs, Complete;
 
 
@@ -90,7 +90,7 @@ template CLI(Config config, COMMAND)
 {
     static Result parseKnownArgs(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
     {
-        auto res = callParser!config(receiver, args, unrecognizedArgs);
+        auto res = .parseArgs!config(receiver, args, unrecognizedArgs);
 
         if(!res && res.errorMsg.length > 0)
             onError!config(res.errorMsg);

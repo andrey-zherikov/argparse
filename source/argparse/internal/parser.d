@@ -1,26 +1,19 @@
 module argparse.internal.parser;
 
-import std.typecons: Nullable, nullable;
-import std.sumtype: SumType;
-
 import argparse.config;
-import argparse.param;
 import argparse.result;
 import argparse.api.ansi: ansiStylingArgument;
-import argparse.internal.arguments: ArgumentInfo;
-import argparse.internal.command: Command, createCommand;
-import argparse.internal.commandinfo: getTopLevelCommandInfo;
 import argparse.internal.commandstack;
 import argparse.internal.tokenizer;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private Result parseArgs(Config config, CommandStack cmdStack, string[] args, out string[] unrecognizedArgs)
+package(argparse) Result parseArgs(Config config, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
 {
     ansiStylingArgument.isEnabled = config.detectAnsiSupport();
 
-    auto tok = Tokenizer(config, args, &cmdStack);
+    auto cmdStack = createCommandStack!config(receiver);
 
     foreach(entry; Tokenizer(config, args, &cmdStack))
     {
@@ -38,11 +31,6 @@ private Result parseArgs(Config config, CommandStack cmdStack, string[] args, ou
     return cmdStack.finalize(config);
 }
 
-package(argparse) Result callParser(Config config, COMMAND)(ref COMMAND receiver, string[] args, out string[] unrecognizedArgs)
-{
-    return parseArgs(config, createCommandStack!config(receiver), args, unrecognizedArgs);
-}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 unittest
 {
@@ -58,21 +46,21 @@ unittest
 
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!config(t, ["-f", "a"], unrecognizedArgs).isError("Argument", "expected at least 2 values"));
-        assert(callParser!config(t, ["-f", "a", "a"], unrecognizedArgs));
-        assert(callParser!config(t, ["-f", "a", "a", "a"], unrecognizedArgs));
-        assert(callParser!config(t, ["-f", "a", "a", "a", "a"], unrecognizedArgs));
+        assert(parseArgs!config(t, ["-f", "a"], unrecognizedArgs).isError("Argument", "expected at least 2 values"));
+        assert(parseArgs!config(t, ["-f", "a", "a"], unrecognizedArgs));
+        assert(parseArgs!config(t, ["-f", "a", "a", "a"], unrecognizedArgs));
+        assert(parseArgs!config(t, ["-f", "a", "a", "a", "a"], unrecognizedArgs));
 
         assert(unrecognizedArgs.length == 0);
-        assert(callParser!config(t, ["-f", "a", "a", "a", "a", "a"], unrecognizedArgs));
+        assert(parseArgs!config(t, ["-f", "a", "a", "a", "a", "a"], unrecognizedArgs));
         assert(unrecognizedArgs == ["a"]);
     }
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!(Config.init)(t, ["-f=a,a"], unrecognizedArgs));
-        assert(callParser!(Config.init)(t, ["-f=a,a,a"], unrecognizedArgs));
-        assert(callParser!(Config.init)(t, ["-f=a,a,a,a"], unrecognizedArgs));
+        assert(parseArgs!(Config.init)(t, ["-f=a,a"], unrecognizedArgs));
+        assert(parseArgs!(Config.init)(t, ["-f=a,a,a"], unrecognizedArgs));
+        assert(parseArgs!(Config.init)(t, ["-f=a,a,a,a"], unrecognizedArgs));
     }
 }
 
@@ -92,28 +80,28 @@ unittest
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(t, ["-", "-c"], unrecognizedArgs));
+        assert(parseArgs!cfg(t, ["-", "-c"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(t == T(true, "-"));
     }
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(t, ["-c", "-"], unrecognizedArgs));
+        assert(parseArgs!cfg(t, ["-c", "-"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(t == T(true, "-"));
     }
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(t, ["-"], unrecognizedArgs));
+        assert(parseArgs!cfg(t, ["-"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(t == T(false, "-"));
     }
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(t, ["-f","-"], unrecognizedArgs));
+        assert(parseArgs!cfg(t, ["-f","-"], unrecognizedArgs));
         assert(unrecognizedArgs == ["-f"]);
         assert(t == T(false, "-"));
     }
@@ -134,21 +122,21 @@ unittest
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(t, ["+a", "foo", "==baz", "BAZZ"], unrecognizedArgs));
+        assert(parseArgs!cfg(t, ["+a", "foo", "==baz", "BAZZ"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(t == T("foo", "BAZZ"));
     }
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(t, ["+a", "foo", "++baz", "BAZZ"], unrecognizedArgs));
+        assert(parseArgs!cfg(t, ["+a", "foo", "++baz", "BAZZ"], unrecognizedArgs));
         assert(unrecognizedArgs == ["++baz", "BAZZ"]);
         assert(t == T("foo", ""));
     }
     {
         T t;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(t, ["=a", "foo", "==baz", "BAZZ"], unrecognizedArgs));
+        assert(parseArgs!cfg(t, ["=a", "foo", "==baz", "BAZZ"], unrecognizedArgs));
         assert(unrecognizedArgs == ["=a", "foo"]);
         assert(t == T("", "BAZZ"));
     }
@@ -168,28 +156,28 @@ unittest
     {
         Args args;
         string[] unrecognizedArgs;
-        assert(callParser!(Config.init)(args, ["-f", "file1", "file2", "target"], unrecognizedArgs));
+        assert(parseArgs!(Config.init)(args, ["-f", "file1", "file2", "target"], unrecognizedArgs));
         assert(unrecognizedArgs == []);
         assert(args == Args(true,  ["file1", "file2", "target"]));
     }
     {
         Args args;
         string[] unrecognizedArgs;
-        assert(callParser!(Config.init)(args, ["file1", "-f", "file2", "target"], unrecognizedArgs));
+        assert(parseArgs!(Config.init)(args, ["file1", "-f", "file2", "target"], unrecognizedArgs));
         assert(unrecognizedArgs == []);
         assert(args == Args(true,  ["file1", "file2", "target"]));
     }
     {
         Args args;
         string[] unrecognizedArgs;
-        assert(callParser!(Config.init)(args, ["file1", "file2", "-f", "target"], unrecognizedArgs));
+        assert(parseArgs!(Config.init)(args, ["file1", "file2", "-f", "target"], unrecognizedArgs));
         assert(unrecognizedArgs == []);
         assert(args == Args(true,  ["file1", "file2", "target"]));
     }
     {
         Args args;
         string[] unrecognizedArgs;
-        assert(callParser!(Config.init)(args, ["file1", "file2", "target", "-f"], unrecognizedArgs));
+        assert(parseArgs!(Config.init)(args, ["file1", "file2", "target", "-f"], unrecognizedArgs));
         assert(unrecognizedArgs == []);
         assert(args == Args(true,  ["file1", "file2", "target"]));
     }
@@ -215,42 +203,42 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--foo","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--boo","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["--boo","BOO"]);
         assert(c == cmd.init);
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["--boo","BOO"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["--boo","BOO"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(c1("FOO","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
@@ -274,42 +262,42 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--foo","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--boo","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(c1("","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--foo","FOO","--boo","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(c1("FOO","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["c1","--boo","BOO","--foo","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("", typeof(c.c)(c1("FOO","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--foo","FOO","c1","--boo","BOO","--foo","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
@@ -339,70 +327,70 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","FAA"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FAA"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","--","FAA"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","--","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FAA"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","FAA","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FAA","BOO"]);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["c1","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["c1","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FOO"]);
         assert(c == cmd("c1"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--","c1","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--","c1","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs == ["FOO"]);
         assert(c == cmd("c1"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","c1","FAA"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","c1","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
@@ -432,77 +420,77 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","FAA"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","FAA","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO"));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","--","FAA"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","--","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--","FOO","FAA","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--","FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["c1","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["c1","FOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("c1", typeof(c.c)(c1("FOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","c1","FAA"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","c1","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","c1","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","c1","--","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO"))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--","FOO","c1","FAA"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--","FOO","c1","FAA"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("c1","FAA"))));
     }
@@ -542,14 +530,14 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO", typeof(c1.c)(c2("FEE","BEE"))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--bar","BAR","FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--bar","BAR","FOO","FAA","BOO","FEE","BEE"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1("FAA","BOO", typeof(c1.c)(c2("FEE","BEE","BAR"))))));
     }
@@ -584,21 +572,21 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","FAA","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1(typeof(c1.c)(c2("FAA","BOO"))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["--bar","BAR","FOO","FAA","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--bar","BAR","FOO","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1(typeof(c1.c)(c2("FAA","BOO","BAR"))))));
     }
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(callParser!cfg(c, ["FOO","c2","FAA","BOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO","c2","FAA","BOO"], unrecognizedArgs));
         assert(unrecognizedArgs.length == 0);
         assert(c == cmd("FOO", typeof(c.c)(c1(typeof(c1.c)(c2("FAA","BOO"))))));
     }
