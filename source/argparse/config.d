@@ -101,6 +101,12 @@ struct Config
        By default all errors are printed to stderr.
      */
     void function(string s) nothrow errorHandler;
+
+    /**
+       Exit code that is returned from main() in case of parsing error.
+       Defaults to 1.
+     */
+    int errorExitCode = 1;
 }
 
 unittest

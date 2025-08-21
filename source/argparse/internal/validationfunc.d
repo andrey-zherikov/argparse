@@ -160,7 +160,7 @@ unittest
 
     // Result validate(Param!T param)
     assert(test((RawParam _) => Result.Success, ["1","2","3"]));
-    assert(test((RawParam _) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
+    assert(test((RawParam _) => Result.Error(1, "error text"), ["1","2","3"]).isError("error text"));
 
     // bool validate(Param!T param)
     assert(test((RawParam _) => true, ["1","2","3"]));
@@ -168,7 +168,7 @@ unittest
 
     // Result validate(Param!(T[]) param)
     assert(test((Param!(string[][]) _) => Result.Success, ["1","2","3"]));
-    assert(test((Param!(string[][]) _) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
+    assert(test((Param!(string[][]) _) => Result.Error(1, "error text"), ["1","2","3"]).isError("error text"));
 
     // bool validate(Param!(T[]) param)
     assert(test((Param!(string[][]) _) => true, ["1","2","3"]));
@@ -176,7 +176,7 @@ unittest
 
     // Result validate(T value)
     assert(test((string _) => Result.Success, ["1","2","3"]));
-    assert(test((string _) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
+    assert(test((string _) => Result.Error(1, "error text"), ["1","2","3"]).isError("error text"));
 
     // bool validate(T value)
     assert(test((string _) => true, ["1","2","3"]));
@@ -184,7 +184,7 @@ unittest
 
     // Result validate(T[] value)
     assert(test((string[] _) => Result.Success, ["1","2","3"]));
-    assert(test((string[] _) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
+    assert(test((string[] _) => Result.Error(1, "error text"), ["1","2","3"]).isError("error text"));
 
     // bool validate(T[] value)
     assert(test((string[] _) => true, ["1","2","3"]));
@@ -201,7 +201,7 @@ unittest
 
     // Result validate(Param!T param)
     assert(test((RawParam _) => Result.Success, ["1","2","3"]));
-    assert(test((RawParam _) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
+    assert(test((RawParam _) => Result.Error(1, "error text"), ["1","2","3"]).isError("error text"));
 
     // bool validate(Param!T param)
     assert(test((RawParam _) => true, ["1","2","3"]));
@@ -209,7 +209,7 @@ unittest
 
     // Result validate(T value)
     assert(test((string _) => Result.Success, ["1","2","3"]));
-    assert(test((string _) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
+    assert(test((string _) => Result.Error(1, "error text"), ["1","2","3"]).isError("error text"));
 
     // bool validate(T value)
     assert(test((string _) => true, ["1","2","3"]));
@@ -217,7 +217,7 @@ unittest
 
     // Result validate(T[] value)
     assert(test((string[] _) => Result.Success, ["1","2","3"]));
-    assert(test((string[] _) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
+    assert(test((string[] _) => Result.Error(1, "error text"), ["1","2","3"]).isError("error text"));
 
     // bool validate(T[] value)
     assert(test((string[] _) => true, ["1","2","3"]));

@@ -136,6 +136,9 @@
 * `parseArgs` template functions that received `newMain` template argument was removed. One should use either `main` template mixin
   or non-templated `Result parseArgs(ref COMMAND receiver, string[] args)` function.
 
+* Removed `Result.Error(T...)(string msg, T extraArgs)` function. Users should explicitly specify result code using
+  `Result.Error(T...)(int resultCode, string msg, T extraArgs)`.
+
 * Dropped support for DMD-2.099.
 
 ### Enhancements and bug fixes
@@ -186,6 +189,8 @@
 * Removed support for delegate in `Config.errorHandler`, `Description`, `ShortDescription`, `Usage` and `Epilog` because of compiler's `closures are not yet supported in CTFE`.
 
 * Added new `Config.assignKeyValueChar` parameter to customize assign character in `key=value` syntax for arguments with associative array type.
+
+* Added new `Config.errorExitCode` parameter to customize exit code in case of parsing error.
 
 * Added support of `@PositionalArgument` without explicit position. In this case positions are determined in the order of declarations of members.
 

@@ -44,7 +44,7 @@ private auto RequiredArg(const Config config, const ArgumentInfo info, size_t in
     {
         return (index in cliArgs) ?
             Result.Success :
-            Result.Error("The following argument is required: '", config.styling.argumentName(info.displayName), "'");
+            Result.Error(config.errorExitCode, "The following argument is required: '", config.styling.argumentName(info.displayName), "'");
     };
 }
 
@@ -79,7 +79,7 @@ private auto RequiredTogether(const Config config, const(ArgumentInfo)[] allArgs
                 missedIndex = index;
 
             if(foundIndex != size_t.max && missedIndex != size_t.max)
-                return Result.Error("Missed argument '", config.styling.argumentName(allArgs[missedIndex].displayName),
+                return Result.Error(config.errorExitCode, "Missed argument '", config.styling.argumentName(allArgs[missedIndex].displayName),
                     "' - it is required by argument '", config.styling.argumentName(allArgs[foundIndex].displayName), "'");
         }
 
@@ -113,7 +113,7 @@ private auto RequiredAnyOf(const Config config, const(ArgumentInfo)[] allArgs)
             if(index in cliArgs)
                 return Result.Success;
 
-        return Result.Error("One of the following arguments is required: '",
+        return Result.Error(config.errorExitCode, "One of the following arguments is required: '",
             restrictionArgs.map!(_ => config.styling.argumentName(allArgs[_].displayName)).join("', '"), "'");
     };
 }
@@ -146,7 +146,7 @@ private auto MutuallyExclusive(const Config config, const(ArgumentInfo)[] allArg
                 if(foundIndex == size_t.max)
                     foundIndex = index;
                 else
-                    return Result.Error("Argument '", config.styling.argumentName(allArgs[foundIndex].displayName),
+                    return Result.Error(config.errorExitCode, "Argument '", config.styling.argumentName(allArgs[foundIndex].displayName),
                         "' is not allowed with argument '", config.styling.argumentName(allArgs[index].displayName),"'");
             }
 

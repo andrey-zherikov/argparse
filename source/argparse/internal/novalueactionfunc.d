@@ -77,7 +77,7 @@ unittest
 
     // Result action(ref DEST receiver, Param!void param)
     assert(test!int((ref int r, Param!void p) { r=7; return Result.Success; }) == 7);
-    assert(testErr!int((ref int r, Param!void p) => Result.Error("error text")).isError("error text"));
+    assert(testErr!int((ref int r, Param!void p) => Result.Error(1, "error text")).isError("error text"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

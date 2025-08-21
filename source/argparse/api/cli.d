@@ -94,8 +94,8 @@ template CLI(Config config, COMMAND)
 
         auto res = .parseArgs!config(receiver, args, unrecognizedArgs);
 
-        if(!res && res.errorMsg.length > 0)
-            onError!config(res.errorMsg);
+        if(!res)
+            onError!config(res.errorMessage);
 
         return res;
     }
@@ -116,8 +116,8 @@ template CLI(Config config, COMMAND)
         auto res = parseKnownArgs(receiver, args);
         if(res && args.length > 0)
         {
-            res = Result.Error("Unrecognized arguments: ", args);
-            onError!config(res.errorMsg);
+            res = Result.Error(config.errorExitCode, "Unrecognized arguments: ", args);
+            onError!config(res.errorMessage);
         }
 
         return res;

@@ -34,7 +34,7 @@ private auto createErrorMessage(T)(Param!T param, string prefix)
 
 package Result processingError(T)(Param!T param)
 {
-    return Result.Error(createErrorMessage(param, "Can't process value")[]);
+    return Result.Error(param.config.errorExitCode, createErrorMessage(param, "Can't process value")[]);
 }
 
 package Result invalidValueError(T)(Param!T param, string suffix = "")
@@ -42,7 +42,7 @@ package Result invalidValueError(T)(Param!T param, string suffix = "")
     auto msg = createErrorMessage(param, "Invalid value");
     msg ~= suffix;
 
-    return Result.Error(msg[]);
+    return Result.Error(param.config.errorExitCode, msg[]);
 }
 
 

@@ -133,8 +133,8 @@ package(argparse) struct ValueParser(PARSE, RECEIVER)
 unittest
 {
     auto vp = ValueParser!(void, void).init
-        .changePreValidation(ValidationFunc!string((string s) => Result.Error("test error")))
-        .changeParse(ParseFunc!int((ref int i, RawParam p) => Result.Error("test error")));
+        .changePreValidation(ValidationFunc!string((string s) => Result.Error(1, "test error")))
+        .changeParse(ParseFunc!int((ref int i, RawParam p) => Result.Error(1, "test error")));
     int receiver;
     assert(vp.preValidate(Param!string(null, "", "")).isError("test error"));
     assert(vp.parse(receiver, RawParam(null,"",[""])).isError("test error"));
@@ -143,14 +143,17 @@ unittest
 unittest
 {
     auto vp1 = ValueParser!(void, void).init
-        .changePreValidation(ValidationFunc!string((string s) => Result.Error("a")));
+        .changePreValidation(ValidationFunc!string((string s) => Result.Error(1, "a")));
     auto vp2 = ValueParser!(void, void).init
-        .changePreValidation(ValidationFunc!string((string s) => Result.Error("b")))
-        .changeValidation(ValidationFunc!int((int s) => Result.Error("c")));
+        .changePreValidation(ValidationFunc!string((string s) => Result.Error(1, "b")))
+        .changeValidation(ValidationFunc!int((int s) => Result.Error(1, "c")));
 
     auto vp3 = vp1.addDefaults(vp2);
     assert(vp3.preValidate is vp1.preValidate);
     assert(vp3.validate is vp2.validate);
+    assert(vp3.preValidate(Param!string(null, "", "")).isError("a"));
+    assert(vp3.validate(Param!int(null, "", 0)).isError("c"));
+    assert(vp2.preValidate(Param!string(null, "", "")).isError("b"));  // for better coverage
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -218,10 +221,10 @@ unittest
     string receiver;
     auto vp = ValueParser!(void, string).init
         .changePreValidation(ValidationFunc!string((string s) =>
-            s.length ? Result.Success : Result.Error("prevalidation failed")
+            s.length ? Result.Success : Result.Error(1, "prevalidation failed")
         ))
         .changeParse(ParseFunc!string(_ => _))
-        .changeValidation(ValidationFunc!string((string _) => Result.Error("main validation failed")));
+        .changeValidation(ValidationFunc!string((string _) => Result.Error(1, "main validation failed")));
     assert(vp.parseParameter(receiver, RawParam(null,"",[""])).isError("prevalidation failed"));
     assert(vp.parseParameter(receiver, RawParam(null,"",["a"])).isError("main validation failed"));
 }
@@ -562,10 +565,10 @@ unittest
         Result cs(string[] s) { c_ ~= s; return Result.Success; }
         Result ds(RawParam p) { d_ ~= p.value; return Result.Success; }
 
-        Result ae() { return Result.Error("my error"); }
-        Result be(string s) { return Result.Error("my error"); }
-        Result ce(string[] s) { return Result.Error("my error"); }
-        Result de(RawParam p) { return Result.Error("my error"); }
+        Result ae() { return Result.Error(1, "my error"); }
+        Result be(string s) { return Result.Error(1, "my error"); }
+        Result ce(string[] s) { return Result.Error(1, "my error"); }
+        Result de(RawParam p) { return Result.Error(1, "my error"); }
     }
 
     auto test(F)(string[] values, F func)
