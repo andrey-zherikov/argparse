@@ -151,6 +151,9 @@ unittest
     auto vp3 = vp1.addDefaults(vp2);
     assert(vp3.preValidate is vp1.preValidate);
     assert(vp3.validate is vp2.validate);
+    assert(vp3.preValidate(Param!string(null, "", "")).isError("a"));
+    assert(vp3.validate(Param!int(null, "", 0)).isError("c"));
+    assert(vp2.preValidate(Param!string(null, "", "")).isError("b"));  // for better coverage
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
