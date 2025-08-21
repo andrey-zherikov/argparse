@@ -90,7 +90,7 @@ unittest
 
     // Result parse(ref T receiver, RawParam param)
     assert(test!(string[])((ref string[] r, RawParam p) { r = p.value; return Result.Success; }, ["1","2","3"]) == ["1","2","3"]);
-    assert(testErr!(string[])((ref string[] r, RawParam p) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
+    assert(testErr!(string[])((ref string[] r, RawParam p) => Result.Error(1, "error text"), ["1","2","3"]).isError("error text"));
 
     // bool parse(ref T receiver, RawParam param)
     assert(test!(string[])((ref string[] r, RawParam p) { r = p.value; return true; }, ["1","2","3"]) == ["1","2","3"]);
@@ -119,7 +119,7 @@ package enum Convert(TYPE) = ParseFunc!TYPE
         }
         catch(Exception e)
         {
-            return Result.Error(e.msg);
+            return Result.Error(param.config.errorExitCode, e.msg);
         }
     });
 
@@ -143,8 +143,9 @@ unittest
 {
     alias testErr(T) = (string value)
     {
+        Config config;
         T receiver;
-        return Convert!T(receiver, RawParam(null, "", [value]));
+        return Convert!T(receiver, RawParam(&config, "", [value]));
     };
 
     assert(testErr!int("unknown").isError());

@@ -29,7 +29,7 @@ package(argparse) struct ArgumentUDA(ValueParser)
         }
         catch(Exception e)
         {
-            return Result.Error("Argument '", param.config.styling.argumentName(param.name), ": ", e.msg);
+            return Result.Error(param.config.errorExitCode, "Argument '", param.config.styling.argumentName(param.name), ": ", e.msg);
         }
     }
 

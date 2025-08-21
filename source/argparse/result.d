@@ -20,10 +20,6 @@ struct Result
 
     static enum Success = Result(0, Status.success);
 
-    static auto Error(T...)(string msg, T extraArgs)
-    {
-        return Error(1, msg, extraArgs);
-    }
     static auto Error(T...)(int resultCode, string msg, T extraArgs)
     {
         import std.conv: text;
@@ -37,16 +33,14 @@ struct Result
 
     private this(int i, Status s, string err = "") { resultCode = i; status = s; errorMsg = err; }
 
-    package int resultCode;
+    private int resultCode;
 
-    package enum Status { error, success, unknownArgument };
-    package Status status;
+    private enum Status { error, success, unknownArgument };
+    private Status status;
 
-    package string errorMsg;
+    private string errorMsg;
 
-    package const(string)[] suggestions;
-
-    package static enum UnknownArgument = Result(0, Status.unknownArgument);
+    package string errorMessage() const { return errorMsg; }
 
     version(unittest)
     {
@@ -71,12 +65,10 @@ unittest
     assert(Result.Success);
 
     assert(!Result.Success.isError);
-    assert(!Result.Error(""));
     assert(!Result.Error(5, ""));
-    assert(Result.Error("").exitCode == 1);
     assert(Result.Error(5, "").exitCode == 5);
 
-    auto r = Result.Error("some text",",","more text");
+    auto r = Result.Error(1, "some text",",","more text");
     assert(r.isError("some", "more"));
     assert(!r.isError("other text"));
 }

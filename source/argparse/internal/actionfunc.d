@@ -81,7 +81,7 @@ unittest
 
     // Result action(ref T receiver, ParseType value)
     assert(test((ref string[] p, string[] a) { p=a; return Result.Success; }, ["1","2","3"]) == ["1","2","3"]);
-    assert(testErr((ref string[] p, string[] a) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
+    assert(testErr((ref string[] p, string[] a) => Result.Error(1, "error text"), ["1","2","3"]).isError("error text"));
 
     // bool action(ref T receiver, ParseType value)
     assert(test((ref string[] p, string[] a) { p=a; return true; }, ["1","2","3"]) == ["1","2","3"]);
@@ -92,7 +92,7 @@ unittest
 
     // Result action(ref T receiver, Param!ParseType param)
     assert(test((ref string[] p, Param!(string[]) a) { p=a.value; return Result.Success; }, ["1","2","3"]) == ["1","2","3"]);
-    assert(testErr((ref string[] p, Param!(string[]) a) => Result.Error("error text"), ["1","2","3"]).isError("error text"));
+    assert(testErr((ref string[] p, Param!(string[]) a) => Result.Error(1, "error text"), ["1","2","3"]).isError("error text"));
 
     // bool action(ref T receiver, Param!ParseType param)
     assert(test((ref string[] p, Param!(string[]) a) { p=a.value; return true; }, ["1","2","3"]) == ["1","2","3"]);

@@ -50,7 +50,7 @@ package(argparse) struct ArgumentInfo
             return Result.Success;
 
         alias error = (least_most, num) =>
-            Result.Error("Argument '",config.styling.argumentName(paramName),"': expected ",least_most,num,
+            Result.Error(config.errorExitCode, "Argument '",config.styling.argumentName(paramName),"': expected ",least_most,num,
                 num == 1 ? " value" : " values"," but got ",numValues);
 
         if(min == max && numValues != min)

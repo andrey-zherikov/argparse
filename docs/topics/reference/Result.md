@@ -21,7 +21,6 @@ static enum Success
 **Signature**
 
 ```c++
-static auto Error(T...)(string msg, T extraArgs)
 static auto Error(T...)(int resultCode, string msg, T extraArgs)
 ```
 
@@ -29,7 +28,7 @@ static auto Error(T...)(int resultCode, string msg, T extraArgs)
 
 - `resultCode`
 
-  Result/exit code of an operation. If it's not specified then `1` is used.
+  Result/exit code of an operation.
 
 - `msg`
 
