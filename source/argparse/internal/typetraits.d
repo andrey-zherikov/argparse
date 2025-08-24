@@ -30,14 +30,20 @@ private template Arguments(Config config, TYPE)
     // Discover potential arguments
     private template potentialArgument(string sym)
     {
-        alias mem = __traits(getMember, TYPE, sym);
+        static if(is(TYPE == class) && __traits(hasMember, Object, sym))
+            // If this is a member of Object class then skip it
+            enum potentialArgument = false;
+        else
+        {
+            alias mem = __traits(getMember, TYPE, sym);
 
-        // Potential argument is:
-        enum potentialArgument =
-            !is(mem) &&                     // not a type               -- and --
-            !isOpFunction!mem &&            // not operator function    -- and --
-            !isConstructor!mem &&           // not a constructor        -- and --
-            !isSubCommand!(typeof(mem));    // not subcommand
+            // Potential argument is:
+            enum potentialArgument =
+                !is(mem) &&                     // not a type               -- and --
+                !isOpFunction!mem &&            // not operator function    -- and --
+                !isConstructor!mem &&           // not a constructor        -- and --
+                !isSubCommand!(typeof(mem));    // not subcommand
+        }
     }
 
     private enum allMembers = Filter!(potentialArgument, __traits(allMembers, TYPE));

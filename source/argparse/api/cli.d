@@ -171,7 +171,10 @@ template CLI(Config config, COMMAND)
             int main(string[] argv)
             {
                 argv = argv[1..$];
-                COMMAND value;
+                static if(is(COMMAND == class))
+                    auto value = new COMMAND;
+                else
+                    COMMAND value;
 
                 static if (is(typeof(newMain(value, argv))))
                 {
@@ -313,6 +316,27 @@ unittest
 
     assert(test!(delegate(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]);}) == 0);
     assert(test!(delegate(ref _, unknown){assert(_ == Args("1")); assert(unknown == ["u"]); return 123;}) == 123);
+}
+
+unittest
+{
+    // Ensure that CLI.main works with classes
+    static class Args {
+        string s;
+    }
+
+    auto test(alias F)()
+    {
+        mixin CLI!Args.main!F;
+
+        return main(["executable","-s","1","u"]); // argv[0] is executable
+    }
+
+    assert(test!(function(ref _, unknown){assert(_.s == "1"); assert(unknown == ["u"]);}) == 0);
+    assert(test!(function(ref _, unknown){assert(_.s == "1"); assert(unknown == ["u"]); return 123;}) == 123);
+
+    assert(test!(delegate(ref _, unknown){assert(_.s == "1"); assert(unknown == ["u"]);}) == 0);
+    assert(test!(delegate(ref _, unknown){assert(_.s == "1"); assert(unknown == ["u"]); return 123;}) == 123);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

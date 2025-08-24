@@ -273,7 +273,12 @@ private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, TARGET)(ref TA
 
     // Initialize if needed
     if(!target.isSetTo!COMMAND_TYPE)
-        target = COMMAND_TYPE.init;
+    {
+        static if(is(COMMAND_TYPE == class))
+            target = new COMMAND_TYPE;
+        else
+            target = COMMAND_TYPE.init;
+    }
 
     static if(TARGET.Types.length == 1)
         return target.match!create;
