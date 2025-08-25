@@ -330,7 +330,7 @@ unittest
     {
         auto t = new T;
         assert(CLI!T.parseArgs(t, ["cmd1","-a","a"]));
-        t.cmd.match!(
+        t.cmd.matchCmd!(
                 (T.cmd1 _) => assert(_.a == "a"),
                 (_) => assert(false)
         );
@@ -338,7 +338,7 @@ unittest
     {
         auto t = new T;
         assert(CLI!T.parseArgs(t, ["cmd2","-b","b"]));
-        t.cmd.match!(
+        t.cmd.matchCmd!(
                 (T.cmd2 _) => assert(_.b == "b"),
                 (_) => assert(false)
         );
