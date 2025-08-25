@@ -319,6 +319,34 @@ unittest
 
 unittest
 {
+    class T
+    {
+        static class cmd1 {string a;}
+        static class cmd2 {string b;}
+
+        SubCommand!(cmd1, cmd2) cmd;
+    }
+
+    {
+        auto t = new T;
+        assert(CLI!T.parseArgs(t, ["cmd1","-a","a"]));
+        t.cmd.match!(
+                (T.cmd1 _) => assert(_.a == "a"),
+                (_) => assert(false)
+        );
+    }
+    {
+        auto t = new T;
+        assert(CLI!T.parseArgs(t, ["cmd2","-b","b"]));
+        t.cmd.match!(
+                (T.cmd2 _) => assert(_.b == "b"),
+                (_) => assert(false)
+        );
+    }
+}
+
+unittest
+{
     struct T
     {
         struct cmd1 { string a; }

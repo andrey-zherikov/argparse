@@ -199,6 +199,8 @@
 
 * Fix for empty argument values: they are now non-null empty strings (`""` instead of `string.init` before).
 
+* Added support for classes.
+
 ### Other changes
 
 * Removed dependency on `std.regex`.
