@@ -60,15 +60,20 @@
     if(ansiStylingArgument.stdoutStyling)
   ```
 
-* `@SubCommands` UDA is removed. One should use `SubCommand` template instead of `SumType`
+* `@SubCommands` UDA is removed. One should use `SubCommand` template instead of `SumType`.
+  All calls to `std.sumtype.match` should be replaced with `matchCmd`.
 
   Simply replace
   ```d
     @SubCommands SumType!(CMD1, CMD2, Default!CMD3) cmd;
+    ...
+    cmd.match!...;
   ```
   with
   ```d
     SubCommand!(CMD1, CMD2, Default!CMD3) cmd;
+    ...
+    cmd.matchCmd!...;
   ```
 
 * `@TrailingArguments` UDA is removed: all command line parameters that appear after double-dash `--` are considered as positional arguments.

@@ -3,7 +3,7 @@ module argparse.internal.command;
 import argparse.config;
 import argparse.param;
 import argparse.result;
-import argparse.api.subcommand: match;
+import argparse.api.subcommand: matchCmd;
 import argparse.internal.arguments: Arguments, ArgumentInfo;
 import argparse.internal.argumentudahelpers: getMemberArgumentUDA;
 import argparse.internal.commandinfo;
@@ -281,10 +281,10 @@ private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, TARGET)(ref TA
     }
 
     static if(TARGET.Types.length == 1)
-        return target.match!create;
+        return target.matchCmd!create;
     else
     {
-        return target.match!(create,
+        return target.matchCmd!(create,
             function Command(_)
             {
                 assert(false, "This should never happen");
