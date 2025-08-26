@@ -46,6 +46,10 @@ package struct CommandStack
 
     auto finalize(const Config config)
     {
+        // Populate stack with default subcommands
+        while(stack.back.defaultSubCommand)
+            stack ~= stack.back.defaultSubCommand();
+
         foreach(ref cmd; stack)
         {
             auto res = cmd.finalize(config, this);
