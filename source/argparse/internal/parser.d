@@ -417,9 +417,8 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(parseArgs!cfg(c, ["FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["FOO"], unrecognizedArgs).isError("The following argument is required","foo"));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO"));
     }
     {
         cmd c;
@@ -438,9 +437,8 @@ unittest
     {
         cmd c;
         string[] unrecognizedArgs;
-        assert(parseArgs!cfg(c, ["--","FOO"], unrecognizedArgs));
+        assert(parseArgs!cfg(c, ["--","FOO"], unrecognizedArgs).isError("The following argument is required","foo"));
         assert(unrecognizedArgs.length == 0);
-        assert(c == cmd("FOO"));
     }
     {
         cmd c;

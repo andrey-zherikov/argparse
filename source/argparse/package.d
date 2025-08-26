@@ -779,8 +779,6 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 unittest
 {
     static auto epilog() { return "custom epilog"; }
@@ -936,6 +934,7 @@ unittest
         "  -h, --help    Show this help message and exit\n\n");
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // https://github.com/andrey-zherikov/argparse/issues/231
 unittest {
     import std.process : environment;
@@ -982,4 +981,48 @@ unittest {
     assert(CLI!Program2.parseArgs(p2, ["CLIUsername"]));
     assert(p2.username == "CLIUsername");
     environment.remove(`ARGPARSE_REQUIRED_USERNAME`);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// https://github.com/andrey-zherikov/argparse/issues/243
+unittest
+{
+    import std.process : environment;
+    struct Program {
+        struct check {
+        }
+
+        struct serve {
+            @(NamedArgument.EnvFallback("__NAME__"))
+            string name = "default";
+
+            @(NamedArgument.Required.EnvFallback("__PWD__"))
+            string pwd;
+
+            @(NamedArgument.Required)
+            string url;
+        }
+
+        SubCommand!(check, Default!serve) cmd;
+    }
+
+    {
+        Program p;
+        assert(CLI!Program.parseArgs(p, [])       .isError("The following argument is required"));
+        assert(CLI!Program.parseArgs(p, ["serve"]).isError("The following argument is required"));
+    }
+    {
+        environment["__PWD__"] = "foo";
+        scope(exit) environment.remove("__PWD__");
+
+        Program p;
+        assert(CLI!Program.parseArgs(p, [])       .isError("The following argument is required","url"));
+        assert(CLI!Program.parseArgs(p, ["serve"]).isError("The following argument is required","url"));
+
+        assert(CLI!Program.parseArgs(p, ["--url","url1"]));
+        assert(p == Program(typeof(Program.cmd)(Program.serve(pwd: "foo", url:"url1"))));
+
+        assert(CLI!Program.parseArgs(p, ["serve","--url","url2"]));
+        assert(p == Program(typeof(Program.cmd)(Program.serve(pwd: "foo", url:"url2"))));
+    }
 }
