@@ -323,7 +323,7 @@ private Token getNextToken(const ref Config config, ref string[] args,
             if (res.arg && res.arg.info.required)
             {
                 auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-                return createArgument(res.arg.info.placeholder, values, res);
+                return createArgument(res.arg.info.displayName, values, res);
             }
 
             // Is it sub command?
@@ -338,7 +338,7 @@ private Token getNextToken(const ref Config config, ref string[] args,
             if (res.arg)
             {
                 auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-                return createArgument(res.arg.info.placeholder, values, res);
+                return createArgument(res.arg.info.displayName, values, res);
             }
         }
 
@@ -348,7 +348,7 @@ private Token getNextToken(const ref Config config, ref string[] args,
             if (res.arg)
             {
                 auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, isArgumentValue);
-                return createArgument(res.arg.info.placeholder, values, res);
+                return createArgument(res.arg.info.displayName, values, res);
             }
         }
     }
@@ -365,7 +365,7 @@ private Token getNextPositionalArgument(const ref Config config, ref string[] ar
     auto createEntry(FindResult res)
     {
         auto values = consumeValuesFromCLI(args, res.arg.info.minValuesCount.get, res.arg.info.maxValuesCount.get, _ => true);
-        return Token(Argument(RawParam(&config, res.arg.info.placeholder, values), res));
+        return Token(Argument(RawParam(&config, res.arg.info.displayName, values), res));
     }
 
     auto res = findPositionalArg();
