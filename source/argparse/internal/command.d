@@ -7,7 +7,6 @@ import argparse.api.subcommand: matchCmd;
 import argparse.internal.arguments: Arguments, ArgumentInfo;
 import argparse.internal.argumentudahelpers: getMemberArgumentUDA;
 import argparse.internal.commandinfo;
-import argparse.internal.commandstack : CommandStack;
 import argparse.internal.restriction;
 import argparse.internal.typetraits;
 
@@ -204,7 +203,7 @@ package struct Command
         return idx != size_t(-1) ? subCommandCreate[idx] : null;
     }
 
-    Result finalize(const Config config, CommandStack cmdStack)
+    Result finalize(const Config config, Command[] stack)
     {
         // https://github.com/andrey-zherikov/argparse/issues/231
         foreach (idx, argInfo; this.arguments.info) {
@@ -217,7 +216,7 @@ package struct Command
                 // https://github.com/andrey-zherikov/argparse/issues/219
                 if (value !is null) {
                     auto param = RawParam(&config, argInfo.displayName, [value]);
-                    this.getParseFunc(this.parseFuncs, idx)(cmdStack.stack, param);
+                    this.getParseFunc(this.parseFuncs, idx)(stack, param);
                 }
             }
         }
