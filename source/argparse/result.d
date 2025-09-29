@@ -31,12 +31,12 @@ struct Result
     /// Private API
     ////////////////////////////////////////////////////////////////
 
-    private this(int i, Status s, string err = "") { resultCode = i; status = s; errorMsg = err; }
+    package this(int i, Status s, string err = "") { resultCode = i; status = s; errorMsg = err; }
 
     private int resultCode;
 
-    private enum Status { error, success, unknownArgument };
-    private Status status;
+    package enum Status { error, success, helpWanted };
+    package Status status;
 
     private string errorMsg;
 
