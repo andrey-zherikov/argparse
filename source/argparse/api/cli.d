@@ -94,6 +94,9 @@ template CLI(Config config, COMMAND)
 
         auto res = .parseArgs!config(receiver, args, unrecognizedArgs);
 
+        if(res.status == Result.Status.helpWanted)
+            return Result.Success;
+
         if(!res)
             onError!config(res.errorMessage);
 
@@ -500,16 +503,12 @@ unittest
 
 unittest
 {
-    // If this unit test is removed then dmd fails with this:
-    //   fatal error LNK1103: debugging information corrupt; recompile module
-    //   Error: linker exited with status 1103
-    struct T
-    {
-        enum Fruit { apple, pear };
+    // https://github.com/andrey-zherikov/argparse/issues/246
+    struct T {}
 
-        Fruit a;
-    }
+    enum Config config = { errorHandler: _ => assert(false) };
 
     T t;
-    assert(CLI!T.parseArgs(t, ["-a", "apple"]));
+    assert(CLI!(config, T).parseArgs(t, ["-h"]));
+    assert(CLI!(config, T).parseArgs(t, ["--help"]));
 }
