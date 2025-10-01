@@ -12,9 +12,13 @@ struct Result
         return resultCode;
     }
 
+    bool isSuccess   () const { return status == Status.success;    }
+    bool isError     () const { return status == Status.error;      }
+    bool isHelpWanted() const { return status == Status.helpWanted; }
+    
     bool opCast(T : bool)() const
     {
-        return status == Status.success;
+        return isSuccess;
     }
 
 
@@ -31,12 +35,14 @@ struct Result
     /// Private API
     ////////////////////////////////////////////////////////////////
 
-    package this(int i, Status s, string err = "") { resultCode = i; status = s; errorMsg = err; }
+    private this(int i, Status s, string err = "") { resultCode = i; status = s; errorMsg = err; }
+
+    package static enum HelpWanted = Result(0, Status.helpWanted);
 
     private int resultCode;
 
-    package enum Status { error, success, helpWanted };
-    package Status status;
+    private enum Status { error, success, helpWanted };
+    private Status status;
 
     private string errorMsg;
 
@@ -44,14 +50,14 @@ struct Result
 
     version(unittest)
     {
-        package bool isError(string[] text...)
+        package bool isError(string text0, string[] text...)
         {
             import std.algorithm: canFind;
 
             if(status != Status.error)
                 return false;   // success is not an error
 
-            foreach(s; text)
+            foreach(s; [text0] ~ text)
                 if(!errorMsg.canFind(s))
                     return false;   // can't find required text
 
@@ -63,10 +69,20 @@ struct Result
 unittest
 {
     assert(Result.Success);
-
+    assert(Result.Success.isSuccess);
     assert(!Result.Success.isError);
+    assert(!Result.Success.isError("text"));
+    assert(!Result.Success.isHelpWanted);
+    
     assert(!Result.Error(5, ""));
     assert(Result.Error(5, "").exitCode == 5);
+    assert(Result.Error(5, "").isError);
+    assert(!Result.Error(5, "").isSuccess);
+    assert(!Result.Error(5, "").isHelpWanted);
+
+    assert(Result.HelpWanted.isHelpWanted);
+    assert(!Result.HelpWanted.isSuccess);
+    assert(!Result.HelpWanted.isError);
 
     auto r = Result.Error(1, "some text",",","more text");
     assert(r.isError("some", "more"));
