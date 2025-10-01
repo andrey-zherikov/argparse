@@ -94,10 +94,7 @@ template CLI(Config config, COMMAND)
 
         auto res = .parseArgs!config(receiver, args, unrecognizedArgs);
 
-        if(res.status == Result.Status.helpWanted)
-            return Result.Success;
-
-        if(!res)
+        if(res.isError)
             onError!config(res.errorMessage);
 
         return res;
@@ -190,8 +187,10 @@ template CLI(Config config, COMMAND)
                     auto res = CLI!(config, COMMAND).parseArgs(value, argv);
                 }
 
-                if (!res)
+                if(res.isError)
                     return res.exitCode;
+                else if(res.isHelpWanted)
+                    return 0;
 
                 // call newMain
                 static if (is(typeof(newMain(value, argv)) == void))
@@ -509,6 +508,16 @@ unittest
     enum Config config = { errorHandler: _ => assert(false) };
 
     T t;
-    assert(CLI!(config, T).parseArgs(t, ["-h"]));
-    assert(CLI!(config, T).parseArgs(t, ["--help"]));
+    assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
+    assert(CLI!(config, T).parseArgs(t, ["--help"]).isHelpWanted);
+
+    auto test_main(string[] args)
+    {
+        mixin CLI!T.main!(_ => assert(false));
+
+        return main(args);
+    }
+
+    assert(test_main(["executable","-h"]) == 0);// argv[0] is executable
+    assert(test_main(["executable","--help"]) == 0);// argv[0] is executable
 }

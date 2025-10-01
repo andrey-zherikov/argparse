@@ -63,9 +63,54 @@ int exitCode() const
 
 Result/exit code of an operation.
 
+### isSuccess
+
+`Result.isSuccess` can be used to determine whether result of an operation is successful.
+
+**Signature**
+
+```c++
+bool isSuccess() const
+```
+
+**Return value**
+
+- `true` if operation is successful.
+- `false` otherwise.
+
+### isError
+
+`Result.isError` can be used to determine whether result of an operation is error.
+
+**Signature**
+
+```c++
+bool isError() const
+```
+
+**Return value**
+
+- `true` if the result is error.
+- `false` otherwise.
+
+### isHelpWanted
+
+`Result.isHelpWanted` can be used to determine whether the help text was requested from command line (i.e. `-h`/`--help` argument was provided).
+
+**Signature**
+
+```c++
+bool isHelpWanted() const
+```
+
+**Return value**
+
+- `true` if help text was requested.
+- `false` otherwise.
+
 ### opCast
 
-`Result.opCast` can be used to determine whether result of an operation is successful.
+`Result.opCast` is the same as `Result.isSuccess`.
 
 **Signature**
 
