@@ -9,7 +9,7 @@ import argparse.internal.lazystring;
 import argparse.internal.arguments: ArgumentInfo, Arguments;
 import argparse.internal.commandinfo: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
-import argparse.internal.style;
+import argparse.style;
 
 import std.sumtype: SumType, match;
 
