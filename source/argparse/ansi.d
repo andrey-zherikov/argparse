@@ -95,7 +95,7 @@ nothrow pure @safe unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package struct StyledText
+private struct StyledText
 {
     TextStyle style;
 
@@ -157,45 +157,45 @@ package template StyleImpl(ubyte styleCode)
     }
 }
 
-alias noStyle      = StyleImpl!(0);
+public alias noStyle      = StyleImpl!(0);
 
-alias bold         = StyleImpl!(Font.bold);
-alias italic       = StyleImpl!(Font.italic);
-alias underline    = StyleImpl!(Font.underline);
+public alias bold         = StyleImpl!(Font.bold);
+public alias italic       = StyleImpl!(Font.italic);
+public alias underline    = StyleImpl!(Font.underline);
 
-alias black        = StyleImpl!(Color.black);
-alias red          = StyleImpl!(Color.red);
-alias green        = StyleImpl!(Color.green);
-alias yellow       = StyleImpl!(Color.yellow);
-alias blue         = StyleImpl!(Color.blue);
-alias magenta      = StyleImpl!(Color.magenta);
-alias cyan         = StyleImpl!(Color.cyan);
-alias lightGray    = StyleImpl!(Color.lightGray);
-alias darkGray     = StyleImpl!(Color.darkGray);
-alias lightRed     = StyleImpl!(Color.lightRed);
-alias lightGreen   = StyleImpl!(Color.lightGreen);
-alias lightYellow  = StyleImpl!(Color.lightYellow);
-alias lightBlue    = StyleImpl!(Color.lightBlue);
-alias lightMagenta = StyleImpl!(Color.lightMagenta);
-alias lightCyan    = StyleImpl!(Color.lightCyan);
-alias white        = StyleImpl!(Color.white);
+public alias black        = StyleImpl!(Color.black);
+public alias red          = StyleImpl!(Color.red);
+public alias green        = StyleImpl!(Color.green);
+public alias yellow       = StyleImpl!(Color.yellow);
+public alias blue         = StyleImpl!(Color.blue);
+public alias magenta      = StyleImpl!(Color.magenta);
+public alias cyan         = StyleImpl!(Color.cyan);
+public alias lightGray    = StyleImpl!(Color.lightGray);
+public alias darkGray     = StyleImpl!(Color.darkGray);
+public alias lightRed     = StyleImpl!(Color.lightRed);
+public alias lightGreen   = StyleImpl!(Color.lightGreen);
+public alias lightYellow  = StyleImpl!(Color.lightYellow);
+public alias lightBlue    = StyleImpl!(Color.lightBlue);
+public alias lightMagenta = StyleImpl!(Color.lightMagenta);
+public alias lightCyan    = StyleImpl!(Color.lightCyan);
+public alias white        = StyleImpl!(Color.white);
 
-alias onBlack        = StyleImpl!(colorBgOffset + Color.black);
-alias onRed          = StyleImpl!(colorBgOffset + Color.red);
-alias onGreen        = StyleImpl!(colorBgOffset + Color.green);
-alias onYellow       = StyleImpl!(colorBgOffset + Color.yellow);
-alias onBlue         = StyleImpl!(colorBgOffset + Color.blue);
-alias onMagenta      = StyleImpl!(colorBgOffset + Color.magenta);
-alias onCyan         = StyleImpl!(colorBgOffset + Color.cyan);
-alias onLightGray    = StyleImpl!(colorBgOffset + Color.lightGray);
-alias onDarkGray     = StyleImpl!(colorBgOffset + Color.darkGray);
-alias onLightRed     = StyleImpl!(colorBgOffset + Color.lightRed);
-alias onLightGreen   = StyleImpl!(colorBgOffset + Color.lightGreen);
-alias onLightYellow  = StyleImpl!(colorBgOffset + Color.lightYellow);
-alias onLightBlue    = StyleImpl!(colorBgOffset + Color.lightBlue);
-alias onLightMagenta = StyleImpl!(colorBgOffset + Color.lightMagenta);
-alias onLightCyan    = StyleImpl!(colorBgOffset + Color.lightCyan);
-alias onWhite        = StyleImpl!(colorBgOffset + Color.white);
+public alias onBlack        = StyleImpl!(colorBgOffset + Color.black);
+public alias onRed          = StyleImpl!(colorBgOffset + Color.red);
+public alias onGreen        = StyleImpl!(colorBgOffset + Color.green);
+public alias onYellow       = StyleImpl!(colorBgOffset + Color.yellow);
+public alias onBlue         = StyleImpl!(colorBgOffset + Color.blue);
+public alias onMagenta      = StyleImpl!(colorBgOffset + Color.magenta);
+public alias onCyan         = StyleImpl!(colorBgOffset + Color.cyan);
+public alias onLightGray    = StyleImpl!(colorBgOffset + Color.lightGray);
+public alias onDarkGray     = StyleImpl!(colorBgOffset + Color.darkGray);
+public alias onLightRed     = StyleImpl!(colorBgOffset + Color.lightRed);
+public alias onLightGreen   = StyleImpl!(colorBgOffset + Color.lightGreen);
+public alias onLightYellow  = StyleImpl!(colorBgOffset + Color.lightYellow);
+public alias onLightBlue    = StyleImpl!(colorBgOffset + Color.lightBlue);
+public alias onLightMagenta = StyleImpl!(colorBgOffset + Color.lightMagenta);
+public alias onLightCyan    = StyleImpl!(colorBgOffset + Color.lightCyan);
+public alias onWhite        = StyleImpl!(colorBgOffset + Color.white);
 
 
 nothrow pure @safe unittest

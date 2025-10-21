@@ -1,6 +1,6 @@
 module argparse.config;
 
-import argparse.internal.style: Style;
+import argparse.style: Style;
 
 
 struct Config

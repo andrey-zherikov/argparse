@@ -28,10 +28,13 @@
     <toc-element topic="Help-generation.md"/>
     <toc-element topic="Shell-completion.md"/>
     <toc-element toc-title="Reference">
+        <toc-element topic="ansiStylingArgument.md"/>
         <toc-element topic="CLI-API.md"/>
         <toc-element topic="Config.md"/>
         <toc-element topic="Param-RawParam.md"/>
         <toc-element topic="Result.md"/>
+        <toc-element topic="Style.md"/>
+        <toc-element topic="SubCommand.md"/>
         <toc-element toc-title="UDAs">
             <toc-element topic="ArgumentGroup.md"/>
             <toc-element topic="AllowedValues.md"/>
@@ -40,7 +43,5 @@
             <toc-element topic="PositionalNamedArgument.md"/>
             <toc-element topic="RequiredTogether.md"/>
         </toc-element>
-        <toc-element topic="SubCommand.md"/>
-        <toc-element topic="ansiStylingArgument.md"/>
     </toc-element>
 </instance-profile>
