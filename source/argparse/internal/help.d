@@ -6,7 +6,7 @@ import argparse.param;
 import argparse.result;
 import argparse.api.ansi: ansiStylingArgument;
 import argparse.internal.lazystring;
-import argparse.internal.arguments: ArgumentInfo, Arguments;
+import argparse.internal.arguments: ArgumentInfo, Arguments, finalize;
 import argparse.internal.commandinfo: CommandInfo;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.style;
@@ -144,16 +144,21 @@ private void print(void delegate(string) sink, const ref Section section, string
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 package struct HelpArgumentUDA
 {
-    ArgumentInfo info = {
-        ArgumentInfo info;
-        info.shortNames = ["h"];
-        info.longNames = ["help"];
-        info.description = "Show this help message and exit";
-        info.required = false;
-        info.minValuesCount = 0;
-        info.maxValuesCount = 0;
-        return info;
-    }();
+    ArgumentInfo info;
+
+    this(const Config config)
+    {
+        enum ArgumentInfo i = {
+            shortNames: ["h"],
+            longNames: ["help"],
+            description: "Show this help message and exit",
+            required: false,
+            minValuesCount: 0,
+            maxValuesCount: 0,
+        };
+
+        info = i.finalize!bool(config, null);
+    }
 
     Result parse(COMMAND_STACK, RECEIVER)(const COMMAND_STACK cmdStack, ref RECEIVER receiver, RawParam param)
     {
@@ -174,18 +179,18 @@ package struct HelpArgumentUDA
 
 unittest
 {
-    assert(HelpArgumentUDA.init.info.shortNames == ["h"]);
-    assert(HelpArgumentUDA.init.info.longNames == ["help"]);
-    assert(!HelpArgumentUDA.init.info.required);
-    assert(HelpArgumentUDA.init.info.minValuesCount == 0);
-    assert(HelpArgumentUDA.init.info.maxValuesCount == 0);
+    assert(HelpArgumentUDA(Config.init).info.shortNames == ["h"]);
+    assert(HelpArgumentUDA(Config.init).info.longNames == ["help"]);
+    assert(!HelpArgumentUDA(Config.init).info.required);
+    assert(HelpArgumentUDA(Config.init).info.minValuesCount == 0);
+    assert(HelpArgumentUDA(Config.init).info.maxValuesCount == 0);
 }
 
 private bool isHelpArgument(string name)
 {
     import std.range: chain;
 
-    static foreach(n; chain(HelpArgumentUDA.init.info.shortNames, HelpArgumentUDA.init.info.longNames))
+    static foreach(n; chain(HelpArgumentUDA(Config.init).info.shortNames, HelpArgumentUDA(Config.init).info.longNames))
         if(n == name)
             return true;
 

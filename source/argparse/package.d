@@ -44,11 +44,7 @@ unittest
         int f;
     }
 
-    enum config = {
-        Config config;
-        config.addHelpArgument = false;
-        return config;
-    }();
+    enum Config config = { addHelpArgument: false };
 
     T receiver;
     auto a = createCommand!config(receiver, getTopLevelCommandInfo!T(config));
@@ -64,11 +60,7 @@ unittest
         int a,b,c,d,e,f;
     }
 
-    enum config = {
-        Config config;
-        config.addHelpArgument = false;
-        return config;
-    }();
+    enum Config config = { addHelpArgument: false };
 
     T receiver;
     auto a = createCommand!config(receiver, getTopLevelCommandInfo!T(config));

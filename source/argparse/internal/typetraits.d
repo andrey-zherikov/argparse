@@ -53,7 +53,7 @@ private template Arguments(Config config, TYPE)
     private enum membersWithUDA = Filter!(hasArgumentUDA, allMembers);
 
     static if(config.addHelpArgument)
-        private enum helpUDA = HelpArgumentUDA(HelpArgumentUDA.init.info.finalize!bool(config, null));
+        private enum helpUDA = HelpArgumentUDA(config);
     else
         private alias helpUDA = AliasSeq!();
 
