@@ -52,7 +52,7 @@ package struct CommandStack
 
         foreach(ref cmd; stack)
         {
-            auto res = cmd.finalize(config, this);
+            auto res = cmd.finalize(config, stack);
             if(!res)
                 return res;
         }

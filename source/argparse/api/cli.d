@@ -52,11 +52,7 @@ unittest
 
 unittest
 {
-    enum config = {
-        Config config;
-        config.errorHandler = (string s) { assert(s == "error text"); };
-        return config;
-    }();
+    enum Config config = { errorHandler: s => assert(s == "error text") };
 
     onError!config("error text");
 }
