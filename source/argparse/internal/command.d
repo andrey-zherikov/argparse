@@ -1,15 +1,20 @@
 module argparse.internal.command;
 
 import argparse.config;
+import argparse.helpinfo;
 import argparse.param;
 import argparse.result;
-import argparse.api.subcommand: matchCmd;
+import argparse.style;
+import argparse.api.subcommand;
 import argparse.internal.arguments: Arguments, ArgumentInfo;
 import argparse.internal.argumentudahelpers: getMemberArgumentUDA;
 import argparse.internal.commandinfo;
+import argparse.internal.helpargument;
 import argparse.internal.restriction;
 import argparse.internal.typetraits;
 
+import std.algorithm: filter, map;
+import std.array: array, join;
 import std.meta;
 
 
@@ -146,9 +151,7 @@ package struct Command
     string[] suggestions(string prefix) const
     {
         import std.range: chain;
-        import std.algorithm: filter, map;
         import std.string: startsWith;
-        import std.array: array, join;
 
         // suggestions are names of all arguments and subcommands
         auto suggestions_ = chain(arguments.namedArguments.filter!((ref _) => !_.hidden).map!((ref _) => _.displayNames).join, subCommands.byName.keys);
@@ -222,39 +225,117 @@ package struct Command
         }
         return restrictions.check(idxParsedArgs);
     }
+
+
+    auto helpInfo() const
+    {
+        alias group = (ref g) =>
+            ArgumentGroupHelpInfo(
+                name: g.name,
+                description: g.description.get,
+                argIndex: g.argIndex,
+                );
+
+        return CommandHelpInfo(
+            name: displayName,
+            usage: info.usage.get,
+            description: info.description.get,
+            epilog: info.epilog.get,
+            arguments: arguments.info.map!((ref _) => _.helpInfo).array,
+            userGroups: arguments.userGroups.map!group.array,
+            requiredGroup: group(arguments.requiredGroup),
+            optionalGroup: group(arguments.optionalGroup),
+            subCommands: subCommands.info
+                .filter!((ref _) => _.displayNames.length > 0 && _.displayNames[0].length > 0)
+                .map!((ref _) => SubCommandHelpInfo(_.displayNames,
+                                                    _.shortDescription.isSet ? _.shortDescription.get : _.description.get))
+                .array
+        );
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package(argparse) Command createCommand(Config config, COMMAND_TYPE)(ref COMMAND_TYPE receiver, CommandInfo info)
+private template HelpArgument(Config config)
+{
+    static if(config.addHelpArgument)
+    {
+        enum UDA = HelpArgumentUDA(config);
+        enum Info = UDA.info;
+    }
+    else
+    {
+        alias UDA = AliasSeq!();
+        alias Info = AliasSeq!();
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package(argparse) template BasicCommand(Config config, COMMAND_TYPE)
 {
     alias typeTraits = TypeTraits!(config, COMMAND_TYPE);
 
-    Command res;
+    alias argumentUDAs = AliasSeq!(typeTraits.argumentUDAs, HelpArgument!config.UDA);
+    alias argumentInfos = AliasSeq!(typeTraits.argumentInfos, HelpArgument!config.Info);
 
-    res.info = info;
-    res.arguments.add!(COMMAND_TYPE, [typeTraits.argumentInfos]);
-    res.restrictions.add!(COMMAND_TYPE, [typeTraits.argumentInfos])(config);
+    Command get(CommandInfo info)
+    {
+        Command res;
+
+        res.info = info;
+        res.arguments.add!(COMMAND_TYPE, [argumentInfos]);
+        res.restrictions.add!(COMMAND_TYPE, [argumentInfos])(config);
+
+        static if(is(typeof(typeTraits.subCommands)))
+            res.subCommands.add([typeTraits.subCommands]);
+
+        return res;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+package(argparse) Command createCommand(Config config, COMMAND_TYPE, PARENT_COMMAND_TYPE...)
+    (ref COMMAND_TYPE receiver,
+    CommandInfo info,
+    CommandHelpInfo delegate()[] getParentHelpInfo = [])
+{
+    alias typeTraits = TypeTraits!(config, COMMAND_TYPE);
+    alias argumentUDAs = BasicCommand!(config, COMMAND_TYPE).argumentUDAs;
+
+    Command res = BasicCommand!(config, COMMAND_TYPE).get(info);
+
+    //res.info = info;
+    //res.arguments.add!(COMMAND_TYPE, [argumentInfos]);
+    //res.restrictions.add!(COMMAND_TYPE, [argumentInfos])(config);
 
     enum getArgumentParsingFunction(alias uda) =
          (const Command[] cmdStack, ref RawParam param) => ArgumentParsingFunction!uda(cmdStack, receiver, param);
 
-    res.parseFuncs = [staticMap!(getArgumentParsingFunction, typeTraits.argumentUDAs)];
+    res.parseFuncs = [staticMap!(getArgumentParsingFunction, argumentUDAs)];
 
     enum getArgumentCompleteFunction(alias uda) =
         (const Command[] cmdStack, ref RawParam param) => ArgumentCompleteFunction!uda(cmdStack, receiver, param);
 
-    res.completeFuncs = [staticMap!(getArgumentCompleteFunction, typeTraits.argumentUDAs)];
+    res.completeFuncs = [staticMap!(getArgumentCompleteFunction, argumentUDAs)];
 
     static if(is(typeof(typeTraits.subCommands)))
     {
-        alias createFunc(alias CMD) = () => ParsingSubCommandCreate!(config, CMD.TYPE)(
-            __traits(getMember, receiver, typeTraits.subCommandSymbol),
-            CMD,
-        );
+        alias createFunc(alias CMD) = () =>
+            ParsingSubCommandCreate!(config,
+                typeof(__traits(getMember, receiver, typeTraits.subCommandSymbol)),
+                CMD.TYPE,
+                PARENT_COMMAND_TYPE,
+                COMMAND_TYPE
+            )(
+                __traits(getMember, receiver, typeTraits.subCommandSymbol),
+                CMD,
+                getParentHelpInfo ~ &res.helpInfo,
+            );
 
         res.subCommandCreate = [staticMap!(createFunc, typeTraits.subCommands)];
-        res.subCommands.add([typeTraits.subCommands]);
+        //res.subCommands.add([typeTraits.subCommands]);
 
         static if(is(typeof(typeTraits.defaultSubCommand)))
             res.defaultSubCommand = createFunc!(typeTraits.defaultSubCommand);
@@ -265,10 +346,14 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE)(ref COMMAND
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto ParsingSubCommandCreate(Config config, COMMAND_TYPE, TARGET)(ref TARGET target, CommandInfo info)
+private auto ParsingSubCommandCreate(Config config, TARGET, COMMAND_TYPE, PARENT_COMMAND_TYPE...)
+    (ref TARGET target,
+    CommandInfo info,
+    CommandHelpInfo delegate()[] getParentHelpInfo)
+if(isSubCommand!TARGET)
 {
     alias create = (ref COMMAND_TYPE actualTarget) =>
-        createCommand!(config, COMMAND_TYPE)(actualTarget, info);
+        createCommand!(config, COMMAND_TYPE, PARENT_COMMAND_TYPE)(actualTarget, info);
 
     // Initialize if needed
     if(!target.isSetTo!COMMAND_TYPE)

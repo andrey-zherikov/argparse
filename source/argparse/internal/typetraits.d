@@ -6,7 +6,6 @@ import argparse.internal.arguments: finalize;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.argumentudahelpers: getMemberArgumentUDA, isArgumentUDA;
 import argparse.internal.commandinfo;
-import argparse.internal.help: HelpArgumentUDA;
 
 import std.meta;
 import std.string: startsWith;
@@ -52,35 +51,28 @@ private template Arguments(Config config, TYPE)
 
     private enum membersWithUDA = Filter!(hasArgumentUDA, allMembers);
 
-    static if(config.addHelpArgument)
-        private enum helpUDA = HelpArgumentUDA(config);
-    else
-        private alias helpUDA = AliasSeq!();
-
     // Get argument UDAs: if there are no members attributed with UDA then get all members, otherwise only attributed ones
     private enum getArgumentUDA(string sym) = getMemberArgumentUDA!(TYPE, sym)(config);
 
     static if(membersWithUDA.length == 0)
     {
         // No argument UDAs are used so all arguments are named and we can skip processing of positional UDAs
-        enum UDAs = AliasSeq!(staticMap!(getArgumentUDA, allMembers), helpUDA);
+        private enum UDAs = staticMap!(getArgumentUDA, allMembers);
 
         private enum hasOptionalPositional = false;
     }
     else
     {
-        private enum originalUDAs = staticMap!(getArgumentUDA, membersWithUDA);
+        private enum UDAs = staticMap!(getArgumentUDA, membersWithUDA);
 
         // Ensure that we don't have a mix of user-dfined and automatic positions of arguments
         private enum positionalWithPos(alias uda) = isPositional!uda && hasPosition!uda;
         private enum positionalWithoutPos(alias uda) = isPositional!uda && !hasPosition!uda;
 
-        private enum positionalWithPosNum = Filter!(positionalWithPos, originalUDAs).length;
+        private enum positionalWithPosNum = Filter!(positionalWithPos, UDAs).length;
 
-        static assert(positionalWithPosNum == 0 || Filter!(positionalWithoutPos, originalUDAs).length == 0,
+        static assert(positionalWithPosNum == 0 || Filter!(positionalWithoutPos, UDAs).length == 0,
             TYPE.stringof~": Positions must be specified for all or none positional arguments");
-
-        enum UDAs = AliasSeq!(originalUDAs, helpUDA);
 
         static if(positionalWithPosNum == 0)
         {
@@ -116,7 +108,7 @@ private template Arguments(Config config, TYPE)
     }
 
     private enum getInfo(alias uda) = uda.info;
-    enum infos = staticMap!(getInfo, UDAs);
+    private enum infos = staticMap!(getInfo, UDAs);
 
     // Check whether argument names do not violate argparse requirements
     static foreach(info; infos)
@@ -146,19 +138,15 @@ private template SubCommands(Config config, TYPE)
 
     static if(symbols.length == 1)
     {
-        enum symbol = symbols[0];
+        private enum symbol = symbols[0];
 
         private alias memberType = typeof(__traits(getMember, TYPE, symbol));
 
-        private enum getCommandInfo(CMD) = .getSubCommandInfo!CMD(config);
-        enum commands = staticMap!(getCommandInfo, memberType.Types);
+        private enum getCommandInfo(alias CMD) = .getSubCommandInfo!CMD(config, is(memberType.DefaultCommand == CMD));
+        private enum commands = staticMap!(getCommandInfo, memberType.Types);
 
-        static if(is(memberType.DefaultCommand))
-        {
-            private enum isDefault(alias CMD) = is(memberType.DefaultCommand == CMD.TYPE);
-
-            enum defaultSubCommand = Filter!(isDefault, commands)[0];
-        }
+        private enum isDefault(alias CMD) = CMD.isDefault;
+        private enum defaultSubCommands = Filter!(isDefault, commands);
 
         // Check whether names of subcommands do not violate argparse requirements
         static foreach(cmd; commands)
@@ -172,7 +160,7 @@ private template SubCommands(Config config, TYPE)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-package template TypeTraits(Config config, TYPE)
+package(argparse) template TypeTraits(Config config, TYPE)
 {
     /////////////////////////////////////////////////////////////////////
     /// Arguments
@@ -192,9 +180,9 @@ package template TypeTraits(Config config, TYPE)
         alias subCommandSymbol = SC.symbol;
         alias subCommands = SC.commands;
 
-        static if(is(typeof(SC.defaultSubCommand)))
+        static if(SC.defaultSubCommands.length > 0)
         {
-            alias defaultSubCommand = SC.defaultSubCommand;
+            alias defaultSubCommand = SC.defaultSubCommands[0];
 
             static assert(!arguments.hasOptionalPositional, TYPE.stringof~": Optional positional arguments and default subcommand can't be used together in one command");
         }

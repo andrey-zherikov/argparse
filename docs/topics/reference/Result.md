@@ -1,4 +1,4 @@
-# Result struct
+# Result
 
 `Result` is a struct that is used to communicate between `argparse` and user functions.
 Its main responsibility is to hold the result of an operation: success or failure.

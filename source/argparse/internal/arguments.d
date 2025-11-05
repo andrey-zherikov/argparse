@@ -3,6 +3,7 @@ module argparse.internal.arguments;
 import argparse.internal.lazystring;
 
 import argparse.config;
+import argparse.helpinfo;
 import argparse.param;
 import argparse.result;
 
@@ -34,6 +35,22 @@ package(argparse) struct ArgumentInfo
     bool required;
     bool isBooleanFlag = false;
     bool positional;
+
+    auto helpInfo() const
+    {
+        return ArgumentHelpInfo(
+            names: displayNames,
+            description: description.get,
+            placeholder: placeholder,
+            multipleOccurrence: maxValuesCount.get > 1,
+            optionalValue: minValuesCount.get == 0,
+            optionalArgument: !required,
+            positional: positional,
+            hidden: hidden,
+            booleanFlag: isBooleanFlag,
+        );
+    }
+
 
     string displayName() const
     {

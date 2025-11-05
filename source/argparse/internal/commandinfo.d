@@ -14,40 +14,45 @@ package(argparse) struct CommandInfo
     LazyString description;
     LazyString shortDescription;
     LazyString epilog;
+    bool isDefaultSubCommand = false;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto finalize(const Config config, CommandInfo uda)
+private auto finalize(const Config config, CommandInfo info, bool isDefaultSubCommand)
 {
-    uda.displayNames = uda.names.dup;
+    info.displayNames = info.names.dup;
 
-    uda.caseSensitive = config.caseSensitiveSubCommand;
+    info.caseSensitive = config.caseSensitiveSubCommand;
     if(!config.caseSensitiveSubCommand)
     {
         import std.algorithm: each;
         import std.uni : toUpper;
 
-        uda.names.each!((ref _) => _ = _.toUpper);
+        info.names.each!((ref _) => _ = _.toUpper);
     }
+    
+    info.isDefaultSubCommand = isDefaultSubCommand;
 
-    return uda;
+    return info;
 }
 
 unittest
 {
-    auto uda = finalize(Config.init, CommandInfo(["cmd-Name"]));
-    assert(uda.displayNames == ["cmd-Name"]);
-    assert(uda.names == ["cmd-Name"]);
+    auto info = finalize(Config.init, CommandInfo(["cmd-Name"]), false);
+    assert(info.displayNames == ["cmd-Name"]);
+    assert(info.names == ["cmd-Name"]);
+    assert(!info.isDefaultSubCommand);
 }
 
 unittest
 {
     enum Config config = { caseSensitiveShortName: false, caseSensitiveLongName: false, caseSensitiveSubCommand: false };
 
-    auto uda = finalize(config, CommandInfo(["cmd-Name"]));
-    assert(uda.displayNames == ["cmd-Name"]);
-    assert(uda.names == ["CMD-NAME"]);
+    auto info = finalize(config, CommandInfo(["cmd-Name"]), true);
+    assert(info.displayNames == ["cmd-Name"]);
+    assert(info.names == ["CMD-NAME"]);
+    assert(info.isDefaultSubCommand);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,12 +70,14 @@ private template getCommandInfo(TYPE)
         enum getCommandInfo = CommandInfo.init;
 }
 
-package auto getSubCommandInfo(COMMAND)(Config config)
+package auto getSubCommandInfo(COMMAND)(Config config, bool isDefault)
 {
     struct SubCommand
     {
         CommandInfo info;
         alias info this;
+
+        bool isDefault;
 
         alias TYPE = COMMAND;
     }
@@ -80,12 +87,12 @@ package auto getSubCommandInfo(COMMAND)(Config config)
     if(info.names.length == 0)
         info.names = [COMMAND.stringof];
 
-    return SubCommand(finalize(config, info));
+    return SubCommand(finalize(config, info, isDefault), isDefault);
 }
 
 package(argparse) CommandInfo getTopLevelCommandInfo(COMMAND)(Config config)
 {
-    return finalize(config, getCommandInfo!COMMAND);
+    return finalize(config, getCommandInfo!COMMAND, false);
 }
 
 unittest
@@ -93,8 +100,15 @@ unittest
     @CommandInfo()
     struct T {}
 
-    auto sc = getSubCommandInfo!T(Config.init);
+    auto sc = getSubCommandInfo!T(Config.init, false);
     assert(sc.displayNames == ["T"]);
     assert(sc.names == ["T"]);
+    assert(!sc.isDefault);
+    assert(is(sc.TYPE == T));
+
+    sc = getSubCommandInfo!T(Config.init, true);
+    assert(sc.displayNames == ["T"]);
+    assert(sc.names == ["T"]);
+    assert(sc.isDefault);
     assert(is(sc.TYPE == T));
 }

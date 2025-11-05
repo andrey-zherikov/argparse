@@ -1,6 +1,7 @@
 module argparse.config;
 
 import argparse.style: Style;
+import argparse.helpinfo: CommandHelpInfo;
 
 
 struct Config
@@ -95,6 +96,12 @@ struct Config
      */
     enum StylingMode { autodetect, on, off }
     StylingMode stylingMode = StylingMode.autodetect;
+
+    /**
+       Function that processes error messages if they happen during argument parsing.
+       By default all errors are printed to stderr.
+     */
+    void function(Style style, CommandHelpInfo[] cmds) helpPrinter;
 
     /**
        Function that processes error messages if they happen during argument parsing.
