@@ -168,6 +168,20 @@ Help text from the first part of the example code above:
 
 <img src="config_styling.png" alt="Config styling example" border-effect="rounded"/>
 
+## Help printer {id="helpPrinter"}
+
+`Config.helpPrinter` is a handler function to print help screen.
+It receives two parameters:
+- `Style style` - style that should be applied to help screen.
+- `CommandHelpInfo[] cmds` - current stack of (sub)commands starting with top-level command.
+  For example, if command line contains `tool subcmd1 subcmd2 -h` then `cmd` will contain array of `CommandHelpInfo`
+  objects that corresponds to `tool`, `subcmd1`, `subcmd2` commands respectively.
+
+Example:
+
+<code-block src="code_snippets/config_helpPrinter.d" lang="c++"/>
+
+
 ## Error handling {id="errorHandler"}
 
 `Config.errorHandler` is a handler function for all errors occurred during command line parsing.

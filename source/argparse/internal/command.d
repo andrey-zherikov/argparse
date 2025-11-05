@@ -1,8 +1,10 @@
 module argparse.internal.command;
 
 import argparse.config;
+import argparse.help;
 import argparse.param;
 import argparse.result;
+import argparse.style;
 import argparse.api.subcommand: matchCmd;
 import argparse.internal.arguments: Arguments, ArgumentInfo;
 import argparse.internal.argumentudahelpers: getMemberArgumentUDA;
@@ -10,6 +12,8 @@ import argparse.internal.commandinfo;
 import argparse.internal.restriction;
 import argparse.internal.typetraits;
 
+import std.algorithm: filter, map;
+import std.array: array, join;
 import std.meta;
 
 
@@ -146,9 +150,7 @@ package struct Command
     string[] suggestions(string prefix) const
     {
         import std.range: chain;
-        import std.algorithm: filter, map;
         import std.string: startsWith;
-        import std.array: array, join;
 
         // suggestions are names of all arguments and subcommands
         auto suggestions_ = chain(arguments.namedArguments.filter!((ref _) => !_.hidden).map!((ref _) => _.displayNames).join, subCommands.byName.keys);
@@ -221,6 +223,33 @@ package struct Command
             }
         }
         return restrictions.check(idxParsedArgs);
+    }
+
+
+    auto helpInfo() const
+    {
+        alias group = (ref g) =>
+            ArgumentGroupHelpInfo(
+                name: g.name,
+                description: g.description.get,
+                argIndex: g.argIndex,
+                );
+
+        return CommandHelpInfo(
+            name: displayName,
+            usage: info.usage.get,
+            description: info.description.get,
+            epilog: info.epilog.get,
+            arguments: arguments.info.map!((ref _) => _.helpInfo).array,
+            userGroups: arguments.userGroups.map!group.array,
+            requiredGroup: group(arguments.requiredGroup),
+            optionalGroup: group(arguments.optionalGroup),
+            subCommands: subCommands.info
+                .filter!((ref _) => _.displayNames.length > 0 && _.displayNames[0].length > 0)
+                .map!((ref _) => SubCommandHelpInfo(_.displayNames,
+                                                    _.shortDescription.isSet ? _.shortDescription.get : _.description.get))
+                .array
+        );
     }
 }
 
