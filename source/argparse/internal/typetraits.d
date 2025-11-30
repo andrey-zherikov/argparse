@@ -6,7 +6,7 @@ import argparse.internal.arguments: finalize;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.argumentudahelpers: getMemberArgumentUDA, isArgumentUDA;
 import argparse.internal.commandinfo;
-import argparse.internal.help: HelpArgumentUDA;
+import argparse.internal.helpargument: HelpArgumentUDA;
 
 import std.meta;
 import std.string: startsWith;
