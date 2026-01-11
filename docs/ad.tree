@@ -31,6 +31,12 @@
         <toc-element topic="ansiStylingArgument.md"/>
         <toc-element topic="CLI-API.md"/>
         <toc-element topic="Config.md"/>
+        <toc-element toc-title="Help">
+            <toc-element topic="HelpScreen.md"/>
+            <toc-element topic="printHelp.md"/>
+            <toc-element topic="HelpPrinter.md"/>
+            <toc-element topic="...HelpInfo.md"/>
+        </toc-element>
         <toc-element topic="Param-RawParam.md"/>
         <toc-element topic="Result.md"/>
         <toc-element topic="Style.md"/>

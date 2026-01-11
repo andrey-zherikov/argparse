@@ -11,17 +11,21 @@ public import argparse.api.restriction;
 public import argparse.api.subcommand;
 
 public import argparse.config;
+public import argparse.help;
+public import argparse.helpinfo;
+public import argparse.helpprinter;
 public import argparse.param;
 public import argparse.result;
+public import argparse.style;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 version(unittest)
 {
+    import argparse.style;
     import argparse.internal.command : createCommand;
     import argparse.internal.commandinfo : getTopLevelCommandInfo;
-    import argparse.internal.help : printHelp;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -796,34 +800,36 @@ unittest
 
     import std.array: appender;
 
-    auto a = appender!string;
+    enum Config config = {
+        styling: Style.None,
+        helpPrinter: (style, stack) {
+            scope hp = new HelpPrinter(style);
 
-    T receiver;
-    auto cmd = createCommand!(Config.init)(receiver, getTopLevelCommandInfo!T(Config.init));
+            auto output = appender!string;
+            hp.printHelp(_ => output.put(_), stack);
 
-    auto isEnabled = ansiStylingArgument.stdoutStyling;
-    scope(exit) ansiStylingArgument.stdoutStyling = isEnabled;
-    ansiStylingArgument.stdoutStyling = false;
+            assert(output[]  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
+                "custom description\n\n"~
+                "Required arguments:\n"~
+                "  -f {apple,pear}, --fruit {apple,pear}\n"~
+                "                   This is a help text for fruit. Very very very very very very\n"~
+                "                   very very very very very very very very very very very very\n"~
+                "                   very long text\n"~
+                "  param0           This is a help text for param0. Very very very very very very\n"~
+                "                   very very very very very very very very very very very very\n"~
+                "                   very long text\n"~
+                "  {q,a}\n\n"~
+                "Optional arguments:\n"~
+                "  -s S\n"~
+                "  -p VALUE\n"~
+                "  -i {1,4,16,8}\n"~
+                "  -h, --help       Show this help message and exit\n\n"~
+                "custom epilog\n");
+        }
+    };
 
-    printHelp(_ => a.put(_), Config.init, cmd, [&cmd.arguments], "MYPROG");
-
-    assert(a[]  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
-        "custom description\n\n"~
-        "Required arguments:\n"~
-        "  -f {apple,pear}, --fruit {apple,pear}\n"~
-        "                   This is a help text for fruit. Very very very very very very\n"~
-        "                   very very very very very very very very very very very very\n"~
-        "                   very long text\n"~
-        "  param0           This is a help text for param0. Very very very very very very\n"~
-        "                   very very very very very very very very very very very very\n"~
-        "                   very long text\n"~
-        "  {q,a}\n\n"~
-        "Optional arguments:\n"~
-        "  -s S\n"~
-        "  -p VALUE\n"~
-        "  -i {1,4,16,8}\n"~
-        "  -h, --help       Show this help message and exit\n\n"~
-        "custom epilog\n");
+    T t;
+    assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
 }
 
 unittest
@@ -852,32 +858,33 @@ unittest
 
     import std.array: appender;
 
-    auto a = appender!string;
+    enum Config config = {
+        styling: Style.None,
+        helpPrinter: (style, stack) {
+            scope hp = new HelpPrinter(style);
 
-    T receiver;
-    auto cmd = createCommand!(Config.init)(receiver, getTopLevelCommandInfo!T(Config.init));
+            auto output = appender!string;
+            hp.printHelp(_ => output.put(_), stack);
 
-    auto isEnabled = ansiStylingArgument.stdoutStyling;
-    scope(exit) ansiStylingArgument.stdoutStyling = isEnabled;
-    ansiStylingArgument.stdoutStyling = false;
+            assert(output[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
+                "group1:\n"~
+                "  group1 description\n\n"~
+                "  -a A\n"~
+                "  -b B\n"~
+                "  p\n\n"~
+                "group2:\n"~
+                "  group2 description\n\n"~
+                "  -c C\n"~
+                "  -d D\n\n"~
+                "Required arguments:\n"~
+                "  q\n\n"~
+                "Optional arguments:\n"~
+                "  -h, --help    Show this help message and exit\n\n");
+        }
+    };
 
-    printHelp(_ => a.put(_), Config.init, cmd, [&cmd.arguments], "MYPROG");
-
-
-    assert(a[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
-        "group1:\n"~
-        "  group1 description\n\n"~
-        "  -a A\n"~
-        "  -b B\n"~
-        "  p\n\n"~
-        "group2:\n"~
-        "  group2 description\n\n"~
-        "  -c C\n"~
-        "  -d D\n\n"~
-        "Required arguments:\n"~
-        "  q\n\n"~
-        "Optional arguments:\n"~
-        "  -h, --help    Show this help message and exit\n\n");
+    T t;
+    assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
 }
 
 unittest
@@ -904,26 +911,51 @@ unittest
 
     import std.array: appender;
 
-    auto a = appender!string;
+    {
+        enum Config config = {
+            styling: Style.None,
+            helpPrinter: (style, stack) {
+                scope hp = new HelpPrinter(style);
 
-    T receiver;
-    auto cmd = createCommand!(Config.init)(receiver, getTopLevelCommandInfo!T(Config.init));
+                auto output = appender!string;
+                hp.printHelp(_ => output.put(_), stack);
 
-    auto isEnabled = ansiStylingArgument.stdoutStyling;
-    scope(exit) ansiStylingArgument.stdoutStyling = isEnabled;
-    ansiStylingArgument.stdoutStyling = false;
+                assert(output[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
+                "Available commands:\n"~
+                "  cmd1          Perform cmd 1\n"~
+                "  very-long-command-name-2\n"~
+                "                Perform cmd 2\n\n"~
+                "Optional arguments:\n"~
+                "  -c C\n"~
+                "  -d D\n"~
+                "  -h, --help    Show this help message and exit\n\n");
+            }
+        };
 
-    printHelp(_ => a.put(_), Config.init, cmd, [&cmd.arguments], "MYPROG");
+        T t;
+        assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
+    }
+    {
+        enum Config config = {
+            styling: Style.None,
+            helpPrinter: (style, stack) {
+                scope hp = new HelpPrinter(style);
 
-    assert(a[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
-        "Available commands:\n"~
-        "  cmd1          Perform cmd 1\n"~
-        "  very-long-command-name-2\n"~
-        "                Perform cmd 2\n\n"~
-        "Optional arguments:\n"~
-        "  -c C\n"~
-        "  -d D\n"~
-        "  -h, --help    Show this help message and exit\n\n");
+                auto output = appender!string;
+                hp.printHelp(_ => output.put(_), stack);
+
+                assert(output[]  == "Usage: MYPROG cmd1 [-a A] [-h]\n\n"~
+                "Optional arguments:\n"~
+                "  -a A\n"~
+                "  -h, --help    Show this help message and exit\n"~
+                "  -c C\n"~
+                "  -d D\n\n");
+            }
+        };
+
+        T t;
+        assert(CLI!(config, T).parseArgs(t, ["cmd1", "-h"]).isHelpWanted);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
