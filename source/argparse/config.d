@@ -101,7 +101,7 @@ struct Config
        Function that processes error messages if they happen during argument parsing.
        By default all errors are printed to stderr.
      */
-    void function(Style style, CommandHelpInfo[] cmds) helpPrinter;
+    void function(Config config, Style style, CommandHelpInfo[] cmds) helpPrinter;
 
     /**
        Function that processes error messages if they happen during argument parsing.

@@ -802,8 +802,8 @@ unittest
 
     enum Config config = {
         styling: Style.None,
-        helpPrinter: (style, stack) {
-            scope hp = new HelpPrinter(style);
+        helpPrinter: (config, style, stack) {
+            scope hp = new HelpPrinter(config, style);
 
             auto output = appender!string;
             hp.printHelp(_ => output.put(_), stack);
@@ -860,8 +860,8 @@ unittest
 
     enum Config config = {
         styling: Style.None,
-        helpPrinter: (style, stack) {
-            scope hp = new HelpPrinter(style);
+        helpPrinter: (config, style, stack) {
+            scope hp = new HelpPrinter(config, style);
 
             auto output = appender!string;
             hp.printHelp(_ => output.put(_), stack);
@@ -914,8 +914,8 @@ unittest
     {
         enum Config config = {
             styling: Style.None,
-            helpPrinter: (style, stack) {
-                scope hp = new HelpPrinter(style);
+            helpPrinter: (config, style, stack) {
+                scope hp = new HelpPrinter(config, style);
 
                 auto output = appender!string;
                 hp.printHelp(_ => output.put(_), stack);
@@ -938,8 +938,8 @@ unittest
     {
         enum Config config = {
             styling: Style.None,
-            helpPrinter: (style, stack) {
-                scope hp = new HelpPrinter(style);
+            helpPrinter: (config, style, stack) {
+                scope hp = new HelpPrinter(config, style);
 
                 auto output = appender!string;
                 hp.printHelp(_ => output.put(_), stack);

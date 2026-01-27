@@ -49,12 +49,12 @@ package struct HelpArgumentUDA
             stack[0].name = getProgramName(); // set command name to executable name
 
         if(param.config.helpPrinter)
-            param.config.helpPrinter(style, stack);
+            param.config.helpPrinter(*param.config, style, stack);
         else
         {
             scope auto output = stdout.lockingTextWriter();
 
-            scope hp = new HelpPrinter(style);
+            scope hp = new HelpPrinter(*param.config, style);
             hp.printHelp(_ => output.put(_), stack);
         }
 
