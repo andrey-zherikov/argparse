@@ -4,20 +4,30 @@
 
 ## Public data members
 
-### Style
+### config
 
-`HelpPrinter.style` holds a style that should be applied to the help screen text.
+`HelpPrinter.config` holds a config object that was passed to constructor.
+
+### style
+
+`HelpPrinter.style` holds an actual style that should be applied to the help screen text. This should be used instead of `config.style`.
 
 ## Public member functions
 
 ### Constructor
 
-Constructor of `HelpPrinter` initializes an object with specified `Style` parameter.
+Constructor of `HelpPrinter` initializes an object with specified `Config` and `Style` parameters.
 
 **Signature**
 ```c++
-this(Style s)
+this(const Config config, Style style)
 ```
+
+> Note that `style` must contain actual style that should be applied to help screen. Usually it's either `config.style` or `Style.None`
+> depending on run-time enablement ([environment](ANSI-coloring-and-styling.md#heuristic) or [command line option](ANSI-coloring-and-styling.md#enable/disable)).
+>
+{style="note"}
+
 
 ### formatCommandUsage
 

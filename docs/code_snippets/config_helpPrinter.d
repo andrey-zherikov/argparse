@@ -7,12 +7,12 @@ struct T
 
 enum Config cfg = {
     helpPrinter:
-        function (Style style, CommandHelpInfo[] cmds)
+        function (Config config, Style style, CommandHelpInfo[] cmds)
         {
             import std.stdio : stderr;
             scope auto output = stderr.lockingTextWriter();
 
-            new HelpPrinter(style).printHelp(_ => output.put(_), cmds);
+            new HelpPrinter(config, style).printHelp(_ => output.put(_), cmds);
         }
 };
 

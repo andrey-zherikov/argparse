@@ -39,7 +39,8 @@ package(argparse) struct ArgumentInfo
     auto helpInfo() const
     {
         return ArgumentHelpInfo(
-            names: displayNames,
+            shortNames: shortNames,
+            longNames: longNames,
             description: description.get,
             placeholder: placeholder,
             multipleOccurrence: maxValuesCount.get > 1,

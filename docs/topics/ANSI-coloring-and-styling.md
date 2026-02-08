@@ -58,7 +58,7 @@ Here is how help screen will look like:
 <img src="styling_help.png" alt="Config help example" border-effect="rounded"/>
 
 
-## Enable/disable the styling
+## Enable/disable the styling {id="enable/disable"}
 
 By default `argparse` will try to detect whether ANSI styling is supported, and if so, it will apply styling to the help text and error messages.
 Note that detection works for stdout and stderr separately so, for example, if stdout is redirected to a file (so stdout styling is disabled)

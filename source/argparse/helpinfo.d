@@ -7,7 +7,8 @@ import std.algorithm.iteration;
 
 public struct ArgumentHelpInfo
 {
-    const string[] names;
+    const string[] shortNames;
+    const string[] longNames;
 
     string description;
     string placeholder;

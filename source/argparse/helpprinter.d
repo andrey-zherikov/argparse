@@ -1,5 +1,6 @@
 module argparse.helpprinter;
 
+import argparse.config;
 import argparse.helpinfo;
 import argparse.style;
 
@@ -50,11 +51,13 @@ public struct HelpScreen
 
 public class HelpPrinter
 {
+    const Config config;
     Style style;
 
-    this(Style s)
+    this(const Config config, Style style)
     {
-        style = s;
+        this.config = config;
+        this.style = style;
     }
 
 
@@ -139,19 +142,22 @@ public class HelpPrinter
         if(value.length > 0)
             value = " " ~ value; // prepend with space
 
-        alias formatNameAndValue = _ => style.argumentName(_) ~ value;
+        auto nameValues = chain(
+            helpInfo.shortNames.map!(_ => style.argumentName(config.shortNamePrefix ~ _) ~ value),
+            helpInfo.longNames .map!(_ => style.argumentName(config.longNamePrefix  ~ _) ~ value)
+        );
 
         if(usageString)
         {
             // usage string contains only one agrument name (even if it has multiple names) and
             // includes square brackets '[]' if argument is optional
-            return wrapOptional(helpInfo.optionalArgument, formatNameAndValue(helpInfo.names[0]));
+            return wrapOptional(helpInfo.optionalArgument, nameValues.front);
         }
         else
         {
             // argument description doesn't contain square brackets '[]' even when argument is optional
             // but shows all argument names
-            return helpInfo.names.map!formatNameAndValue.join(", ");
+            return nameValues.join(", ");
         }
     }
 
@@ -192,8 +198,14 @@ public class HelpPrinter
     {
         bool[string] processedArgs;
 
-        alias showArg = (_) =>
-            !_.hidden && !(_.names[0] in processedArgs) ? (processedArgs[_.names[0]] = true) : false;
+        alias showArg = (arg)
+        {
+            auto name = arg.shortNames.length > 0
+                ? arg.shortNames[0]
+                : arg.longNames[0];
+
+            return !arg.hidden && !(name in processedArgs) ? (processedArgs[name] = true) : false;
+        };
 
 
         HelpScreen.Group[] groups;
@@ -339,7 +351,7 @@ public class HelpPrinter
 
 unittest
 {
-    scope hp = new HelpPrinter(Style.None);
+    scope hp = new HelpPrinter(Config.init, Style.None);
 
     auto test(string placeholder, bool optionalValue, bool multipleOccurrence)
     {
@@ -358,12 +370,13 @@ unittest
 
 unittest
 {
-    scope hp = new HelpPrinter(Style.None);
+    scope hp = new HelpPrinter(Config.init, Style.None);
 
     auto test(bool optionalArgument, bool positional)
     {
         return hp.formatArgumentUsage(ArgumentHelpInfo(
-                names: ["-f","--foo"],
+                shortNames: ["f"],
+                longNames: ["foo"],
                 placeholder: "v",
                 optionalArgument: optionalArgument,
                 positional: positional),
@@ -378,7 +391,7 @@ unittest
 
 unittest
 {
-    scope hp = new HelpPrinter(Style.None);
+    scope hp = new HelpPrinter(Config.init, Style.None);
     auto res = hp.formatCommandUsage(["a","b"], CommandHelpInfo(usage: "%(PROG) my usage"));
 
     assert(res == "Usage: a b my usage");
