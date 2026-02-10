@@ -171,7 +171,8 @@ Help text from the first part of the example code above:
 ## Help printer {id="helpPrinter"}
 
 `Config.helpPrinter` is a handler function to print help screen.
-It receives two parameters:
+It receives the following parameters:
+- `Config config` - config object that was provided to parsing API.
 - `Style style` - style that should be applied to help screen.
 - `CommandHelpInfo[] cmds` - current stack of (sub)commands starting with top-level command.
   For example, if command line contains `tool subcmd1 subcmd2 -h` then `cmd` will contain array of `CommandHelpInfo`

@@ -65,7 +65,7 @@ public void printHelp(Config config, COMMAND...)()
 if(COMMAND.length > 0)
 {
     static if(config.helpPrinter)
-        config.helpPrinter(ansiStylingArgument ? config.styling : Style.None, getCommandHelpInfos!(config, COMMAND));
+        config.helpPrinter(config, ansiStylingArgument ? config.styling : Style.None, getCommandHelpInfos!(config, COMMAND));
     else
     {
         import std.stdio: stdout;
@@ -78,7 +78,7 @@ if(COMMAND.length > 0)
 public void printHelp(Config config, COMMAND...)(void delegate(string) sink)
 if(COMMAND.length > 0)
 {
-    scope hp = new HelpPrinter(ansiStylingArgument ? config.styling : Style.None);
+    scope hp = new HelpPrinter(config, ansiStylingArgument ? config.styling : Style.None);
     hp.printHelp(sink, getCommandHelpInfos!(config, COMMAND));
 }
 
