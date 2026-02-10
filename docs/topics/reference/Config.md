@@ -199,3 +199,9 @@ Example:
 <code-block src="code_snippets/config_errorHandler.d" lang="c++"/>
 
 This code prints `Detected an error: Unrecognized arguments: ["-b"]` to `stderr`.
+
+## Error exit code {id="errorExitCode"}
+
+`Config.errorExitCode` holds and exit code in case of error.
+
+Default value is `1`.
