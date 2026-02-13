@@ -34,7 +34,7 @@ package struct HelpArgumentUDA
             maxValuesCount: 0,
         };
 
-        info = i.finalize!bool(config, null);
+        info = i.finalize!void(config, null);
     }
 
     Result parse(COMMAND_STACK, RECEIVER)(const COMMAND_STACK cmdStack, ref RECEIVER receiver, RawParam param)

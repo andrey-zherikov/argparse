@@ -134,7 +134,7 @@ public class HelpPrinter
 
     string formatArgumentUsage(in ArgumentHelpInfo helpInfo, bool usageString)
     {
-        auto value = formatArgumentValue(helpInfo);
+        auto value = helpInfo.booleanFlag ? "" : formatArgumentValue(helpInfo);
 
         if(helpInfo.positional)
             return wrapOptional(helpInfo.optionalArgument, value);
@@ -142,9 +142,11 @@ public class HelpPrinter
         if(value.length > 0)
             value = " " ~ value; // prepend with space
 
+        auto noPrefix = helpInfo.booleanFlag ? "[no-]" : "";
+
         auto nameValues = chain(
             helpInfo.shortNames.map!(_ => style.argumentName(config.shortNamePrefix ~ _) ~ value),
-            helpInfo.longNames .map!(_ => style.argumentName(config.longNamePrefix  ~ _) ~ value)
+            helpInfo.longNames .map!(_ => style.argumentName(config.longNamePrefix ~ noPrefix ~ _) ~ value)
         );
 
         if(usageString)
@@ -372,7 +374,7 @@ unittest
 {
     scope hp = new HelpPrinter(Config.init, Style.None);
 
-    auto test(bool optionalArgument, bool positional)
+    auto test(bool optionalArgument, bool positional, bool usageString)
     {
         return hp.formatArgumentUsage(ArgumentHelpInfo(
                 shortNames: ["f"],
@@ -380,13 +382,37 @@ unittest
                 placeholder: "v",
                 optionalArgument: optionalArgument,
                 positional: positional),
-            true);
+        usageString);
     }
 
-    assert(test(true, false) == "[-f v]");
-    assert(test(true, true) == "[v]");
-    assert(test(false, false) == "-f v");
-    assert(test(false, true) == "v");
+    assert(test(true, false, true) == "[-f v]");
+    assert(test(true, true, true) == "[v]");
+    assert(test(false, false, true) == "-f v");
+    assert(test(false, true, true) == "v");
+
+    assert(test(true, false, false) == "-f v, --foo v");
+    assert(test(true, true, false) == "[v]");
+    assert(test(false, false, false) == "-f v, --foo v");
+    assert(test(false, true, false) == "v");
+}
+
+unittest
+{
+    scope hp = new HelpPrinter(Config.init, Style.None);
+
+    auto test(bool usageString)
+    {
+        return hp.formatArgumentUsage(ArgumentHelpInfo(
+                shortNames: ["f"],
+                longNames: ["foo"],
+                placeholder: "v",
+                optionalValue: true,
+                booleanFlag: true),
+            usageString);
+    }
+
+    assert(test(true) == "-f");
+    assert(test(false) == "-f, --[no-]foo");
 }
 
 unittest
