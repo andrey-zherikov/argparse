@@ -958,6 +958,36 @@ unittest
     }
 }
 
+unittest
+{
+    @(Command("MYPROG"))
+    struct T
+    {
+        @NamedArgument("f","foo")
+        bool foo;
+    }
+
+    import std.array: appender;
+
+    enum Config config = {
+        styling: Style.None,
+        helpPrinter: (config, style, stack) {
+            scope hp = new HelpPrinter(config, style);
+
+            auto output = appender!string;
+            hp.printHelp(_ => output.put(_), stack);
+
+            assert(output[]  == "Usage: MYPROG [-f] [-h]\n\n"~
+            "Optional arguments:\n"~
+            "  -f, --[no-]foo\n"~
+            "  -h, --help        Show this help message and exit\n\n");
+        }
+    };
+
+    T t;
+    assert(CLI!(config, T).parseArgs(t, ["cmd1", "-h"]).isHelpWanted);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // https://github.com/andrey-zherikov/argparse/issues/231
 unittest {
