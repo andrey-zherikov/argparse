@@ -238,27 +238,16 @@ private enum is2DArray(TYPE) = isActualArray!TYPE && is1DArray!(ForeachType!TYPE
 private template TypedValueParser(T)
 if(!is(T == void))
 {
-    import std.conv: to;
-
     static if(is(T == enum))
     {
         enum preValidation = ValueInList(getEnumValues!T);
         enum parse = ParseFunc!T((string _) => getEnumValue!T(_));
         enum action = Assign!T;
-
-        enum TypedValueParser = ValueParser!(T, T).init
-            .changePreValidation(preValidation)
-            .changeParse(parse)
-            .changeAction(action);
     }
     else static if(isSomeString!T || isNumeric!T)
     {
         enum parse = Convert!T;
         enum action = Assign!T;
-
-        enum TypedValueParser = ValueParser!(T, T).init
-            .changeParse(parse)
-            .changeAction(action);
     }
     else static if(isBoolean!T)
     {
@@ -284,25 +273,15 @@ if(!is(T == void))
         });
         enum action = Assign!T;
         enum noValueAction = SetValue(true);
-
-        enum TypedValueParser = ValueParser!(T, T).init
-            .changePreProcess(preProcess)
-            .changePreValidation(preValidation)
-            .changeParse(parse)
-            .changeAction(action)
-            .changeNoValueAction(noValueAction);
     }
     else static if(isSomeChar!T)
     {
         enum parse = ParseFunc!T((string value)
         {
+            import std.conv: to;
             return value.length > 0 ? value[0].to!T : T.init;
         });
         enum action = Assign!T;
-
-        enum TypedValueParser = ValueParser!(T, T).init
-            .changeParse(parse)
-            .changeAction(action);
     }
     else static if(isActualArray!T)
     {
@@ -333,6 +312,8 @@ if(!is(T == void))
 
         static if(is1DArray!T)
         {
+            enum parse = parseValue!T;
+
             static if(!isStaticArray!T)
                 enum action = Append!T;
             else
@@ -344,30 +325,22 @@ if(!is(T == void))
         {
             alias PARSE_TYPE = ForeachType!T;
 
+            enum parse = parseValue!PARSE_TYPE;
             enum action = Extend!T;
             enum noValueAction = NoValueActionFunc!T((ref T receiver, _) { receiver ~= PARSE_TYPE.init; return Result.Success; });
         }
         else
             static assert(false, "Multi-dimentional arrays are not supported: " ~ T.stringof);
-
-        static if(!is(PARSE_TYPE))
-            alias PARSE_TYPE = T;
-
-        enum parse = parseValue!PARSE_TYPE;
-
-        enum TypedValueParser = ValueParser!(PARSE_TYPE, T).init
-            .changeParse(parse)
-            .changeAction(action)
-            .changeNoValueAction(noValueAction);
     }
     else static if(isAssociativeArray!T)
     {
-        import std.array: split;
-        import std.string : indexOf;
+        alias PARSE_TYPE = string[];
 
         enum parse = ParseFunc!(string[])((string[] _) => _);
         enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
         {
+            import std.array: split;
+            import std.string : indexOf;
             alias K = KeyType!T;
             alias V = ValueType!T;
 
@@ -393,14 +366,11 @@ if(!is(T == void))
             return Result.Success;
         });
         enum noValueAction = NoValueActionFunc!T((ref _1, _2) => Result.Success);
-
-        enum TypedValueParser = ValueParser!(string[], T).init
-            .changeParse(parse)
-            .changeAction(action)
-            .changeNoValueAction(noValueAction);
     }
     else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
     {
+        alias PARSE_TYPE = string[];
+
         enum parse = ParseFunc!(string[])((string[] _) => _);
         enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
         {
@@ -477,19 +447,43 @@ if(!is(T == void))
             return Result.Success;
         });
         enum noValueAction = CallFunctionNoParam!T;
-
-        enum TypedValueParser = ValueParser!(string[], T).init
-            .changeParse(parse)
-            .changeAction(action)
-            .changeNoValueAction(noValueAction);
     }
     else
     {
         enum action = Assign!T;
-
-        enum TypedValueParser = ValueParser!(T, T).init
-            .changeAction(action);
     }
+
+    // Default PARSE_TYPE to T when not explicitly set by a branch
+    static if(!is(PARSE_TYPE))
+        alias PARSE_TYPE = T;
+
+    // Build the final TypedValueParser by conditionally applying each pipeline stage
+    enum _vp0 = ValueParser!(PARSE_TYPE, T).init;
+
+    static if(is(typeof(preProcess)))
+        enum _vp1 = _vp0.changePreProcess(preProcess);
+    else
+        alias _vp1 = _vp0;
+
+    static if(is(typeof(preValidation)))
+        enum _vp2 = _vp1.changePreValidation(preValidation);
+    else
+        alias _vp2 = _vp1;
+
+    static if(is(typeof(parse)))
+        enum _vp3 = _vp2.changeParse(parse);
+    else
+        alias _vp3 = _vp2;
+
+    static if(is(typeof(action)))
+        enum _vp4 = _vp3.changeAction(action);
+    else
+        alias _vp4 = _vp3;
+
+    static if(is(typeof(noValueAction)))
+        enum TypedValueParser = _vp4.changeNoValueAction(noValueAction);
+    else
+        alias TypedValueParser = _vp4;
 }
 
 unittest
