@@ -231,6 +231,8 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private enum isActualArray(TYPE) = isArray!TYPE && !isSomeString!TYPE;
+
 private template TypedValueParser(T)
 if(!is(T == void))
 {
@@ -300,7 +302,7 @@ if(!is(T == void))
             .changeParse(parse)
             .changeAction(action);
     }
-    else static if(isArray!T)
+    else static if(isActualArray!T)
     {
         enum parseValue(TYPE) = ParseFunc!TYPE((ref TYPE receiver, RawParam param)
             {
@@ -329,7 +331,7 @@ if(!is(T == void))
 
         alias TElement = ForeachType!T;
 
-        static if(!isArray!TElement || isSomeString!TElement)  // 1D array
+        static if(!isActualArray!TElement)  // 1D array
         {
             static if(!isStaticArray!T)
                 enum action = Append!T;
@@ -344,7 +346,7 @@ if(!is(T == void))
                 .changeAction(action)
                 .changeNoValueAction(noValueAction);
         }
-        else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
+        else static if(!isActualArray!(ForeachType!TElement))  // 2D array
         {
             enum parse = parseValue!TElement;
             enum action = Extend!T;
