@@ -232,6 +232,8 @@ unittest
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 private enum isActualArray(TYPE) = isArray!TYPE && !isSomeString!TYPE;
+private enum is1DArray(TYPE) = isActualArray!TYPE && !isActualArray!(ForeachType!TYPE);
+private enum is2DArray(TYPE) = isActualArray!TYPE && is1DArray!(ForeachType!TYPE);
 
 private template TypedValueParser(T)
 if(!is(T == void))
@@ -329,36 +331,34 @@ if(!is(T == void))
             });
 
 
-        alias TElement = ForeachType!T;
-
-        static if(!isActualArray!TElement)  // 1D array
+        static if(is1DArray!T)
         {
             static if(!isStaticArray!T)
                 enum action = Append!T;
             else
                 enum action = Assign!T;
 
-            enum parse = parseValue!T;
             enum noValueAction = NoValueActionFunc!T((ref _1, _2) => Result.Success);
-
-            enum TypedValueParser = ValueParser!(T, T).init
-                .changeParse(parse)
-                .changeAction(action)
-                .changeNoValueAction(noValueAction);
         }
-        else static if(!isActualArray!(ForeachType!TElement))  // 2D array
+        else static if(is2DArray!T)
         {
-            enum parse = parseValue!TElement;
-            enum action = Extend!T;
-            enum noValueAction = NoValueActionFunc!T((ref T receiver, _) { receiver ~= TElement.init; return Result.Success; });
+            alias PARSE_TYPE = ForeachType!T;
 
-            enum TypedValueParser = ValueParser!(TElement, T).init
-                .changeParse(parse)
-                .changeAction(action)
-                .changeNoValueAction(noValueAction);
+            enum action = Extend!T;
+            enum noValueAction = NoValueActionFunc!T((ref T receiver, _) { receiver ~= PARSE_TYPE.init; return Result.Success; });
         }
         else
             static assert(false, "Multi-dimentional arrays are not supported: " ~ T.stringof);
+
+        static if(!is(PARSE_TYPE))
+            alias PARSE_TYPE = T;
+
+        enum parse = parseValue!PARSE_TYPE;
+
+        enum TypedValueParser = ValueParser!(PARSE_TYPE, T).init
+            .changeParse(parse)
+            .changeAction(action)
+            .changeNoValueAction(noValueAction);
     }
     else static if(isAssociativeArray!T)
     {
