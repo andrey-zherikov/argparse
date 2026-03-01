@@ -367,85 +367,89 @@ if(!is(T == void))
         });
         enum noValueAction = NoValueActionFunc!T((ref _1, _2) => Result.Success);
     }
-    else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
+    else static if(is(T == function) || is(T == delegate))
     {
         alias PARSE_TYPE = string[];
 
         enum parse = ParseFunc!(string[])((string[] _) => _);
-        enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
+
+        // ... function() / delegate()
+        static if(is(T == R function(), R) || is(T == R delegate(), R) ||
+                  is(T == void function()) || is(T == void delegate()))
         {
-            auto parseInto(DEST)(ref DEST dest)
+            enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
             {
-                return TypedValueParser!DEST.parseParameter(dest, param);
-            }
-
-            // Result function()
-            static if(is(T == Result function()) || is(T == Result delegate()))
-            {
-                return receiver();
-            }
-            // void function()
-            else static if(is(T == void function()) || is(T == void delegate()))
-            {
-                receiver();
-                return Result.Success;
-            }
-            // Result function(string value)
-            else static if(is(T == Result function(string)) || is(T == Result delegate(string)))
-            {
-                foreach(value; param.value)
+                static if(is(R == Result))
+                    return receiver();
+                else
                 {
-                    auto res = receiver(value);
-                    if(!res)
-                        return res;
+                    receiver();
+                    return Result.Success;
                 }
-                return Result.Success;
-            }
-            // void function(string value)
-            else static if(is(T == void function(string)) || is(T == void delegate(string)))
+            });
+        }
+        // ... function(string) / delegate(string)
+        else static if(is(T == R function(string), R) || is(T == R delegate(string), R) ||
+                       is(T == void function(string)) || is(T == void delegate(string)))
+        {
+            enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
             {
-                foreach(value; param.value)
+                static if(is(R == Result))
+                {
+                    foreach(value; param.value)
+                    {
+                        auto res = receiver(value);
+                        if(!res)
+                            return res;
+                    }
+                    return Result.Success;
+                }
+                else
+                {
+                    foreach(value; param.value)
+                        receiver(value);
+                    return Result.Success;
+                }
+            });
+        }
+        // ... function(string[]) / delegate(string[])
+        else static if(is(T == R function(string[]), R) || is(T == R delegate(string[]), R) ||
+                       is(T == void function(string[])) || is(T == void delegate(string[])))
+        {
+            enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
+            {
+                string[] value;
+                Result res = TypedValueParser!(string[]).parseParameter(value, param);
+                if(!res)
+                    return res;
+
+                static if(is(R == Result))
+                    return receiver(value);
+                else
+                {
                     receiver(value);
-
-                return Result.Success;
-            }
-            // Result function(string[] value)
-            else static if(is(T == Result function(string[])) || is(T == Result delegate(string[])))
+                    return Result.Success;
+                }
+            });
+        }
+        // ... function(RawParam) / delegate(RawParam)
+        else static if(is(T == R function(RawParam), R) || is(T == R delegate(RawParam), R) ||
+                       is(T == void function(RawParam)) || is(T == void delegate(RawParam)))
+        {
+            enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
             {
-                string[] value;
-                Result res = TypedValueParser!(string[]).parseParameter(value, param);
-                if(!res)
-                    return res;
+                static if(is(R == Result))
+                    return receiver(param);
+                else
+                {
+                    receiver(param);
+                    return Result.Success;
+                }
+            });
+        }
+        else
+            static assert(false, "Unsupported callback: " ~ T.stringof);
 
-                return receiver(value);
-            }
-            // void function(string[] value)
-            else static if(is(T == void function(string[])) || is(T == void delegate(string[])))
-            {
-                string[] value;
-                Result res = TypedValueParser!(string[]).parseParameter(value, param);
-                if(!res)
-                    return res;
-
-                receiver(value);
-                return Result.Success;
-            }
-            // Result function(RawParam value)
-            else static if(is(T == Result function(RawParam)) || is(T == Result delegate(RawParam)))
-            {
-                return receiver(param);
-            }
-            // void function(RawParam value)
-            else static if(is(T == void function(RawParam)) || is(T == void delegate(RawParam)))
-            {
-                receiver(param);
-                return Result.Success;
-            }
-            else
-                static assert(false, "Unsupported callback: " ~ T.stringof);
-
-            return Result.Success;
-        });
         enum noValueAction = CallFunctionNoParam!T;
     }
     else
