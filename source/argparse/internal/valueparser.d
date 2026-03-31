@@ -231,60 +231,59 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private enum isActualArray(TYPE) = isArray!TYPE && !isSomeString!TYPE;
+private enum is1DArray(TYPE) = isActualArray!TYPE && !isActualArray!(ForeachType!TYPE);
+private enum is2DArray(TYPE) = isActualArray!TYPE && is1DArray!(ForeachType!TYPE);
+
 private template TypedValueParser(T)
 if(!is(T == void))
 {
-    import std.conv: to;
-
     static if(is(T == enum))
     {
-        enum TypedValueParser = ValueParser!(T, T).init
-            .changePreValidation(ValueInList(getEnumValues!T))
-            .changeParse(ParseFunc!T((string _) => getEnumValue!T(_)))
-            .changeAction(Assign!T);
+        enum preValidation = ValueInList(getEnumValues!T);
+        enum parse = ParseFunc!T((string _) => getEnumValue!T(_));
+        enum action = Assign!T;
     }
     else static if(isSomeString!T || isNumeric!T)
     {
-        enum TypedValueParser = ValueParser!(T, T).init
-            .changeParse(Convert!T)
-            .changeAction(Assign!T);
+        enum parse = Convert!T;
+        enum action = Assign!T;
     }
     else static if(isBoolean!T)
     {
-        enum TypedValueParser = ValueParser!(T, T).init
-            .changePreProcess((ref RawParam param)
-            {
-                import std.algorithm.iteration: map;
-                import std.array: array;
-                import std.ascii: toLower;
-                import std.string: representation;
+        enum preProcess = function(ref RawParam param)
+        {
+            import std.algorithm.iteration: map;
+            import std.array: array;
+            import std.ascii: toLower;
+            import std.string: representation;
 
-                // convert values to lower case and replace "" with "y"
-                foreach(ref value; param.value)
-                    value = value.length == 0 ? "y" : value.representation.map!(_ => immutable char(_.toLower)).array;
-            })
-            .changePreValidation(ValueInList("true","yes","y","false","no","n"))
-            .changeParse(ParseFunc!T((string value)
+            // convert values to lower case and replace "" with "y"
+            foreach(ref value; param.value)
+                value = value.length == 0 ? "y" : value.representation.map!(_ => immutable char(_.toLower)).array;
+        };
+        enum preValidation = ValueInList("true","yes","y","false","no","n");
+        enum parse = ParseFunc!T((string value)
+        {
+            switch(value)
             {
-                switch(value)
-                {
-                    case "true", "yes", "y": return true;
-                    default:                 return false;
-                }
-            }))
-            .changeAction(Assign!T)
-            .changeNoValueAction(SetValue(true));
+                case "true", "yes", "y": return true;
+                default:                 return false;
+            }
+        });
+        enum action = Assign!T;
+        enum noValueAction = SetValue(true);
     }
     else static if(isSomeChar!T)
     {
-        enum TypedValueParser = ValueParser!(T, T).init
-            .changeParse(ParseFunc!T((string value)
-            {
-                return value.length > 0 ? value[0].to!T : T.init;
-            }))
-            .changeAction(Assign!T);
+        enum parse = ParseFunc!T((string value)
+        {
+            import std.conv: to;
+            return value.length > 0 ? value[0].to!T : T.init;
+        });
+        enum action = Assign!T;
     }
-    else static if(isArray!T)
+    else static if(isActualArray!T)
     {
         enum parseValue(TYPE) = ParseFunc!TYPE((ref TYPE receiver, RawParam param)
             {
@@ -311,89 +310,91 @@ if(!is(T == void))
             });
 
 
-        alias TElement = ForeachType!T;
-
-        static if(!isArray!TElement || isSomeString!TElement)  // 1D array
+        static if(is1DArray!T)
         {
+            enum parse = parseValue!T;
+
             static if(!isStaticArray!T)
                 enum action = Append!T;
             else
                 enum action = Assign!T;
 
-            enum TypedValueParser = ValueParser!(T, T).init
-                .changeParse(parseValue!T)
-                .changeAction(action)
-                .changeNoValueAction(NoValueActionFunc!T((ref _1, _2) => Result.Success));
+            enum noValueAction = NoValueActionFunc!T((ref _1, _2) => Result.Success);
         }
-        else static if(!isArray!(ForeachType!TElement) || isSomeString!(ForeachType!TElement))  // 2D array
+        else static if(is2DArray!T)
         {
-            enum TypedValueParser = ValueParser!(TElement, T).init
-                .changeParse(parseValue!TElement)
-                .changeAction(Extend!T)
-                .changeNoValueAction(NoValueActionFunc!T((ref T receiver, _) { receiver ~= TElement.init; return Result.Success; }));
+            alias PARSE_TYPE = ForeachType!T;
+
+            enum parse = parseValue!PARSE_TYPE;
+            enum action = Extend!T;
+            enum noValueAction = NoValueActionFunc!T((ref T receiver, _) { receiver ~= PARSE_TYPE.init; return Result.Success; });
         }
         else
             static assert(false, "Multi-dimentional arrays are not supported: " ~ T.stringof);
     }
     else static if(isAssociativeArray!T)
     {
-        import std.array: split;
-        import std.string : indexOf;
+        alias PARSE_TYPE = string[];
 
-        enum TypedValueParser = ValueParser!(string[], T).init
-            .changeParse(ParseFunc!(string[])((string[] _) => _))
-            .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
-            {
-                alias K = KeyType!T;
-                alias V = ValueType!T;
+        enum parse = ParseFunc!(string[])((string[] _) => _);
+        enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
+        {
+            import std.array: split;
+            import std.string : indexOf;
+            alias K = KeyType!T;
+            alias V = ValueType!T;
 
-                foreach(paramValue; param.value)
-                    foreach(input; paramValue.split(param.config.valueSep))
-                    {
-                        auto j = indexOf(input, param.config.assignKeyValueChar);
-                        if(j < 0)
-                            return invalidValueError(param);
+            foreach(paramValue; param.value)
+                foreach(input; paramValue.split(param.config.valueSep))
+                {
+                    auto j = indexOf(input, param.config.assignKeyValueChar);
+                    if(j < 0)
+                        return invalidValueError(param);
 
-                        K key;
-                        Result res = TypedValueParser!K.parseParameter(key, RawParam(param.config, param.name, [input[0 .. j]]));
-                        if(!res)
-                            return res;
+                    K key;
+                    Result res = TypedValueParser!K.parseParameter(key, RawParam(param.config, param.name, [input[0 .. j]]));
+                    if(!res)
+                        return res;
 
-                        V value;
-                        res = TypedValueParser!V.parseParameter(value, RawParam(param.config, param.name, [input[j + 1 .. $]]));
-                        if(!res)
-                            return res;
+                    V value;
+                    res = TypedValueParser!V.parseParameter(value, RawParam(param.config, param.name, [input[j + 1 .. $]]));
+                    if(!res)
+                        return res;
 
-                        receiver[key] = value;
-                    }
-                return Result.Success;
-            }))
-            .changeNoValueAction(NoValueActionFunc!T((ref _1, _2) => Result.Success));
+                    receiver[key] = value;
+                }
+            return Result.Success;
+        });
+        enum noValueAction = NoValueActionFunc!T((ref _1, _2) => Result.Success);
     }
-    else static if(is(T == function) || is(T == delegate) || is(typeof(*T) == function) || is(typeof(*T) == delegate))
+    else static if(is(T == function) || is(T == delegate))
     {
-        enum TypedValueParser = ValueParser!(string[], T).init
-            .changeParse(ParseFunc!(string[])((string[] _) => _))
-            .changeAction(ActionFunc!(T,string[])((ref T receiver, RawParam param)
-            {
-                auto parseInto(DEST)(ref DEST dest)
-                {
-                    return TypedValueParser!DEST.parseParameter(dest, param);
-                }
+        alias PARSE_TYPE = string[];
 
-                // Result function()
-                static if(is(T == Result function()) || is(T == Result delegate()))
-                {
+        enum parse = ParseFunc!(string[])((string[] _) => _);
+
+        // ... function() / delegate()
+        static if(is(T == R function(), R) || is(T == R delegate(), R) ||
+                  is(T == void function()) || is(T == void delegate()))
+        {
+            enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
+            {
+                static if(is(R == Result))
                     return receiver();
-                }
-                // void function()
-                else static if(is(T == void function()) || is(T == void delegate()))
+                else
                 {
                     receiver();
                     return Result.Success;
                 }
-                // Result function(string value)
-                else static if(is(T == Result function(string)) || is(T == Result delegate(string)))
+            });
+        }
+        // ... function(string) / delegate(string)
+        else static if(is(T == R function(string), R) || is(T == R delegate(string), R) ||
+                       is(T == void function(string)) || is(T == void delegate(string)))
+        {
+            enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
+            {
+                static if(is(R == Result))
                 {
                     foreach(value; param.value)
                     {
@@ -403,58 +404,90 @@ if(!is(T == void))
                     }
                     return Result.Success;
                 }
-                // void function(string value)
-                else static if(is(T == void function(string)) || is(T == void delegate(string)))
+                else
                 {
                     foreach(value; param.value)
                         receiver(value);
-
                     return Result.Success;
                 }
-                // Result function(string[] value)
-                else static if(is(T == Result function(string[])) || is(T == Result delegate(string[])))
-                {
-                    string[] value;
-                    Result res = TypedValueParser!(string[]).parseParameter(value, param);
-                    if(!res)
-                        return res;
+            });
+        }
+        // ... function(string[]) / delegate(string[])
+        else static if(is(T == R function(string[]), R) || is(T == R delegate(string[]), R) ||
+                       is(T == void function(string[])) || is(T == void delegate(string[])))
+        {
+            enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
+            {
+                string[] value;
+                Result res = TypedValueParser!(string[]).parseParameter(value, param);
+                if(!res)
+                    return res;
 
+                static if(is(R == Result))
                     return receiver(value);
-                }
-                // void function(string[] value)
-                else static if(is(T == void function(string[])) || is(T == void delegate(string[])))
+                else
                 {
-                    string[] value;
-                    Result res = TypedValueParser!(string[]).parseParameter(value, param);
-                    if(!res)
-                        return res;
-
                     receiver(value);
                     return Result.Success;
                 }
-                // Result function(RawParam value)
-                else static if(is(T == Result function(RawParam)) || is(T == Result delegate(RawParam)))
-                {
+            });
+        }
+        // ... function(RawParam) / delegate(RawParam)
+        else static if(is(T == R function(RawParam), R) || is(T == R delegate(RawParam), R) ||
+                       is(T == void function(RawParam)) || is(T == void delegate(RawParam)))
+        {
+            enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
+            {
+                static if(is(R == Result))
                     return receiver(param);
-                }
-                // void function(RawParam value)
-                else static if(is(T == void function(RawParam)) || is(T == void delegate(RawParam)))
+                else
                 {
                     receiver(param);
                     return Result.Success;
                 }
-                else
-                    static assert(false, "Unsupported callback: " ~ T.stringof);
+            });
+        }
+        else
+            static assert(false, "Unsupported callback: " ~ T.stringof);
 
-                return Result.Success;
-            }))
-            .changeNoValueAction(CallFunctionNoParam!T);
+        enum noValueAction = CallFunctionNoParam!T;
     }
     else
     {
-        enum TypedValueParser = ValueParser!(T, T).init
-            .changeAction(Assign!T);
+        enum action = Assign!T;
     }
+
+    // Default PARSE_TYPE to T when not explicitly set by a branch
+    static if(!is(PARSE_TYPE))
+        alias PARSE_TYPE = T;
+
+    // Build the final TypedValueParser by conditionally applying each pipeline stage
+    enum _vp0 = ValueParser!(PARSE_TYPE, T).init;
+
+    static if(is(typeof(preProcess)))
+        enum _vp1 = _vp0.changePreProcess(preProcess);
+    else
+        alias _vp1 = _vp0;
+
+    static if(is(typeof(preValidation)))
+        enum _vp2 = _vp1.changePreValidation(preValidation);
+    else
+        alias _vp2 = _vp1;
+
+    static if(is(typeof(parse)))
+        enum _vp3 = _vp2.changeParse(parse);
+    else
+        alias _vp3 = _vp2;
+
+    static if(is(typeof(action)))
+        enum _vp4 = _vp3.changeAction(action);
+    else
+        alias _vp4 = _vp3;
+
+    static if(is(typeof(noValueAction)))
+        enum TypedValueParser = _vp4.changeNoValueAction(noValueAction);
+    else
+        alias TypedValueParser = _vp4;
 }
 
 unittest
