@@ -12,8 +12,11 @@ struct Example
         // '--number' argument
         int number;
 
-        // '--boolean' argument
+        // '--boolean' argument (boolean flag)
         bool boolean;
+
+        // '--boolean2' argument (boolean flag as function)
+        void boolean2(bool value) {}
 
         // Argument can have default value if it's not specified in command line
         // '--unused' argument

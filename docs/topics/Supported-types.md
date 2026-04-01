@@ -27,6 +27,8 @@ negation (i.e., `--no-flag`):
 | `true`,`yes`,`y` | true   |
 | `false`,`no`,`n` | false  |
 
+Data types that are considered as boolean flags are regular `bool` and a function accepting boolean parameter `... flag(bool)`.
+
 ## Numbers and strings
 
 Numeric (according to `std.traits.isNumeric`) and string (according to `std.traits.isSomeString`) data types are

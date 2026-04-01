@@ -1,5 +1,6 @@
 module argparse.internal.arguments;
 
+import argparse.internal.booleanhelpers;
 import argparse.internal.lazystring;
 
 import argparse.config;
@@ -129,9 +130,8 @@ package ArgumentInfo finalize(MEMBERTYPE)(ArgumentInfo info, const Config config
     import std.array: array;
     import std.conv: text;
     import std.range: chain;
-    import std.traits: isBoolean;
 
-    info.isBooleanFlag = isBoolean!MEMBERTYPE;
+    info.isBooleanFlag = isBooleanFlag!MEMBERTYPE;
 
     if(info.namesToSplit.length > 0)
     {
@@ -230,21 +230,25 @@ unittest
         return info;
     }
 
-    auto res = createInfo().finalize!bool(Config.init, "default_name");
-    assert(res.isBooleanFlag);
-    assert(res.shortNames == []);
-    assert(res.longNames == ["default_name"]);
-    assert(res.displayNames == ["--default_name"]);
-    assert(res.placeholder == "DEFAULT_NAME");
+    import std.meta;
+    static foreach (T; AliasSeq!(bool, void function(bool), void delegate(bool), Result function(bool), Result delegate(bool)))
+    {{
+        auto res = createInfo().finalize!T(Config.init, "default_name");
+        assert(res.isBooleanFlag);
+        assert(res.shortNames == []);
+        assert(res.longNames == ["default_name"]);
+        assert(res.displayNames == ["--default_name"]);
+        assert(res.placeholder == "DEFAULT_NAME");
 
-    res = createInfo().finalize!bool(Config.init, "b");
-    assert(res.isBooleanFlag);
-    assert(res.shortNames == ["b"]);
-    assert(res.longNames == []);
-    assert(res.displayNames == ["-b"]);
-    assert(res.placeholder == "B");
+        res = createInfo().finalize!T(Config.init, "b");
+        assert(res.isBooleanFlag);
+        assert(res.shortNames == ["b"]);
+        assert(res.longNames == []);
+        assert(res.displayNames == ["-b"]);
+        assert(res.placeholder == "B");
+    }}
 
-    res = createInfo("myvalue").finalize!bool(Config.init, "default_name");
+    auto res = createInfo("myvalue").finalize!bool(Config.init, "default_name");
     assert(res.placeholder == "myvalue");
     assert(res.displayNames == ["--default_name"]);
 }
