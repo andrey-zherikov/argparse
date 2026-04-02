@@ -686,3 +686,11 @@ unittest
     assert(testErr!(int[int])(["123=1","unknown=2"]).isError());
     assert(testErr!(int[int])(["123=1","2=unknown"]).isError());
 }
+
+unittest
+{
+    auto failure = function(bool) {};
+
+    Config config;
+    assert(TypedValueParser!(typeof(failure)).parseParameter(failure, RawParam(&config, "", [])).isError());
+}
