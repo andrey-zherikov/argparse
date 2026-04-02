@@ -388,6 +388,25 @@ if(!is(T == void))
                 }
             });
         }
+        // ... function(bool) / delegate(bool)
+        else static if(is(T == R function(bool), R) || is(T == R delegate(bool), R))
+        {
+            enum action = ActionFunc!(T,string[])((ref T receiver, RawParam param)
+            {
+                bool value;
+                Result res = TypedValueParser!bool.parseParameter(value, param);
+                if(!res)
+                    return res;
+
+                static if(is(R == Result))
+                    return receiver(value);
+                else
+                {
+                    receiver(value);
+                    return Result.Success;
+                }
+            });
+        }
         // ... function(string) / delegate(string)
         else static if(is(T == R function(string), R) || is(T == R delegate(string), R) ||
                        is(T == void function(string)) || is(T == void delegate(string)))
@@ -666,4 +685,12 @@ unittest
     assert(testErr!(int[int])(["123=1","unknown"]).isError("Invalid value","unknown"));
     assert(testErr!(int[int])(["123=1","unknown=2"]).isError());
     assert(testErr!(int[int])(["123=1","2=unknown"]).isError());
+}
+
+unittest
+{
+    auto failure = function(bool) {};
+
+    Config config;
+    assert(TypedValueParser!(typeof(failure)).parseParameter(failure, RawParam(&config, "", [])).isError());
 }

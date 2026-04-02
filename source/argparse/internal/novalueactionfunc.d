@@ -95,29 +95,43 @@ package enum CallFunctionNoParam(FUNC) = NoValueActionFunc!FUNC
     ((ref FUNC func, Param!void param)
     {
         // ... func()
-        static if(__traits(compiles, { func(); }))
+        static if(is(FUNC == R function(), R) || is(FUNC == R delegate(), R))
         {
-            func();
+            static if(is(R == Result))
+                return func();
+            else
+                func();
         }
-        // ... func(string value)
-        else static if(__traits(compiles, { func(string.init); }))
+        else static if(is(FUNC == R function(bool), R) || is(FUNC == R delegate(bool), R))
         {
-            func(string.init);
-        }
-        // ... func(string[] value)
-        else static if(__traits(compiles, { func([]); }))
-        {
-            func([]);
+            static if(is(R == Result))
+                return func(true);
+            else
+                func(true);
         }
         // ... func(Param!void param)
-        else static if(__traits(compiles, { func(param); }))
+        else static if(is(FUNC == R function(Param!void), R) || is(FUNC == R delegate(Param!void), R))
         {
-            func(param);
+            static if(is(R == Result))
+                return func(param);
+            else
+                func(param);
         }
         // ... func(RawParam param)
-        else static if(__traits(compiles, { func(RawParam.init); }))
+        else static if(is(FUNC == R function(RawParam), R) || is(FUNC == R delegate(RawParam), R))
         {
-            func(RawParam(param.config, param.name));
+            static if(is(R == Result))
+                return func(RawParam(param.config, param.name));
+            else
+                func(RawParam(param.config, param.name));
+        }
+        // ... func(T value)
+        else static if(is(FUNC == R function(T), R, T) || is(FUNC == R delegate(T), R, T))
+        {
+            static if(is(R == Result))
+                return func(T.init);
+            else
+                func(T.init);
         }
         else
             static assert(false, "Unsupported callback: " ~ FUNC.stringof);

@@ -632,6 +632,34 @@ unittest
 
 unittest
 {
+    static struct T
+    {
+        @NamedArgument("f", "foo")
+        bool f;
+
+        @NamedArgument("b", "bar")
+        void b(bool val) { b_val = val; b_used = true; }
+        bool b_val;
+        bool b_used;
+    }
+
+    auto test(string[] args)
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, args));
+        return t;
+    }
+
+    assert(test(["-f"])       == T(true));
+    assert(test(["--foo"])    == T(true));
+    assert(test(["--no-foo"]) == T(false));
+    assert(test(["-b"])       == T(false, true, true));
+    assert(test(["--bar"])    == T(false, true, true));
+    assert(test(["--no-bar"]) == T(false, false, true));
+}
+
+unittest
+{
     struct Value { string a; }
     struct T
     {
@@ -965,6 +993,9 @@ unittest
     {
         @NamedArgument("f","foo")
         bool foo;
+
+        @NamedArgument("b","bar")
+        void bar(bool value) {}
     }
 
     import std.array: appender;
@@ -977,9 +1008,10 @@ unittest
             auto output = appender!string;
             hp.printHelp(_ => output.put(_), stack);
 
-            assert(output[]  == "Usage: MYPROG [-f] [-h]\n\n"~
+            assert(output[]  == "Usage: MYPROG [-f] [-b] [-h]\n\n"~
             "Optional arguments:\n"~
             "  -f, --[no-]foo\n"~
+            "  -b, --[no-]bar\n"~
             "  -h, --help        Show this help message and exit\n\n");
         }
     };

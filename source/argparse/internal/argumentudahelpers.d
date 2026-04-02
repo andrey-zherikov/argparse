@@ -3,6 +3,8 @@ module argparse.internal.argumentudahelpers;
 import argparse.api.argument: NamedArgument, PositionalArgument;
 import argparse.config;
 import argparse.internal.argumentuda: ArgumentUDA;
+import argparse.internal.arguments: finalize;
+import argparse.internal.booleanhelpers;
 import argparse.param;
 
 
@@ -20,12 +22,7 @@ private template defaultValuesCount(T)
 {
     import std.traits;
 
-    static if(isBoolean!T ||
-              // ... function()
-              is(T == R function(), R) ||
-              is(T == R delegate(), R) ||
-              is(T == void function()) ||
-              is(T == void delegate()))
+    static if(isBooleanFlag!T)
     {
         enum min = 0;
         enum max = 0;
@@ -77,6 +74,7 @@ unittest
         int[]       da;
         int[string] aa;
         void f();
+        void fb(bool);
         void fs(string);
         void fa(string[]);
         void fp(RawParam);
@@ -97,6 +95,7 @@ unittest
     test!(typeof(T.da))(1, size_t.max);
     test!(typeof(T.aa))(1, size_t.max);
     test!(typeof(&T.f))(0, 0);
+    test!(typeof(&T.fb))(0, 0);
     test!(typeof(&T.fs))(1, 1);
     test!(typeof(&T.fa))(1, size_t.max);
     test!(typeof(&T.fp))(1, size_t.max);
@@ -110,7 +109,6 @@ unittest
 
 package auto getMemberArgumentUDA(TYPE, string symbol)(const Config config)
 {
-    import argparse.internal.arguments: finalize;
     import std.meta: AliasSeq, Filter;
 
     alias member = __traits(getMember, TYPE, symbol);
