@@ -244,17 +244,17 @@ public class HelpPrinter
 
     HelpScreen createHelpScreen(CommandHelpInfo[] commands)
     {
-        auto ref currentCmd = commands[$-1];
+        CommandHelpInfo* currentCmd = &commands[$-1];
 
         auto cmdFullName = commands.map!((ref _) => _.name).array;
 
-        auto helpScreen = HelpScreen(formatCommandUsage(cmdFullName, currentCmd),
-                                     currentCmd.description,
-                                     currentCmd.epilog);
+        auto helpScreen = HelpScreen(formatCommandUsage(cmdFullName, *currentCmd),
+                                     (*currentCmd).description,
+                                     (*currentCmd).epilog);
 
         // sub commands go first
-        if(currentCmd.subCommands.length > 0)
-            helpScreen.groups ~= createSubCommandGroup(currentCmd);
+        if((*currentCmd).subCommands.length > 0)
+            helpScreen.groups ~= createSubCommandGroup(*currentCmd);
 
         // then arguments
         helpScreen.groups ~= createArgumentsGroups(commands);
