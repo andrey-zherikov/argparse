@@ -15,6 +15,8 @@ package(argparse) struct CommandInfo
     LazyString shortDescription;
     LazyString epilog;
     bool isDefaultSubCommand = false;
+
+    string displayName() const { return displayNames.length > 0 ? displayNames[0] : ""; }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -190,11 +190,11 @@ package struct Command
     }
 
 
-    Restrictions restrictions;
+    private Restrictions argRestrictions;
 
     CommandInfo info;
 
-    string displayName() const { return info.displayNames.length > 0 ? info.displayNames[0] : ""; }
+    string displayName() const { return info.displayName; }
 
     SubCommands subCommands;
     Command delegate() [] subCommandCreate;
@@ -223,7 +223,7 @@ package struct Command
                 }
             }
         }
-        return restrictions.check(idxParsedArgs);
+        return argRestrictions.check(idxParsedArgs);
     }
 
 
@@ -285,7 +285,7 @@ package(argparse) template BasicCommand(Config config, COMMAND_TYPE)
 
         res.info = info;
         res.arguments.add!(COMMAND_TYPE, [argumentInfos]);
-        res.restrictions.add!(COMMAND_TYPE, [argumentInfos])(config);
+        res.argRestrictions.add!(COMMAND_TYPE, [argumentInfos])(config);
 
         static if(is(typeof(typeTraits.subCommands)))
             res.subCommands.add([typeTraits.subCommands]);
