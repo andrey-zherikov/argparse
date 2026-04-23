@@ -191,6 +191,7 @@ package struct Command
 
 
     private Restrictions argRestrictions;
+    private Result delegate()[] cmdRestrictions;
 
     CommandInfo info;
 
@@ -208,6 +209,13 @@ package struct Command
 
     Result finalize(const Config config, Command[] stack)
     {
+        foreach(fn; cmdRestrictions)
+        {
+            auto res = fn();
+            if(!res)
+                return res;
+        }
+
         // https://github.com/andrey-zherikov/argparse/issues/231
         foreach (idx, argInfo; this.arguments.info) {
             // if argument was not provided in command line and has environment variable fallback
@@ -306,10 +314,6 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, PARENT_COMM
 
     Command res = BasicCommand!(config, COMMAND_TYPE).get(info);
 
-    //res.info = info;
-    //res.arguments.add!(COMMAND_TYPE, [argumentInfos]);
-    //res.restrictions.add!(COMMAND_TYPE, [argumentInfos])(config);
-
     enum getArgumentParsingFunction(alias uda) =
          (const Command[] cmdStack, ref RawParam param) => ArgumentParsingFunction!uda(cmdStack, receiver, param);
 
@@ -335,10 +339,17 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, PARENT_COMM
             );
 
         res.subCommandCreate = [staticMap!(createFunc, typeTraits.subCommands)];
-        //res.subCommands.add([typeTraits.subCommands]);
 
         static if(is(typeof(typeTraits.defaultSubCommand)))
             res.defaultSubCommand = createFunc!(typeTraits.defaultSubCommand);
+
+        static if(typeTraits.subCommandRequired)
+            res.cmdRestrictions ~= () {
+                return (__traits(getMember, receiver, typeTraits.subCommandSymbol).isSet) ?
+                    Result.Success :
+                    Result.Error(config.errorExitCode, "Subcommand is required: ",
+                        [typeTraits.subCommands].map!((ref _) => config.styling.subcommandName(_.displayName)).join(", "));
+            };
     }
 
     return res;

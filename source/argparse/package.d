@@ -19,6 +19,15 @@ public import argparse.result;
 public import argparse.style;
 
 
+//auto ref Optional(T)(T uda)
+//{
+//    return argparse.api.argument.Optional(uda);
+//}
+//auto ref Optional()
+//{
+//    return argparse.api.subcommand.Optional();
+//}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 version(unittest)
@@ -310,6 +319,47 @@ unittest
         T t;
         assert(CLI!T.parseArgs(t, ["cmd2"]));
         assert(t == T(typeof(T.cmd)(T.cmd2.init)));
+    }
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, []).isError("Subcommand is required","cmd1","cmd2"));
+        assert(!t.cmd.isSet);
+    }
+}
+
+unittest
+{
+    struct T
+    {
+        struct cmd1 {}
+        struct cmd2 {}
+
+        @Optional()
+        SubCommand!(cmd1, cmd2) cmd;
+    }
+
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, []));
+        assert(!t.cmd.isSet);
+    }
+}
+
+unittest
+{
+    struct T
+    {
+        struct cmd1 {}
+        struct cmd2 {}
+
+        @Optional()
+        SubCommand!(cmd1, cmd2) cmd;
+    }
+
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, []));
+        assert(!t.cmd.isSet);
     }
 }
 

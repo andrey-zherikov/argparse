@@ -1,6 +1,7 @@
 module argparse.internal.typetraits;
 
 import argparse.config;
+import argparse.api.argument: Optional;
 import argparse.api.subcommand: isSubCommand;
 import argparse.internal.arguments: finalize;
 import argparse.internal.argumentuda: ArgumentUDA;
@@ -11,6 +12,8 @@ import std.meta;
 import std.string: startsWith;
 import std.traits;
 
+private enum isOptional(alias _ : Optional) = true;
+private enum isOptional(alias uda) = is(typeof(uda) == typeof(Optional())) && uda == Optional();
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -142,6 +145,8 @@ private template SubCommands(Config config, TYPE)
 
         private alias memberType = typeof(__traits(getMember, TYPE, symbol));
 
+        private enum required = Filter!(isOptional, __traits(getAttributes, __traits(getMember, TYPE, symbol))).length == 0;
+        
         private enum getCommandInfo(alias CMD) = .getSubCommandInfo!CMD(config, is(memberType.DefaultCommand == CMD));
         private enum commands = staticMap!(getCommandInfo, memberType.Types);
 
@@ -179,6 +184,7 @@ package(argparse) template TypeTraits(Config config, TYPE)
     {
         alias subCommandSymbol = SC.symbol;
         alias subCommands = SC.commands;
+        alias subCommandRequired = SC.required;
 
         static if(SC.defaultSubCommands.length > 0)
         {

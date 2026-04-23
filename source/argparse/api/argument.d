@@ -40,6 +40,12 @@ auto ref Optional(T)(auto ref ArgumentUDA!T uda)
     return uda;
 }
 
+auto ref Optional()  /// This one is for subcommands, it has to be here to mitigate D's case to not resolve same symbol 
+{
+    struct Impl {}
+    return Impl.init;
+}
+
 auto ref Hidden(T)(auto ref ArgumentUDA!T uda, bool hide = true)
 {
     uda.info.hidden = hide;

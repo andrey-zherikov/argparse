@@ -31,6 +31,14 @@ a subcommand:
 
 <code-block src="code_snippets/subcommands_names.d" lang="c++"/>
 
+## Optional subcommand
+
+By default, subcommand is required in command line unless default subcommand is declared with `Default!T` (see [below](#default-subcommand)).
+
+To make a subcommand optional, one can add `@Optional` UDA to the subcommand member:
+
+<code-block src="code_snippets/subcommands_optional.d" lang="c++"/>
+
 ## Default subcommand
 
 Default subcommand is one that is selected when user does not specify any subcommand in the command line.
