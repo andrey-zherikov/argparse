@@ -12,6 +12,17 @@ package(argparse) Result parseArgs(Config config, COMMAND)(ref COMMAND receiver,
 {
     auto cmdStack = createCommandStack!config(receiver);
 
+    // This is the only place where the failing result and the command stack that produced it are both
+    // alive, so it is where the help information for the active command is attached to the result.
+    // It is a no-op when Config.helpOnError is `none`.
+    Result attachHelpInfo(Result res)
+    {
+        static if(config.helpOnError != Config.HelpOnError.none)
+            res.cmdHelpInfo = cmdStack.helpInfo();
+
+        return res;
+    }
+
     foreach(entry; Tokenizer(config, args, &cmdStack))
     {
         import std.sumtype : match;
@@ -22,10 +33,10 @@ package(argparse) Result parseArgs(Config config, COMMAND)(ref COMMAND receiver,
                 (ref Unknown u) { unrecognizedArgs ~= u.value; return Result.Success; }
             );
         if (!res)
-            return res;
+            return attachHelpInfo(res);
     }
 
-    return cmdStack.finalize(config);
+    return attachHelpInfo(cmdStack.finalize(config));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

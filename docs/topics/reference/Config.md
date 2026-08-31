@@ -126,6 +126,36 @@ Help text from the first part of the example code above:
 <img src="config_help.png" alt="Config help example" border-effect="rounded"/>
 
 
+## Help on error {id="helpOnError"}
+
+`Config.helpOnError` controls what is printed to `stderr` in front of the error message when command line parsing
+failed. It has the following type: `enum HelpOnError { none, usage, full }`:
+- `Config.HelpOnError.none`: **nothing** is printed, only the error message itself.
+- `Config.HelpOnError.usage`: the **usage line** is printed:
+
+  ```
+  Usage: prog sub [--req REQ] [-h]
+  Error: The following argument is required: '--req'
+  ```
+
+- `Config.HelpOnError.full`: the **whole help screen** is printed, the same one that `-h`/`--help` prints.
+
+Whatever is printed belongs to the command that was being parsed when the error happened, so an error in a
+[subcommand](Subcommands.md) refers to that subcommand rather than to the top level command.
+
+[`Config.helpPrinter`](#helpPrinter) is used for `Config.HelpOnError.full` only, since that is the setting that
+customizes the help screen. There is no such hook for the usage line.
+
+Note that this setting is independent from [`Config.errorHandler`](#errorHandler): the latter receives the error
+message only, so providing a custom error handler does not suppress the usage line or the help screen.
+
+Default is `Config.HelpOnError.none`.
+
+Example:
+
+<code-block src="code_snippets/config_helpOnError.d" lang="c++"/>
+
+
 ## Styling mode {id="stylingMode"}
 
 `Config.stylingMode` controls whether styling for help text and errors should be enabled.

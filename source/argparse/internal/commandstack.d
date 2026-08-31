@@ -1,9 +1,11 @@
 module argparse.internal.commandstack;
 
 import argparse.config;
+import argparse.helpinfo: CommandHelpInfo;
 import argparse.result;
 import argparse.internal.command;
 import argparse.internal.commandinfo: getTopLevelCommandInfo;
+import argparse.internal.helpargument: getProgramName;
 
 import std.range: back, popBack;
 
@@ -42,6 +44,19 @@ package struct CommandStack
         import std.range: join;
 
         return stack.map!((ref _) => _.suggestions(arg)).join.sort.uniq.array;
+    }
+
+    CommandHelpInfo[] helpInfo() const
+    {
+        import std.algorithm: map;
+        import std.array: array;
+
+        auto res = stack.map!((ref _) => _.helpInfo).array;
+
+        if(res[0].name.length == 0)
+            res[0].name = getProgramName(); // set command name to executable name
+
+        return res;
     }
 
     auto finalize(const Config config)

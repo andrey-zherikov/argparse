@@ -1,5 +1,7 @@
 module argparse.result;
 
+import argparse.helpinfo: CommandHelpInfo;
+
 
 struct Result
 {
@@ -47,6 +49,12 @@ struct Result
     private string errorMsg;
 
     package string errorMessage() const { return errorMsg; }
+
+    // Help information for the stack of commands that was active when this result was produced.
+    // It is populated by the parser unless Config.helpOnError is `none`. Successful results
+    // carry it as well, so that errors that are detected after parsing has completed (unrecognized
+    // arguments) can still print the help screen of the command that was actually being parsed.
+    package CommandHelpInfo[] cmdHelpInfo;
 
     version(unittest)
     {
