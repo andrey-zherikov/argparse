@@ -86,6 +86,15 @@ struct Config
     bool addHelpArgument = true;
 
     /**
+       What is printed to stderr in front of the error message when command line parsing failed.
+       Whatever is printed belongs to the command that was being parsed when the error happened, so an
+       error in a subcommand refers to that subcommand rather than to the top level command.
+       Defaults to printing nothing.
+     */
+    enum HelpOnError { none, usage, full }
+    HelpOnError helpOnError = HelpOnError.none;
+
+    /**
        Styling.
      */
     Style styling = Style.Default;
