@@ -108,6 +108,26 @@ Example:
 
 <code-block src="code_snippets/config_bundling.d" lang="c++"/>
 
+## Require subcommand {id="requireSubCommand"}
+
+`Config.requireSubCommand` controls whether a [subcommand](Subcommands.md) is required in the command line.
+If it is set to `true` then parsing fails when a command that has subcommands got none of them in the command line:
+
+```
+Error: Subcommand is required: cmd1, cmd2
+```
+
+The following are not affected by this setting:
+- a command that has a [default subcommand](Subcommands.md#default-subcommand), because such command always has a
+  subcommand chosen;
+- a subcommand member that is marked with [`@Optional`](Subcommands.md#required-subcommand) UDA.
+
+Default is `false`.
+
+Example:
+
+<code-block src="code_snippets/config_requireSubCommand.d" lang="c++"/>
+
 ## Adding help generation {id="addHelpArgument"}
 
 `Config.addHelpArgument` can be used to add (if `true`) or not (if `false`) `-h`/`--help` argument.

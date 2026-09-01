@@ -80,6 +80,15 @@ struct Config
     bool variadicNamedArgument = false;
 
     /**
+       If set then a subcommand is required in the command line: parsing fails with an error if
+       a command that has subcommands got none of them in the command line. A command that has a
+       default subcommand (see `Default`) always has a subcommand so it is not affected, and an
+       individual subcommand member can opt out of the requirement with `@Optional` UDA.
+       Defaults to false.
+     */
+    bool requireSubCommand = false;
+
+    /**
        Add a -h/--help argument to the parser.
        Defaults to true.
      */

@@ -31,6 +31,24 @@ a subcommand:
 
 <code-block src="code_snippets/subcommands_names.d" lang="c++"/>
 
+## Required subcommand
+
+By default, a subcommand can be omitted in the command line. [`Config.requireSubCommand`](Config.md#requireSubCommand)
+can be used to make it required: in that case the parsing fails with an error if a command that has subcommands got
+none of them in the command line:
+
+<code-block src="code_snippets/config_requireSubCommand.d" lang="c++"/>
+
+An individual subcommand member can opt out of this requirement with `@Optional` UDA - such subcommand can always be
+omitted in the command line. Note that a command that has a [default subcommand](#default-subcommand) never needs it
+because such command always has a subcommand chosen.
+
+<code-block src="code_snippets/subcommands_optional.d" lang="c++"/>
+
+> `@Optional` has no effect unless `Config.requireSubCommand` is set.
+>
+{style="note"}
+
 ## Default subcommand
 
 Default subcommand is one that is selected when user does not specify any subcommand in the command line.
