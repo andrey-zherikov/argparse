@@ -12,8 +12,8 @@ struct T
 
 T t;
 
-// parsing fails because subcommand is required
-assert(!CLI!T.parseArgs(t, []));
+assert(CLI!T.parseArgs(t, []));
+assert(t == T.init);
 
 assert(CLI!T.parseArgs(t, ["cmd1"]));
 assert(t == T(typeof(T.cmd)(cmd1.init)));
