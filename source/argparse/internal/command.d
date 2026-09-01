@@ -343,7 +343,8 @@ package(argparse) Command createCommand(Config config, COMMAND_TYPE, PARENT_COMM
         static if(is(typeof(typeTraits.defaultSubCommand)))
             res.defaultSubCommand = createFunc!(typeTraits.defaultSubCommand);
 
-        static if(typeTraits.subCommandRequired)
+        // Config.requireSubCommand turns the requirement on, @Optional on the subcommand member opts out of it
+        static if(config.requireSubCommand && typeTraits.subCommandRequired)
             res.cmdRestrictions ~= () {
                 return (__traits(getMember, receiver, typeTraits.subCommandSymbol).isSet) ?
                     Result.Success :

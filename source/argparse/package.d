@@ -19,15 +19,6 @@ public import argparse.result;
 public import argparse.style;
 
 
-//auto ref Optional(T)(T uda)
-//{
-//    return argparse.api.argument.Optional(uda);
-//}
-//auto ref Optional()
-//{
-//    return argparse.api.subcommand.Optional();
-//}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 version(unittest)
@@ -322,42 +313,6 @@ unittest
     }
     {
         T t;
-        assert(CLI!T.parseArgs(t, []).isError("Subcommand is required","cmd1","cmd2"));
-        assert(!t.cmd.isSet);
-    }
-}
-
-unittest
-{
-    struct T
-    {
-        struct cmd1 {}
-        struct cmd2 {}
-
-        @Optional()
-        SubCommand!(cmd1, cmd2) cmd;
-    }
-
-    {
-        T t;
-        assert(CLI!T.parseArgs(t, []));
-        assert(!t.cmd.isSet);
-    }
-}
-
-unittest
-{
-    struct T
-    {
-        struct cmd1 {}
-        struct cmd2 {}
-
-        @Optional()
-        SubCommand!(cmd1, cmd2) cmd;
-    }
-
-    {
-        T t;
         assert(CLI!T.parseArgs(t, []));
         assert(!t.cmd.isSet);
     }
@@ -408,6 +363,167 @@ unittest
         T t;
         assert(CLI!T.parseArgs(t, ["-c","C","-b","B"]));
         assert(t == T("C",null,typeof(T.cmd)(T.cmd2("B"))));
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    enum Config config = { requireSubCommand: true, styling: Style.None };
+
+    struct T
+    {
+        struct cmd1 { string a; }
+        struct cmd2 { string b; }
+
+        string c;
+
+        SubCommand!(cmd1, cmd2) cmd;
+    }
+
+    // Subcommand is not required by default
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, ["-c","C"]));
+        assert(t == T("C"));
+    }
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, []).isError("Subcommand is required","cmd1","cmd2"));
+        assert(!t.cmd.isSet);
+    }
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, ["-c","C"]).isError("Subcommand is required","cmd1","cmd2"));
+    }
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, ["-c","C","cmd2","-b","B"]));
+        assert(t == T("C",typeof(T.cmd)(T.cmd2("B"))));
+    }
+}
+
+unittest
+{
+    // @Optional opts the subcommand member out of Config.requireSubCommand
+    enum Config config = { requireSubCommand: true, styling: Style.None };
+
+    struct T
+    {
+        struct cmd1 { string a; }
+        struct cmd2 { string b; }
+
+        @Optional
+        SubCommand!(cmd1, cmd2) cmd;
+    }
+
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, []));
+        assert(!t.cmd.isSet);
+    }
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, ["cmd1","-a","A"]));
+        assert(t == T(typeof(T.cmd)(T.cmd1("A"))));
+    }
+    // ... and it is ignored when the requirement is off
+    {
+        T t;
+        assert(CLI!T.parseArgs(t, []));
+        assert(!t.cmd.isSet);
+    }
+}
+
+unittest
+{
+    // @Optional() is accepted as well
+    enum Config config = { requireSubCommand: true, styling: Style.None };
+
+    struct T
+    {
+        struct cmd1 {}
+        struct cmd2 {}
+
+        @Optional()
+        SubCommand!(cmd1, cmd2) cmd;
+    }
+
+    T t;
+    assert(CLI!(config, T).parseArgs(t, []));
+    assert(!t.cmd.isSet);
+}
+
+unittest
+{
+    // Default subcommand satisfies the requirement
+    enum Config config = { requireSubCommand: true, styling: Style.None };
+
+    struct T
+    {
+        struct cmd1 { string a; }
+        struct cmd2 { string b; }
+
+        SubCommand!(cmd1, Default!cmd2) cmd;
+    }
+
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, []));
+        assert(t == T(typeof(T.cmd)(T.cmd2.init)));
+    }
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, ["cmd1","-a","A"]));
+        assert(t == T(typeof(T.cmd)(T.cmd1("A"))));
+    }
+}
+
+unittest
+{
+    // Command without subcommands is not affected
+    enum Config config = { requireSubCommand: true, styling: Style.None };
+
+    struct T { string a; }
+
+    T t;
+    assert(CLI!(config, T).parseArgs(t, ["-a","A"]));
+    assert(t == T("A"));
+}
+
+unittest
+{
+    // Subcommand is required on every level of the command stack
+    enum Config config = { requireSubCommand: true, styling: Style.None };
+
+    struct T
+    {
+        struct cmd1
+        {
+            struct sub1 {}
+            struct sub2 {}
+
+            SubCommand!(sub1, sub2) sub;
+        }
+        struct cmd2 {}
+
+        SubCommand!(cmd1, cmd2) cmd;
+    }
+
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, ["cmd1"]).isError("Subcommand is required","sub1","sub2"));
+    }
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, ["cmd1","sub2"]));
+        assert(t == T(typeof(T.cmd)(T.cmd1(typeof(T.cmd1.sub)(T.cmd1.sub2.init)))));
+    }
+    {
+        T t;
+        assert(CLI!(config, T).parseArgs(t, ["cmd2"]));
+        assert(t == T(typeof(T.cmd)(T.cmd2.init)));
     }
 }
 

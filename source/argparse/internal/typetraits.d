@@ -146,7 +146,7 @@ private template SubCommands(Config config, TYPE)
         private alias memberType = typeof(__traits(getMember, TYPE, symbol));
 
         private enum required = Filter!(isOptional, __traits(getAttributes, __traits(getMember, TYPE, symbol))).length == 0;
-        
+
         private enum getCommandInfo(alias CMD) = .getSubCommandInfo!CMD(config, is(memberType.DefaultCommand == CMD));
         private enum commands = staticMap!(getCommandInfo, memberType.Types);
 

@@ -196,7 +196,6 @@ unittest
 unittest
 {
     import argparse.api.subcommand: SubCommand;
-    import argparse.api.argument: Optional;
 
     struct c1 {
         string foo;
@@ -204,7 +203,6 @@ unittest
     }
     struct cmd {
         string foo;
-        @Optional()
         SubCommand!(c1) c;
     }
 
@@ -316,7 +314,7 @@ unittest
 
 unittest
 {
-    import argparse.api.argument: PositionalArgument, Optional;
+    import argparse.api.argument;
     import argparse.api.subcommand: SubCommand;
 
     struct c1 {
@@ -329,7 +327,6 @@ unittest
         @PositionalArgument
         string foo;
 
-        @Optional
         SubCommand!(c1) c;
     }
 
