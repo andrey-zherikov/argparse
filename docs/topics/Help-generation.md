@@ -20,6 +20,9 @@
 `Usage`, `Description`, `ShortDescription` and `Epilog` modifiers take either `string` or `string function()`
 value – the latter can be used to return a value that is not known at compile time.
 
+A [default subcommand](Subcommands.md#default-subcommand) is marked with `(default)` next to its name in
+*Available commands* section on help screen of the parent command.
+
 ## Argument
 
 There are some customizations supported on argument level for both `PositionalArgument` and `NamedArgument` UDAs:

@@ -24,6 +24,19 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+private string defaultMark(bool isDefault)
+{
+    return isDefault ? " (default)" : "";
+}
+
+unittest
+{
+    assert(defaultMark(false) == "");
+    assert(defaultMark(true) == " (default)");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 public struct HelpScreen
 {
     struct Parameter
@@ -191,7 +204,8 @@ public class HelpPrinter
             title: style.argumentGroupTitle("Available commands"),
             parameters: cmd.subCommands
                 .map!((ref _) =>
-                    HelpScreen.Parameter(_.names.map!(_ => style.subcommandName(_)).join(","), _.description))
+                    HelpScreen.Parameter(_.names.map!(_ => style.subcommandName(_)).join(",") ~ defaultMark(_.isDefault),
+                                         _.description))
                 .array
         );
     }
@@ -421,6 +435,26 @@ unittest
     auto res = hp.formatCommandUsage(["a","b"], CommandHelpInfo(usage: "%(PROG) my usage"));
 
     assert(res == "Usage: a b my usage");
+}
+
+unittest
+{
+    scope hp = new HelpPrinter(Config.init, Style.None);
+
+    CommandHelpInfo cmd = {
+        subCommands: [
+            SubCommandHelpInfo(["cmd1"], "desc1", true),
+            SubCommandHelpInfo(["cmd2","c2"], "desc2"),
+        ]
+    };
+
+    auto res = hp.createSubCommandGroup(cmd);
+
+    assert(res.title == "Available commands");
+    assert(res.parameters == [
+        HelpScreen.Parameter("cmd1 (default)", "desc1"),
+        HelpScreen.Parameter("cmd2,c2", "desc2"),
+    ]);
 }
 
 unittest

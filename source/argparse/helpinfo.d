@@ -32,6 +32,8 @@ public struct SubCommandHelpInfo
 {
     const string[] names;
     string description;
+
+    bool isDefault;
 }
 
 public struct CommandHelpInfo

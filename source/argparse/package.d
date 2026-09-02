@@ -1157,6 +1157,48 @@ unittest
     @(Command("MYPROG"))
     struct T
     {
+        struct cmd1
+        {
+        }
+        @(Command.ShortDescription("Perform cmd 2"))
+        struct cmd2
+        {
+        }
+
+        string c;
+
+        SubCommand!(Default!cmd1, cmd2) cmd;
+    }
+
+    import std.array: appender;
+
+    enum Config config = {
+        styling: Style.None,
+        helpPrinter: (config, style, stack) {
+            scope hp = new HelpPrinter(config, style);
+
+            auto output = appender!string;
+            hp.printHelp(_ => output.put(_), stack);
+
+            assert(output[]  == "Usage: MYPROG [-c C] [-h] <command> [<args>]\n\n"~
+            "Available commands:\n"~
+            "  cmd1 (default)\n"~
+            "  cmd2              Perform cmd 2\n\n"~
+            "Optional arguments:\n"~
+            "  -c C\n"~
+            "  -h, --help        Show this help message and exit\n\n");
+        }
+    };
+
+    T t;
+    assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
+}
+
+unittest
+{
+    @(Command("MYPROG"))
+    struct T
+    {
         @NamedArgument("f","foo")
         bool foo;
 

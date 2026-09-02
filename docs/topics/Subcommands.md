@@ -56,6 +56,16 @@ To mark a subcommand as default, use `Default` template:
 
 <code-block src="code_snippets/subcommands_default.d" lang="c++"/>
 
+Default subcommand is marked with `(default)` next to its name in *Available commands* section on help screen of the
+parent command:
+
+```
+Available commands:
+  sum (default)
+  min
+  max
+```
+
 ## Enumerating subcommands in CLI mixin
 
 One of the possible ways to use subcommands with `argparse` is to list all subcommands in `CLI` mixin. Although this might
