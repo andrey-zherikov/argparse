@@ -40,6 +40,27 @@ package E getEnumValue(E)(string value)
     return values[value];
 }
 
+// Returns the name that is used in command line for a specific enum value
+package string getEnumValueName(E)(E value)
+{
+    import std.traits: EnumMembers, getUDAs;
+
+    static foreach(mem; EnumMembers!E)
+    {{
+        enum valueUDAs = getUDAs!(mem, EnumValue);
+
+        static if(valueUDAs.length > 0)
+            enum name = valueUDAs[0].values[0];
+        else
+            enum name = mem.stringof;
+
+        if(value == mem)
+            return name;
+    }}
+
+    return null;
+}
+
 
 unittest
 {
@@ -49,6 +70,10 @@ unittest
     assert(getEnumValue!E("abc") == E.abc);
     assert(getEnumValue!E("def") == E.def);
     assert(getEnumValue!E("ghi") == E.ghi);
+    assert(getEnumValueName(E.abc) == "abc");
+    assert(getEnumValueName(E.def) == "def");
+    assert(getEnumValueName(E.ghi) == "ghi");
+    assert(getEnumValueName(cast(E) 100) is null);
 }
 
 unittest
@@ -66,6 +91,9 @@ unittest
     assert(getEnumValue!E("c") == E.abc);
     assert(getEnumValue!E("def") == E.def);
     assert(getEnumValue!E("ghi") == E.ghi);
+    assert(getEnumValueName(E.abc) == "a");
+    assert(getEnumValueName(E.def) == "def");
+    assert(getEnumValueName(E.ghi) == "ghi");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

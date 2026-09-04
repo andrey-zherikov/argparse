@@ -12,6 +12,8 @@ import argparse.internal.parsefunc;
 import argparse.internal.validationfunc;
 import argparse.internal.utils: formatAllowedValues;
 
+import std.typecons: Nullable;
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Public API for argument UDA
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,6 +63,18 @@ auto ref Hidden(T)(auto ref ArgumentUDA!T uda, bool hide = true)
 auto ref Placeholder(T)(auto ref ArgumentUDA!T uda, string value)
 {
     uda.info.placeholder = value;
+    return uda;
+}
+
+auto ref PrintDefaultValueInHelp(T)(auto ref ArgumentUDA!T uda, bool print = true)
+{
+    uda.info.printDefaultValue = print;
+    return uda;
+}
+
+auto ref PrintDefaultValueInHelp(T)(auto ref ArgumentUDA!T uda, Nullable!string function() value)
+{
+    uda.info.defaultValue = value;
     return uda;
 }
 
@@ -128,6 +142,18 @@ unittest
 
     arg = arg.Description(() => "qwer").Placeholder("text");
     assert(arg.info.description.get == "qwer");
+
+    assert(arg.info.printDefaultValue.isNull);
+    assert(arg.info.defaultValue is null);
+
+    arg = arg.PrintDefaultValueInHelp;
+    assert(arg.info.printDefaultValue == true);
+
+    arg = arg.PrintDefaultValueInHelp(false);
+    assert(arg.info.printDefaultValue == false);
+
+    arg = arg.PrintDefaultValueInHelp(() => Nullable!string("some value"));
+    assert(arg.info.defaultValue() == "some value");
 
     arg = arg.Hidden.Required.NumberOfValues(10);
     assert(arg.info.hidden);

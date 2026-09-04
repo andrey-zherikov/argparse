@@ -122,6 +122,45 @@ struct my_command
 }
 ```
 
+### PrintDefaultValueInHelp
+
+`PrintDefaultValueInHelp` overrides whether the default value of the argument is printed in help message. See
+[Default value of an argument](Help-generation.md#default-value-of-an-argument) for details about the default behavior.
+
+**Signature**
+
+```C++
+PrintDefaultValueInHelp(auto ref ... argument, bool print = true)
+PrintDefaultValueInHelp(auto ref ... argument, Nullable!string function() value)
+```
+
+**Parameters**
+
+- `print`
+
+  If `true` then the default value of the argument is printed in help message, otherwise it is not printed.
+  Note that compilation fails if the default value can't be converted to string at compile time – `value` parameter
+  below should be used in this case.
+
+- `value`
+
+  Function that returns the default value that is printed in help message. If it returns `null` then nothing is
+  printed. It can be used to provide a value that is not known at compile time. Note that `Nullable` comes from
+  `std.typecons` so it has to be imported.
+
+**Usage example**
+
+```C++
+struct my_command
+{
+  @(NamedArgument.PrintDefaultValueInHelp(false))
+  int a = 10;
+
+  @(NamedArgument.PrintDefaultValueInHelp(() => Nullable!string("number of CPUs")))
+  int threads;
+}
+```
+
 ### Required
 
 Mark an argument as required so if it is not provided in command line, `argparse` will error out.

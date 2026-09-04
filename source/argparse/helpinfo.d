@@ -1,6 +1,7 @@
 module argparse.helpinfo;
 
 import std.algorithm.iteration;
+import std.typecons: Nullable;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -12,6 +13,9 @@ public struct ArgumentHelpInfo
 
     string description;
     string placeholder;
+
+    // Default value of an argument that should be printed on help screen; null if it should not be printed
+    Nullable!string defaultValue;
 
     bool multipleOccurrence;
     bool optionalValue;

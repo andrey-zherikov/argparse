@@ -37,6 +37,10 @@ package(argparse) struct ArgumentInfo
     bool isBooleanFlag = false;
     bool positional;
 
+    // `printDefaultValue` is consumed by `getMemberArgumentUDA` that translates it into `defaultValue`
+    Nullable!bool printDefaultValue;
+    Nullable!string function() defaultValue;
+
     auto helpInfo() const
     {
         return ArgumentHelpInfo(
@@ -44,6 +48,7 @@ package(argparse) struct ArgumentInfo
             longNames: longNames,
             description: description.get,
             placeholder: placeholder,
+            defaultValue: defaultValue is null ? Nullable!string.init : defaultValue(),
             multipleOccurrence: maxValuesCount.get > 1,
             optionalValue: minValuesCount.get == 0,
             optionalArgument: !required,
@@ -120,6 +125,23 @@ unittest
     assert(info(1,2,1));
     assert(info(1,2,2));
     assert(info(1,2,3).isError("expected at most 2 values"));
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+unittest
+{
+    ArgumentInfo info;
+    info.minValuesCount = 0;
+    info.maxValuesCount = 1;
+
+    assert(info.helpInfo.defaultValue.isNull);
+
+    info.defaultValue = () => Nullable!string("abc");
+    assert(info.helpInfo.defaultValue == "abc");
+
+    info.defaultValue = () => Nullable!string.init;
+    assert(info.helpInfo.defaultValue.isNull);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

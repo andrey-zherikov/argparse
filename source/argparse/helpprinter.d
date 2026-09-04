@@ -8,6 +8,7 @@ import std.algorithm;
 import std.conv: text;
 import std.range;
 import std.string;
+import std.typecons: Nullable, nullable;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -176,6 +177,20 @@ public class HelpPrinter
         }
     }
 
+    string formatArgumentDescription(in ArgumentHelpInfo helpInfo)
+    {
+        if(helpInfo.defaultValue.isNull)
+            return helpInfo.description.idup;   // copy is needed to not return a slice of `scope` parameter
+
+        auto value = helpInfo.positional ?
+                     style.positionalArgumentValue(helpInfo.defaultValue.get) :
+                     style.namedArgumentValue(helpInfo.defaultValue.get);
+
+        auto mark = "(default: " ~ value ~ ")";
+
+        return helpInfo.description.length > 0 ? helpInfo.description ~ " " ~ mark : mark;
+    }
+
     string formatCommandUsage(string[] commandName, in CommandHelpInfo helpInfo)
     {
         string usage;
@@ -248,7 +263,7 @@ public class HelpPrinter
                 groups[index].parameters ~= group.argIndex
                     .map!(_ => cmd.arguments[_])
                     .filter!(showArg)
-                    .map!(_ => HelpScreen.Parameter(formatArgumentUsage(_, false), _.description))
+                    .map!(_ => HelpScreen.Parameter(formatArgumentUsage(_, false), formatArgumentDescription(_)))
                     .array;
             }
         }
@@ -427,6 +442,26 @@ unittest
 
     assert(test(true) == "-f");
     assert(test(false) == "-f, --[no-]foo");
+}
+
+unittest
+{
+    scope hp = new HelpPrinter(Config.init, Style.None);
+
+    auto test(string description, Nullable!string defaultValue, bool positional = false)
+    {
+        return hp.formatArgumentDescription(ArgumentHelpInfo(
+                description: description,
+                defaultValue: defaultValue,
+                positional: positional));
+    }
+
+    assert(test("desc", Nullable!string.init) == "desc");
+    assert(test("", Nullable!string.init) == "");
+    assert(test("desc", nullable("abc")) == "desc (default: abc)");
+    assert(test("", nullable("abc")) == "(default: abc)");
+    assert(test("desc", nullable("")) == "desc (default: )");
+    assert(test("desc", nullable("abc"), true) == "desc (default: abc)");
 }
 
 unittest

@@ -6,6 +6,8 @@ import argparse.result;
 import argparse.internal.arguments: ArgumentInfo;
 import argparse.internal.valueparser: parseParameter;
 
+import std.typecons: Nullable;
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 package(argparse) auto createArgumentUDA(ValueParser)(ArgumentInfo info, ValueParser valueParser)
@@ -45,6 +47,8 @@ package(argparse) struct ArgumentUDA(ValueParser)
         if(!newInfo.positional) newInfo.positional = uda.info.positional;
         if(newInfo.minValuesCount.isNull()) newInfo.minValuesCount = uda.info.minValuesCount;
         if(newInfo.maxValuesCount.isNull()) newInfo.maxValuesCount = uda.info.maxValuesCount;
+        if(newInfo.printDefaultValue.isNull()) newInfo.printDefaultValue = uda.info.printDefaultValue;
+        if(newInfo.defaultValue is null) newInfo.defaultValue = uda.info.defaultValue;
 
         auto newValueParser = valueParser.addDefaults(uda.valueParser);
 
@@ -84,6 +88,8 @@ unittest
     arg1.info.positional = true;
     arg1.info.minValuesCount = 2;
     arg1.info.maxValuesCount = 3;
+    arg1.info.printDefaultValue = true;
+    arg1.info.defaultValue = () => Nullable!string("def1");
 
     ArgumentUDA!(S!"foo2") arg2;
     arg2.info.shortNames = ["a2","b2"];
@@ -94,6 +100,8 @@ unittest
     arg1.info.positional = true;
     arg2.info.minValuesCount = 20;
     arg2.info.maxValuesCount = 30;
+    arg2.info.printDefaultValue = false;
+    arg2.info.defaultValue = () => Nullable!string("def2");
 
     {
         // values shouldn't be changed
@@ -105,6 +113,8 @@ unittest
         assert(res.info.position.get == 1);
         assert(res.info.minValuesCount == 2);
         assert(res.info.maxValuesCount == 3);
+        assert(res.info.printDefaultValue == true);
+        assert(res.info.defaultValue() == "def1");
         assert(res.valueParser.str == "foo1");
     }
 
@@ -117,6 +127,8 @@ unittest
         assert(res.info.position.get == 1);
         assert(res.info.minValuesCount == 2);
         assert(res.info.maxValuesCount == 3);
+        assert(res.info.printDefaultValue == true);
+        assert(res.info.defaultValue() == "def1");
         assert(res.valueParser.str == "foo1");
     }
 }

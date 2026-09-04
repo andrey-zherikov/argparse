@@ -32,6 +32,41 @@ There are some customizations supported on argument level for both `PositionalAr
   value – the latter can be used to return a value that is not known at compile time.
 - `Hidden` – can be used to indicate that the argument shouldn’t be printed in help message.
 - `Placeholder` – provides custom text that is used to indicate the value of the argument in help message.
+- `PrintDefaultValueInHelp` – overrides whether the default value of the argument is printed in help message.
+
+## Default value of an argument
+
+The default value of an optional argument is printed next to its description if there is something meaningful to print:
+either the type of the argument is `enum` or the argument is initialized with a value that is different from the init
+value of its type. Required arguments never print their default value automatically since it is never used.
+
+The value is printed in the same format that is expected in command line, so it can be copy-pasted from help screen:
+values of an array are printed as a comma-separated list and values of an associative array are printed as a
+comma-separated list of `key=value` pairs.
+
+`PrintDefaultValueInHelp` modifier overrides this behavior: it takes either `bool` (`true` – always print the default
+value, `false` – never print it) or a function that returns `Nullable!string` (`null` – don’t print the default value,
+otherwise the returned string is printed as the default value) – the latter can be used to provide a value that is not
+known at compile time.
+
+<code-block src="code_snippets/help_default_value.d" lang="c++"/>
+
+This example prints the following:
+
+```
+Optional arguments:
+  --config CONFIG       path to config file (default: /etc/app.conf)
+  --mode {fast,slow}    mode to use (default: fast)
+  --tags TAGS ...       tags to filter by
+  --threads THREADS     number of threads (default: number of CPUs)
+  --output OUTPUT       output file
+  -h, --help            Show this help message and exit
+```
+
+> Note that if the default value of an argument can’t be converted to string at compile time (for example, if `toString`
+> of its type can’t be executed at compile time) then it is not printed. In this case `PrintDefaultValueInHelp(true)`
+> results in a compilation error – the function above should be used instead.
+{style="note"}
 
 ## Help text styling
 
