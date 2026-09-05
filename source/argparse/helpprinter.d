@@ -8,6 +8,7 @@ import std.algorithm;
 import std.conv: text;
 import std.range;
 import std.string;
+import std.typecons: Nullable, nullable;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,6 +21,19 @@ unittest
 {
     assert(wrapOptional(false, "foo") == "foo");
     assert(wrapOptional(true, "foo") == "[foo]");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private string defaultMark(bool isDefault)
+{
+    return isDefault ? " (default)" : "";
+}
+
+unittest
+{
+    assert(defaultMark(false) == "");
+    assert(defaultMark(true) == " (default)");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -163,6 +177,20 @@ public class HelpPrinter
         }
     }
 
+    string formatArgumentDescription(in ArgumentHelpInfo helpInfo)
+    {
+        if(helpInfo.defaultValue.isNull)
+            return helpInfo.description.idup;   // copy is needed to not return a slice of `scope` parameter
+
+        auto value = helpInfo.positional ?
+                     style.positionalArgumentValue(helpInfo.defaultValue.get) :
+                     style.namedArgumentValue(helpInfo.defaultValue.get);
+
+        auto mark = "(default: " ~ value ~ ")";
+
+        return helpInfo.description.length > 0 ? helpInfo.description ~ " " ~ mark : mark;
+    }
+
     string formatCommandUsage(string[] commandName, in CommandHelpInfo helpInfo)
     {
         string usage;
@@ -191,7 +219,8 @@ public class HelpPrinter
             title: style.argumentGroupTitle("Available commands"),
             parameters: cmd.subCommands
                 .map!((ref _) =>
-                    HelpScreen.Parameter(_.names.map!(_ => style.subcommandName(_)).join(","), _.description))
+                    HelpScreen.Parameter(_.names.map!(_ => style.subcommandName(_)).join(",") ~ defaultMark(_.isDefault),
+                                         _.description))
                 .array
         );
     }
@@ -234,7 +263,7 @@ public class HelpPrinter
                 groups[index].parameters ~= group.argIndex
                     .map!(_ => cmd.arguments[_])
                     .filter!(showArg)
-                    .map!(_ => HelpScreen.Parameter(formatArgumentUsage(_, false), _.description))
+                    .map!(_ => HelpScreen.Parameter(formatArgumentUsage(_, false), formatArgumentDescription(_)))
                     .array;
             }
         }
@@ -418,9 +447,49 @@ unittest
 unittest
 {
     scope hp = new HelpPrinter(Config.init, Style.None);
+
+    auto test(string description, Nullable!string defaultValue, bool positional = false)
+    {
+        return hp.formatArgumentDescription(ArgumentHelpInfo(
+                description: description,
+                defaultValue: defaultValue,
+                positional: positional));
+    }
+
+    assert(test("desc", Nullable!string.init) == "desc");
+    assert(test("", Nullable!string.init) == "");
+    assert(test("desc", nullable("abc")) == "desc (default: abc)");
+    assert(test("", nullable("abc")) == "(default: abc)");
+    assert(test("desc", nullable("")) == "desc (default: )");
+    assert(test("desc", nullable("abc"), true) == "desc (default: abc)");
+}
+
+unittest
+{
+    scope hp = new HelpPrinter(Config.init, Style.None);
     auto res = hp.formatCommandUsage(["a","b"], CommandHelpInfo(usage: "%(PROG) my usage"));
 
     assert(res == "Usage: a b my usage");
+}
+
+unittest
+{
+    scope hp = new HelpPrinter(Config.init, Style.None);
+
+    CommandHelpInfo cmd = {
+        subCommands: [
+            SubCommandHelpInfo(["cmd1"], "desc1", true),
+            SubCommandHelpInfo(["cmd2","c2"], "desc2"),
+        ]
+    };
+
+    auto res = hp.createSubCommandGroup(cmd);
+
+    assert(res.title == "Available commands");
+    assert(res.parameters == [
+        HelpScreen.Parameter("cmd1 (default)", "desc1"),
+        HelpScreen.Parameter("cmd2,c2", "desc2"),
+    ]);
 }
 
 unittest

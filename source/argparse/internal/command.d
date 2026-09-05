@@ -256,7 +256,8 @@ package struct Command
             subCommands: subCommands.info
                 .filter!((ref _) => _.displayNames.length > 0 && _.displayNames[0].length > 0)
                 .map!((ref _) => SubCommandHelpInfo(_.displayNames,
-                                                    _.shortDescription.isSet ? _.shortDescription.get : _.description.get))
+                                                    _.shortDescription.isSet ? _.shortDescription.get : _.description.get,
+                                                    _.isDefaultSubCommand))
                 .array
         );
     }

@@ -1157,6 +1157,48 @@ unittest
     @(Command("MYPROG"))
     struct T
     {
+        struct cmd1
+        {
+        }
+        @(Command.ShortDescription("Perform cmd 2"))
+        struct cmd2
+        {
+        }
+
+        string c;
+
+        SubCommand!(Default!cmd1, cmd2) cmd;
+    }
+
+    import std.array: appender;
+
+    enum Config config = {
+        styling: Style.None,
+        helpPrinter: (config, style, stack) {
+            scope hp = new HelpPrinter(config, style);
+
+            auto output = appender!string;
+            hp.printHelp(_ => output.put(_), stack);
+
+            assert(output[]  == "Usage: MYPROG [-c C] [-h] <command> [<args>]\n\n"~
+            "Available commands:\n"~
+            "  cmd1 (default)\n"~
+            "  cmd2              Perform cmd 2\n\n"~
+            "Optional arguments:\n"~
+            "  -c C\n"~
+            "  -h, --help        Show this help message and exit\n\n");
+        }
+    };
+
+    T t;
+    assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
+}
+
+unittest
+{
+    @(Command("MYPROG"))
+    struct T
+    {
         @NamedArgument("f","foo")
         bool foo;
 
@@ -1184,6 +1226,63 @@ unittest
 
     T t;
     assert(CLI!(config, T).parseArgs(t, ["cmd1", "-h"]).isHelpWanted);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// https://github.com/andrey-zherikov/argparse/issues/148
+unittest
+{
+    import std.typecons: Nullable;
+
+    @(Command("MYPROG"))
+    struct T
+    {
+        enum Mode { WALK, RUN }
+
+        @(NamedArgument.Description("desc for a"))      string a = "abc";
+        @NamedArgument                                  string b;
+        @NamedArgument                                  Mode mode;
+        @(NamedArgument.Required)                       Mode req;
+        @(NamedArgument.PrintDefaultValueInHelp(false)) Mode quiet;
+        @(NamedArgument.PrintDefaultValueInHelp)        string forced;
+        @(NamedArgument.PrintDefaultValueInHelp(() => Nullable!string("number of CPUs"))) int j;
+        @(NamedArgument.PrintDefaultValueInHelp(() => Nullable!string.init))              string k = "abc";
+        @NamedArgument                                  string[] arr = ["x","y"];
+        @NamedArgument                                  int[string] aa = ["a":1];
+        @(PositionalArgument(0).Optional)               string pos = "xyz";
+    }
+
+    import std.array: appender;
+
+    enum Config config = {
+        styling: Style.None,
+        helpPrinter: (config, style, stack) {
+            scope hp = new HelpPrinter(config, style);
+
+            auto output = appender!string;
+            hp.printHelp(_ => output.put(_), stack);
+
+            assert(output[]  == "Usage: MYPROG [-a A] [-b B] [--mode {WALK,RUN}] --req {WALK,RUN} [--quiet {WALK,RUN}]"~
+            " [--forced FORCED] [-j J] [-k K] [--arr ARR ...] [--aa AA ...] [-h] [pos]\n\n"~
+            "Required arguments:\n"~
+            "  --req {WALK,RUN}\n\n"~
+            "Optional arguments:\n"~
+            "  -a A                  desc for a (default: abc)\n"~   // initialized with non-init value
+            "  -b B\n"~                                              // no initializer
+            "  --mode {WALK,RUN}     (default: WALK)\n"~             // enum
+            "  --quiet {WALK,RUN}\n"~                                // enum but explicitly disabled
+            "  --forced FORCED       (default: )\n"~                 // no initializer but explicitly enabled
+            "  -j J                  (default: number of CPUs)\n"~   // provided by a function
+            "  -k K\n"~                                              // suppressed by a function
+            "  --arr ARR ...         (default: x,y)\n"~
+            "  --aa AA ...           (default: a=1)\n"~
+            "  [pos]                 (default: xyz)\n"~
+            "  -h, --help            Show this help message and exit\n\n");
+        }
+    };
+
+    T t;
+    assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

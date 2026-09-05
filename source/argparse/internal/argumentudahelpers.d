@@ -5,7 +5,10 @@ import argparse.config;
 import argparse.internal.argumentuda: ArgumentUDA;
 import argparse.internal.arguments: finalize;
 import argparse.internal.booleanhelpers;
+import argparse.internal.defaultvaluehelpers;
 import argparse.param;
+
+import std.typecons: Nullable;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -144,6 +147,22 @@ package auto getMemberArgumentUDA(TYPE, string symbol)(const Config config)
     static if(initUDA.info.minValuesCount.isNull) result.info.minValuesCount = defaultValuesCount!MemberType.min;
     static if(initUDA.info.maxValuesCount.isNull) result.info.maxValuesCount = defaultValuesCount!MemberType.max;
 
+    // Default value is printed if it's explicitly requested or, for an optional argument, if there is something
+    // meaningful to print: enum value or an initializer that differs from the init value of the member type.
+    // Note that explicit request of a value that can't be formatted in compile time is a compilation error
+    enum printDefaultValue = initUDA.info.printDefaultValue.get(
+        !initUDA.info.required && (is(MemberType == enum) || hasDefaultValue!(TYPE, symbol)));
+
+    static if(printDefaultValue)
+    {
+        static assert(__traits(compiles, defaultValueText!(TYPE, symbol)),
+            "Can't get default value of "~TYPE.stringof~"."~symbol~
+            ": use PrintDefaultValueInHelp with a function that returns Nullable!string");
+
+        if(result.info.defaultValue is null)    // it's not set through PrintDefaultValueInHelp
+            result.info.defaultValue = () => Nullable!string(defaultValueText!(TYPE, symbol));
+    }
+
     return result;
 }
 
@@ -222,4 +241,46 @@ unittest
     assert(res.maxValuesCount == 2);
 
     assert(!__traits(compiles, getInfo!"mult1"));
+}
+
+unittest
+{
+    import argparse.api.argument: NamedArgument, Required, PrintDefaultValueInHelp;
+
+    enum E { a, b }
+
+    struct Args
+    {
+        string s = "abc";
+        string sInit;
+        E e;
+        @(NamedArgument.Required) E eRequired;
+        @(NamedArgument.PrintDefaultValueInHelp(false)) E eDisabled;
+        @(NamedArgument.PrintDefaultValueInHelp) string forced;
+        @(NamedArgument.PrintDefaultValueInHelp(() => Nullable!string("custom"))) int func;
+        @(NamedArgument.PrintDefaultValueInHelp(() => Nullable!string.init)) string suppressed = "abc";
+        int[] arr = [1,2];
+        string[][] cantFormat = [["a"],["b"]];
+        @(NamedArgument.PrintDefaultValueInHelp) string[][] cantFormatButRequested;
+    }
+
+    auto defaultValue(string symbol)()
+    {
+        auto get = getMemberArgumentUDA!(Args, symbol)(Config.init).info.defaultValue;
+        return get is null ? Nullable!string.init : get();
+    }
+
+    assert(defaultValue!"s" == "abc");
+    assert(defaultValue!"sInit".isNull);
+    assert(defaultValue!"e" == "a");
+    assert(defaultValue!"eRequired".isNull);
+    assert(defaultValue!"eDisabled".isNull);
+    assert(defaultValue!"forced" == "");
+    assert(defaultValue!"func" == "custom");
+    assert(defaultValue!"suppressed".isNull);
+    assert(defaultValue!"arr" == "1,2");
+
+    // there is no way to print the default value of these
+    assert(defaultValue!"cantFormat".isNull);
+    assert(!__traits(compiles, defaultValue!"cantFormatButRequested"));
 }

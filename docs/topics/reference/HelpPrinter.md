@@ -99,6 +99,28 @@ string formatArgumentValue(in ArgumentHelpInfo helpInfo)
 
 String with formatted argument value.
 
+### formatArgumentDescription
+
+`formatArgumentDescription` returns the description of an argument that is printed next to its name, including the
+default value of the argument if it should be printed. For example, it returns `path to config (default: /etc/app.conf)`
+for an argument that is described as `path to config` and has `/etc/app.conf` default value.
+
+**Signature**
+
+```c++
+string formatArgumentDescription(in ArgumentHelpInfo helpInfo)
+```
+
+**Parameters**
+
+- `helpInfo`
+
+  Help info about argument.
+
+**Return value**
+
+String with formatted argument description.
+
 ### createHelpScreen
 
 This function creates [`HelpScreen`](HelpScreen.md) based on list of [commands](...HelpInfo.md#commandhelpinfo).
