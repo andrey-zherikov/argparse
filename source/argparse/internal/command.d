@@ -207,14 +207,16 @@ package struct Command
         return idx != size_t(-1) ? subCommandCreate[idx] : null;
     }
 
+    // Every check is run and all failures are reported: they are independent from each other, so
+    // stopping at the first one would hide the rest of what is wrong with the command line.
+    // Missing required arguments are not checked here - they are collected for the whole command
+    // stack at once, see `missingRequiredArguments`.
     Result finalize(const Config config, Command[] stack)
     {
+        auto res = Result.Success;
+
         foreach(fn; cmdRestrictions)
-        {
-            auto res = fn();
-            if(!res)
-                return res;
-        }
+            res ~= fn();
 
         // https://github.com/andrey-zherikov/argparse/issues/231
         foreach (idx, argInfo; this.arguments.info) {
@@ -227,11 +229,27 @@ package struct Command
                 // https://github.com/andrey-zherikov/argparse/issues/219
                 if (value !is null) {
                     auto param = RawParam(&config, argInfo.displayName, [value]);
-                    this.getParseFunc(this.parseFuncs, idx)(stack, param);
+                    res ~= this.getParseFunc(this.parseFuncs, idx)(stack, param);
                 }
             }
         }
-        return argRestrictions.check(idxParsedArgs);
+
+        res ~= argRestrictions.check(idxParsedArgs);
+
+        return res;
+    }
+
+    // Arguments that are required but were not provided, neither in the command line nor through an
+    // environment variable. Meaningful only after `finalize` since that is what applies the fallback.
+    const(ArgumentInfo)[] missingRequiredArguments() const
+    {
+        const(ArgumentInfo)[] res;
+
+        foreach(idx, ref info; arguments.info)
+            if(info.required && idx !in idxParsedArgs)
+                res ~= info;
+
+        return res;
     }
 
 
@@ -261,6 +279,37 @@ package struct Command
                 .array
         );
     }
+}
+
+unittest
+{
+    import argparse.api.argument: NamedArgument, Required;
+
+    struct T
+    {
+        @(NamedArgument.Required) string a;
+        @NamedArgument            string b;
+        @(NamedArgument.Required) string c;
+    }
+
+    alias names = (const(ArgumentInfo)[] args) => args.map!((ref _) => _.displayName).array;
+
+    T t;
+    auto cmd = createCommand!(Config.init)(t, CommandInfo.init);
+
+    assert(names(cmd.missingRequiredArguments()) == ["-a","-c"]);
+
+    // an argument that was provided in the command line is not missing anymore
+    cmd.idxParsedArgs[0] = 1;
+    assert(names(cmd.missingRequiredArguments()) == ["-c"]);
+
+    cmd.idxParsedArgs[2] = 1;
+    assert(cmd.missingRequiredArguments().length == 0);
+
+    // optional arguments are never missing
+    cmd.idxParsedArgs.clear();
+    cmd.idxParsedArgs[1] = 1;
+    assert(names(cmd.missingRequiredArguments()) == ["-a","-c"]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,6 +1,7 @@
 module argparse.internal.restriction;
 
 import argparse.config;
+import argparse.helpprinter: HelpPrinter;
 import argparse.result;
 import argparse.internal.arguments: ArgumentInfo;
 
@@ -38,25 +39,49 @@ unittest
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private auto RequiredArg(const Config config, const ArgumentInfo info, size_t index)
+// Arguments that are required but were not provided are reported together, in one message that lists
+// them the same way the help screen does so that their help text comes along.
+package Result missingRequiredArgumentsError(const Config config, const(ArgumentInfo)[] args)
 {
-    return (in size_t[size_t] cliArgs)
-    {
-        return (index in cliArgs) ?
-            Result.Success :
-            Result.Error(config.errorExitCode, "The following argument is required: '", config.styling.argumentName(info.displayName), "'");
-    };
+    import std.algorithm: map;
+    import std.array: array;
+    import std.string: chomp;
+
+    assert(args.length > 0);
+
+    scope hp = new HelpPrinter(config, config.styling);
+
+    return Result.Error(config.errorExitCode,
+        "The following argument", args.length > 1 ? "s are" : " is", " required:\n",
+        hp.formatArgumentList(args.map!((ref _) => _.helpInfo).array).chomp);
 }
 
 unittest
 {
-    auto f = RequiredArg(Config.init, ArgumentInfo([],[],[""]), 0);
+    import argparse.style: Style;
 
-    assert(f((size_t[size_t]).init).isError("argument is required"));
+    enum Config config = { styling: Style.None };
 
-    assert(f([1:1]).isError("argument is required"));
+    static ArgumentInfo info(string name, string description)
+    {
+        ArgumentInfo res;
+        res.longNames = [name];
+        res.displayNames = ["--"~name];
+        res.description = description;
+        res.placeholder = "V";
+        res.minValuesCount = 1;
+        res.maxValuesCount = 1;
+        res.required = true;
+        return res;
+    }
 
-    assert(f([0:1]));
+    // Single argument: singular wording
+    assert(missingRequiredArgumentsError(config, [info("foo","descr")]).errorMessages ==
+        ["The following argument is required:\n  --foo V    descr"]);
+
+    // Multiple arguments: plural wording, and an argument without description is fine
+    assert(missingRequiredArgumentsError(config, [info("foo","descr"), info("bar",null)]).errorMessages ==
+        ["The following arguments are required:\n  --foo V    descr\n  --bar V"]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -201,14 +226,12 @@ package(argparse) struct RestrictionGroup
 
     private Result check(in size_t[size_t] cliArgs) const
     {
-        foreach(check; checks)
-        {
-            auto res = check(cliArgs, argIndex);
-            if(!res)
-                return res;
-        }
+        auto res = Result.Success;
 
-        return Result.Success;
+        foreach(check; checks)
+            res ~= check(cliArgs, argIndex);
+
+        return res;
     }
 }
 
@@ -258,9 +281,6 @@ package struct Restrictions
                 if(config.variadicNamedArgument)
                     checks ~= CheckNumberOfValues(config, info, argIndex);
 
-                static if(info.required)
-                    checks ~= RequiredArg(config, info, argIndex);
-
                 static foreach(group; getRestrictionGroups!(__traits(getMember, TYPE, info.memberSymbol)))
                 {{
                     auto groupIndex = (group.location in groupsByLocation);
@@ -279,23 +299,19 @@ package struct Restrictions
     }
 
 
+    // All checks are run: they are independent from each other, so reporting only the first failure
+    // would hide the rest of what is wrong with the command line.
     package Result check(in size_t[size_t] cliArgs) const
     {
+        auto res = Result.Success;
+
         foreach(check; checks)
-        {
-            auto res = check(cliArgs);
-            if(!res)
-                return res;
-        }
+            res ~= check(cliArgs);
 
         foreach(ref group; groups)
-        {
-            auto res = group.check(cliArgs);
-            if(!res)
-                return res;
-        }
+            res ~= group.check(cliArgs);
 
-        return Result.Success;
+        return res;
     }
 }
 
