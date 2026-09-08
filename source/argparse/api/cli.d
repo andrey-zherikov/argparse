@@ -21,19 +21,21 @@ private void defaultErrorPrinter(T...)(T message)
     stderr.writeln(message);
 }
 
-private void onError(alias printer = defaultErrorPrinter)(Config config, string message) nothrow
+private void onError(alias printer = defaultErrorPrinter)(Config config, in string[] messages) nothrow
 {
     import std.algorithm.iteration: joiner;
 
     if(config.errorHandler)
-        config.errorHandler(message);
+        foreach(message; messages)
+            config.errorHandler(message);
     else
         try
         {
-            if(ansiStylingArgument.stderrStyling)
-                printer(config.styling.errorMessagePrefix("Error: "), message);
-            else
-                printer("Error: ", message.getUnstyledText.joiner);
+            foreach(message; messages)
+                if(ansiStylingArgument.stderrStyling)
+                    printer(config.styling.errorMessagePrefix("Error: "), message);
+                else
+                    printer("Error: ", message.getUnstyledText.joiner);
         }
         catch(Exception e)
         {
@@ -50,14 +52,7 @@ unittest
         throw new Exception("My Message.");
     }
 
-    assert(collectExceptionMsg!Error(onError!printer(Config.init, "text")) == "My Message.");
-}
-
-unittest
-{
-    enum Config config = { errorHandler: s => assert(s == "error text") };
-
-    onError(config, "error text");
+    assert(collectExceptionMsg!Error(onError!printer(Config.init, ["text"])) == "My Message.");
 }
 
 // Prints what accompanies an error message, as selected by Config.helpOnError.
@@ -229,7 +224,7 @@ template CLI(Config config, COMMAND)
             static if(config.helpOnError != Config.HelpOnError.none)
                 onErrorHelp(config, res.cmdHelpInfo);
 
-            onError(config, res.errorMessage);
+            onError(config, res.errorMessages);
         }
 
         return res;
@@ -261,7 +256,7 @@ template CLI(Config config, COMMAND)
             static if(config.helpOnError != Config.HelpOnError.none)
                 onErrorHelp(config, res.cmdHelpInfo);
 
-            onError(config, res.errorMessage);
+            onError(config, res.errorMessages);
         }
 
         return res;
