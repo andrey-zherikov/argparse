@@ -121,6 +121,34 @@ string formatArgumentDescription(in ArgumentHelpInfo helpInfo)
 
 String with formatted argument description.
 
+### formatArgumentList
+
+`formatArgumentList` returns a list of arguments formatted the same way the help screen formats them: every argument
+takes a line with its usage on the left and its description on the right, aligned into two columns and wrapped when
+needed. It is useful to spell out which arguments a message is about, for example:
+
+```
+  --input INPUT    File to read the data from
+  destination      Where to upload the result
+```
+
+**Signature**
+
+```c++
+string formatArgumentList(const ArgumentHelpInfo[] args)
+```
+
+**Parameters**
+
+- `args`
+
+  Arguments to be listed.
+
+**Return value**
+
+String with the formatted list of arguments. Every line, including the last one, is terminated with `\n`.
+Empty string if `args` is empty.
+
 ### createHelpScreen
 
 This function creates [`HelpScreen`](HelpScreen.md) based on list of [commands](...HelpInfo.md#commandhelpinfo).

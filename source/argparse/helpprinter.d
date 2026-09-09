@@ -271,6 +271,26 @@ public class HelpPrinter
         return groups;
     }
 
+    // Renders a list of arguments the way the help screen does: name column and wrapped description.
+    // Used for error messages that have to spell out which arguments they are about.
+    string formatArgumentList(const ArgumentHelpInfo[] args)
+    {
+        import std.array: appender;
+
+        auto parameters = args
+            .map!((ref _) => HelpScreen.Parameter(formatArgumentUsage(_, false), formatArgumentDescription(_)))
+            .array;
+
+        immutable offset = descriptionOffset(parameters);
+
+        auto res = appender!string;
+
+        foreach(const ref param; parameters)
+            printParameter(_ => res.put(_), param, offset);
+
+        return res[];
+    }
+
     HelpScreen createHelpScreen(CommandHelpInfo[] commands)
     {
         CommandHelpInfo* currentCmd = &commands[$-1];
@@ -364,19 +384,26 @@ public class HelpPrinter
         }
     }
 
+    // Column where the description of a parameter starts: it is aligned across all parameters but
+    // parameters with an excessively long name are left out of the calculation (their description
+    // starts on the next line).
+    private static size_t descriptionOffset(R)(R parameters)
+    {
+        enum parameterNameLimit = 20;
+
+        immutable helpPosition = 4 + parameters
+            .map!(_ => _.name.getUnstyledTextLength)
+            .filter!(_ => _ <= parameterNameLimit)
+            .maxElement(0);
+
+        return helpPosition + 2;
+    }
+
     void printHelp(void delegate(string) sink, CommandHelpInfo[] commands)
     {
         auto helpScreen = createHelpScreen(commands);
 
-        enum parameterNameLimit = 20;
-
-        immutable helpPosition = 4 + helpScreen.groups
-            .map!((ref _) => _.parameters.map!((ref _) => _.name.getUnstyledTextLength))
-            .joiner
-            .filter!(_ => _ <= parameterNameLimit)
-            .maxElement(0);
-
-        printHelpScreen(sink, helpScreen, helpPosition + 2);
+        printHelpScreen(sink, helpScreen, descriptionOffset(helpScreen.groups.map!((ref _) => _.parameters).joiner));
     }
 }
 
@@ -511,4 +538,26 @@ unittest
 
     assert(test("a short string", 7, "\t") == "\ta\nshort\nstring\n");
     assert(test("a short string", 7, "\t", "    ") == "\ta\n    short\n    string\n");
+}
+
+unittest
+{
+    scope hp = new HelpPrinter(Config.init, Style.None);
+
+    ArgumentHelpInfo[] args = [
+        // name is too long to fit into the name column, so the description goes to the next line
+        ArgumentHelpInfo(shortNames: ["i"], longNames: ["input"], placeholder: "FILE", description: "File to read"),
+        // no description at all
+        ArgumentHelpInfo(shortNames: ["v"], booleanFlag: true),
+        // positional argument is shown by its placeholder
+        ArgumentHelpInfo(placeholder: "dest", description: "Where to upload", positional: true),
+    ];
+
+    assert(hp.formatArgumentList(args) ==
+        "  -i FILE, --input FILE\n"~
+        "          File to read\n"~
+        "  -v\n"~
+        "  dest    Where to upload\n");
+
+    assert(hp.formatArgumentList([]) == "");
 }
