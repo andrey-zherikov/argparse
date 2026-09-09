@@ -154,8 +154,9 @@ failed. It has the following type: `enum HelpOnError { none, usage, full }`:
 - `Config.HelpOnError.usage`: the **usage line** is printed:
 
   ```
-  Usage: prog sub [--req REQ] [-h]
-  Error: The following argument is required: '--req'
+  Usage: prog sub --req REQ [-h]
+  Error: The following argument is required:
+    --req REQ    Value that is required
   ```
 
 - `Config.HelpOnError.full`: the **whole help screen** is printed, the same one that `-h`/`--help` prints.
@@ -237,6 +238,9 @@ Example:
 
 `Config.errorHandler` is a handler function for all errors occurred during command line parsing.
 It is a function that receives `string` parameter which would contain an error message.
+
+Command line parsing can detect more than one error at a time, in which case the handler is called once per
+error message.
 
 > Function must ne `nothrow`
 >

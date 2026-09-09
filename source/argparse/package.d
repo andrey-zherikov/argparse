@@ -850,6 +850,55 @@ unittest
     assert(CLI!T.parseArgs(t, []).isError("The following argument is required","-s"));
 }
 
+// All missed required arguments are listed in one error message, along with their help text
+// https://github.com/andrey-zherikov/argparse/issues/195
+unittest
+{
+    struct T
+    {
+        @(NamedArgument.Required.Description("File to read"))
+        string input;
+
+        @(NamedArgument.Required.Description("Where to write"))
+        string output;
+
+        @(PositionalArgument(0, "dest").Description("Upload target"))
+        string destination;
+    }
+
+    T t;
+    auto res = CLI!T.parseArgs(t, []);
+
+    assert(res.errorMessages.length == 1);
+    assert(res.isError("The following arguments are required",
+                       "--input" , "File to read",
+                       "--output", "Where to write",
+                       "dest"    , "Upload target"));
+}
+
+// Missed required arguments do not hide the restrictions that are violated at the same time
+unittest
+{
+    struct T
+    {
+        @(NamedArgument.Required)  string req;
+
+        // note: once any member has an argument UDA, only annotated members are arguments
+        @MutuallyExclusive()
+        {
+            @NamedArgument string a;
+            @NamedArgument string b;
+        }
+    }
+
+    T t;
+    auto res = CLI!T.parseArgs(t, ["-a","a","-b","b"]);
+
+    assert(res.errorMessages.length == 2);
+    assert(res.isError("The following argument is required","--req"));
+    assert(res.isError("Argument","-a","is not allowed with argument","-b"));
+}
+
 unittest
 {
     struct T
@@ -960,7 +1009,8 @@ unittest
         return CLI!TOP.parseArgs(t, args);
     }
 
-    assert(test(["SUB"]).isError("The following argument is required","--req_top"));
+    // Missing arguments of the whole command stack are reported together
+    assert(test(["SUB"]).isError("The following arguments are required","--req_top","--req_sub"));
     assert(test(["SUB","--req_sub","v"]).isError("The following argument is required","--req_top"));
     assert(test(["SUB","--req_top","v"]).isError("The following argument is required","--req_sub"));
     assert(test(["SUB","--req_sub","v","--req_top","v"]));
@@ -1359,8 +1409,9 @@ unittest
 
     {
         Program p;
-        assert(CLI!Program.parseArgs(p, [])       .isError("The following argument is required"));
-        assert(CLI!Program.parseArgs(p, ["serve"]).isError("The following argument is required"));
+        // Neither the environment variable nor the command line provides `pwd`, and `url` is missing too
+        assert(CLI!Program.parseArgs(p, [])       .isError("The following arguments are required","pwd","url"));
+        assert(CLI!Program.parseArgs(p, ["serve"]).isError("The following arguments are required","pwd","url"));
     }
     {
         environment["__PWD__"] = "foo";

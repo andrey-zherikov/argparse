@@ -3,9 +3,11 @@ module argparse.internal.commandstack;
 import argparse.config;
 import argparse.helpinfo: CommandHelpInfo;
 import argparse.result;
+import argparse.internal.arguments: ArgumentInfo;
 import argparse.internal.command;
 import argparse.internal.commandinfo: getTopLevelCommandInfo;
 import argparse.internal.helpargument: getProgramName;
+import argparse.internal.restriction: missingRequiredArgumentsError;
 
 import std.range: back, popBack;
 
@@ -65,14 +67,23 @@ package struct CommandStack
         while(stack.back.defaultSubCommand)
             stack ~= stack.back.defaultSubCommand();
 
-        foreach(ref cmd; stack)
-        {
-            auto res = cmd.finalize(config, stack);
-            if(!res)
-                return res;
-        }
+        auto restrictionErrors = Result.Success;
 
-        return Result.Success;
+        foreach(ref cmd; stack)
+            restrictionErrors ~= cmd.finalize(config, stack);
+
+        // Required arguments are collected across the whole stack so that all of them are listed in
+        // one message: a missing argument of a command must not hide a missing one of its subcommand.
+        const(ArgumentInfo)[] missing;
+
+        foreach(ref cmd; stack)
+            missing ~= cmd.missingRequiredArguments();
+
+        auto res = missing.length > 0 ? missingRequiredArgumentsError(config, missing) : Result.Success;
+
+        res ~= restrictionErrors;
+
+        return res;
     }
 
     auto findSubCommand(string name)
