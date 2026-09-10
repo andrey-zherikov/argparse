@@ -2,7 +2,7 @@ module argparse.internal.helpargument;
 
 import argparse.ansi;
 import argparse.config;
-import argparse.defaulthelpprinter: DefaultHelpPrinter;
+import argparse.defaulthelpprinter: createHelpPrinter;
 import argparse.helpinfo: CommandHelpInfo;
 import argparse.param;
 import argparse.result;
@@ -54,7 +54,7 @@ package struct HelpArgumentUDA
         {
             scope auto output = stdout.lockingTextWriter();
 
-            scope hp = new DefaultHelpPrinter(*param.config, style);
+            scope hp = createHelpPrinter(*param.config, style);
             hp.printHelp(_ => output.put(_), stack);
         }
 

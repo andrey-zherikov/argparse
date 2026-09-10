@@ -2,6 +2,7 @@ module argparse.defaulthelpprinter;
 
 import argparse.config;
 import argparse.helpinfo;
+import argparse.helpprinter;
 import argparse.style;
 
 import std.algorithm;
@@ -63,7 +64,25 @@ public struct HelpScreen
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-public class DefaultHelpPrinter
+// Creates the object that renders help text. Every place that formats help goes through this function so
+// that all of them consistently use the same implementation.
+package HelpPrinter createHelpPrinter(const Config config, Style style)
+{
+    return new DefaultHelpPrinter(config, style);
+}
+
+unittest
+{
+    auto hp = createHelpPrinter(Config.init, Style.None);
+
+    assert(hp !is null);
+    assert(cast(DefaultHelpPrinter) hp !is null);
+    assert(hp.formatCommandUsage(["prog"], CommandHelpInfo(name: "prog")) == "Usage: prog");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+public class DefaultHelpPrinter : HelpPrinter
 {
     const Config config;
     Style style;

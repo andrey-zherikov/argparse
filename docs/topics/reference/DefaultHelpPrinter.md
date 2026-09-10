@@ -1,6 +1,7 @@
 # DefaultHelpPrinter
 
-`DefaultHelpPrinter` is a helper class that is used to create and print help screen.
+`DefaultHelpPrinter` is the help renderer that `argparse` uses out of the box. It implements
+`HelpPrinter` and is the class to derive from in order to customize help screen.
 
 ## Public data members
 

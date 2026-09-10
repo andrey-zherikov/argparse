@@ -14,6 +14,7 @@ public import argparse.config;
 public import argparse.defaulthelpprinter;
 public import argparse.help;
 public import argparse.helpinfo;
+public import argparse.helpprinter;
 public import argparse.param;
 public import argparse.result;
 public import argparse.style;
