@@ -11,9 +11,9 @@ public import argparse.api.restriction;
 public import argparse.api.subcommand;
 
 public import argparse.config;
+public import argparse.defaulthelpprinter;
 public import argparse.help;
 public import argparse.helpinfo;
-public import argparse.helpprinter;
 public import argparse.param;
 public import argparse.result;
 public import argparse.style;
@@ -1047,7 +1047,7 @@ unittest
     enum Config config = {
         styling: Style.None,
         helpPrinter: (config, style, stack) {
-            scope hp = new HelpPrinter(config, style);
+            scope hp = new DefaultHelpPrinter(config, style);
 
             auto output = appender!string;
             hp.printHelp(_ => output.put(_), stack);
@@ -1105,7 +1105,7 @@ unittest
     enum Config config = {
         styling: Style.None,
         helpPrinter: (config, style, stack) {
-            scope hp = new HelpPrinter(config, style);
+            scope hp = new DefaultHelpPrinter(config, style);
 
             auto output = appender!string;
             hp.printHelp(_ => output.put(_), stack);
@@ -1159,7 +1159,7 @@ unittest
         enum Config config = {
             styling: Style.None,
             helpPrinter: (config, style, stack) {
-                scope hp = new HelpPrinter(config, style);
+                scope hp = new DefaultHelpPrinter(config, style);
 
                 auto output = appender!string;
                 hp.printHelp(_ => output.put(_), stack);
@@ -1183,7 +1183,7 @@ unittest
         enum Config config = {
             styling: Style.None,
             helpPrinter: (config, style, stack) {
-                scope hp = new HelpPrinter(config, style);
+                scope hp = new DefaultHelpPrinter(config, style);
 
                 auto output = appender!string;
                 hp.printHelp(_ => output.put(_), stack);
@@ -1225,7 +1225,7 @@ unittest
     enum Config config = {
         styling: Style.None,
         helpPrinter: (config, style, stack) {
-            scope hp = new HelpPrinter(config, style);
+            scope hp = new DefaultHelpPrinter(config, style);
 
             auto output = appender!string;
             hp.printHelp(_ => output.put(_), stack);
@@ -1261,7 +1261,7 @@ unittest
     enum Config config = {
         styling: Style.None,
         helpPrinter: (config, style, stack) {
-            scope hp = new HelpPrinter(config, style);
+            scope hp = new DefaultHelpPrinter(config, style);
 
             auto output = appender!string;
             hp.printHelp(_ => output.put(_), stack);
@@ -1307,7 +1307,7 @@ unittest
     enum Config config = {
         styling: Style.None,
         helpPrinter: (config, style, stack) {
-            scope hp = new HelpPrinter(config, style);
+            scope hp = new DefaultHelpPrinter(config, style);
 
             auto output = appender!string;
             hp.printHelp(_ => output.put(_), stack);

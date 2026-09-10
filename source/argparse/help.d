@@ -2,8 +2,8 @@ module argparse.help;
 
 import argparse.api.ansi: ansiStylingArgument;
 import argparse.config;
+import argparse.defaulthelpprinter;
 import argparse.helpinfo: CommandHelpInfo;
-import argparse.helpprinter;
 import argparse.style;
 import argparse.internal.command: BasicCommand;
 import argparse.internal.commandinfo: getTopLevelCommandInfo;
@@ -78,7 +78,7 @@ if(COMMAND.length > 0)
 public void printHelp(Config config, COMMAND...)(void delegate(string) sink)
 if(COMMAND.length > 0)
 {
-    scope hp = new HelpPrinter(config, ansiStylingArgument ? config.styling : Style.None);
+    scope hp = new DefaultHelpPrinter(config, ansiStylingArgument ? config.styling : Style.None);
     hp.printHelp(sink, getCommandHelpInfos!(config, COMMAND));
 }
 

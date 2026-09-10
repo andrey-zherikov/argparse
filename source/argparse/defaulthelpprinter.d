@@ -1,4 +1,4 @@
-module argparse.helpprinter;
+module argparse.defaulthelpprinter;
 
 import argparse.config;
 import argparse.helpinfo;
@@ -63,7 +63,7 @@ public struct HelpScreen
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-public class HelpPrinter
+public class DefaultHelpPrinter
 {
     const Config config;
     Style style;
@@ -409,7 +409,7 @@ public class HelpPrinter
 
 unittest
 {
-    scope hp = new HelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
 
     auto test(string placeholder, bool optionalValue, bool multipleOccurrence)
     {
@@ -428,7 +428,7 @@ unittest
 
 unittest
 {
-    scope hp = new HelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
 
     auto test(bool optionalArgument, bool positional, bool usageString)
     {
@@ -454,7 +454,7 @@ unittest
 
 unittest
 {
-    scope hp = new HelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
 
     auto test(bool usageString)
     {
@@ -473,7 +473,7 @@ unittest
 
 unittest
 {
-    scope hp = new HelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
 
     auto test(string description, Nullable!string defaultValue, bool positional = false)
     {
@@ -493,7 +493,7 @@ unittest
 
 unittest
 {
-    scope hp = new HelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
     auto res = hp.formatCommandUsage(["a","b"], CommandHelpInfo(usage: "%(PROG) my usage"));
 
     assert(res == "Usage: a b my usage");
@@ -501,7 +501,7 @@ unittest
 
 unittest
 {
-    scope hp = new HelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
 
     CommandHelpInfo cmd = {
         subCommands: [
@@ -524,7 +524,7 @@ unittest
     string test(string s, size_t maxLineLength, string firstIndent = null, string indent = null)
     {
         auto a = appender!string;
-        HelpPrinter.wrapText(_ => a.put(_), s, firstIndent, indent, maxLineLength);
+        DefaultHelpPrinter.wrapText(_ => a.put(_), s, firstIndent, indent, maxLineLength);
         return a[];
     }
     assert(test("", 7) == "");
@@ -542,7 +542,7 @@ unittest
 
 unittest
 {
-    scope hp = new HelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
 
     ArgumentHelpInfo[] args = [
         // name is too long to fit into the name column, so the description goes to the next line

@@ -34,7 +34,7 @@
         <toc-element toc-title="Help">
             <toc-element topic="HelpScreen.md"/>
             <toc-element topic="printHelp.md"/>
-            <toc-element topic="HelpPrinter.md"/>
+            <toc-element topic="DefaultHelpPrinter.md"/>
             <toc-element topic="...HelpInfo.md"/>
         </toc-element>
         <toc-element topic="Param-RawParam.md"/>

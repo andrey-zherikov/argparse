@@ -1,7 +1,7 @@
 module argparse.internal.restriction;
 
 import argparse.config;
-import argparse.helpprinter: HelpPrinter;
+import argparse.defaulthelpprinter: DefaultHelpPrinter;
 import argparse.result;
 import argparse.internal.arguments: ArgumentInfo;
 
@@ -49,7 +49,7 @@ package Result missingRequiredArgumentsError(const Config config, const(Argument
 
     assert(args.length > 0);
 
-    scope hp = new HelpPrinter(config, config.styling);
+    scope hp = new DefaultHelpPrinter(config, config.styling);
 
     return Result.Error(config.errorExitCode,
         "The following argument", args.length > 1 ? "s are" : " is", " required:\n",
