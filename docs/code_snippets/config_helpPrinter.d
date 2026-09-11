@@ -12,7 +12,7 @@ enum Config cfg = {
             import std.stdio : stderr;
             scope auto output = stderr.lockingTextWriter();
 
-            new HelpPrinter(config, style).printHelp(_ => output.put(_), cmds);
+            new DefaultHelpPrinter(config, style).printHelp(_ => output.put(_), cmds);
         }
 };
 

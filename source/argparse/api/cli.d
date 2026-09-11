@@ -1,8 +1,8 @@
 module argparse.api.cli;
 
 import argparse.config;
+import argparse.defaulthelpprinter: createHelpPrinter;
 import argparse.helpinfo: CommandHelpInfo;
-import argparse.helpprinter: HelpPrinter;
 import argparse.result;
 import argparse.style: Style;
 import argparse.api.ansi: ansiStylingArgument;
@@ -73,7 +73,7 @@ private void onErrorHelp(alias printer = defaultErrorPrinter)(Config config, Com
     {
         auto style = ansiStylingArgument.stderrStyling ? config.styling : Style.None;
 
-        scope hp = new HelpPrinter(config, style);
+        scope hp = createHelpPrinter(config, style);
 
         final switch(config.helpOnError)
         {

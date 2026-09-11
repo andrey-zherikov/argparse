@@ -1,22 +1,23 @@
-# HelpPrinter
+# DefaultHelpPrinter
 
-`HelpPrinter` is a helper class that is used to create and print help screen.
+`DefaultHelpPrinter` is the help renderer that `argparse` uses out of the box. It implements
+`HelpPrinter` and is the class to derive from in order to customize help screen.
 
 ## Public data members
 
 ### config
 
-`HelpPrinter.config` holds a config object that was passed to constructor.
+`DefaultHelpPrinter.config` holds a config object that was passed to constructor.
 
 ### style
 
-`HelpPrinter.style` holds an actual style that should be applied to the help screen text. This should be used instead of `config.style`.
+`DefaultHelpPrinter.style` holds an actual style that should be applied to the help screen text. This should be used instead of `config.style`.
 
 ## Public member functions
 
 ### Constructor
 
-Constructor of `HelpPrinter` initializes an object with specified `Config` and `Style` parameters.
+Constructor of `DefaultHelpPrinter` initializes an object with specified `Config` and `Style` parameters.
 
 **Signature**
 ```c++
