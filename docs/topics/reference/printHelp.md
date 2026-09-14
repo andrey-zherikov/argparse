@@ -12,8 +12,8 @@ void printHelp(Config config, COMMAND...)(void delegate(string) sink)
 
 - `config`
 
-  [`Config`](Config.md) object that is expected to be the same as the one passed to [`CLI API`](CLI-API.md). Note that
-  only the first function checks for [`config.helpPrinter`](Config.md#helpPrinter) and calls it if it's set.
+  [`Config`](Config.md) object that is expected to be the same as the one passed to [`CLI API`](CLI-API.md). Both
+  functions render help through [`config.helpPrinterFactory`](Config.md#helpPrinterFactory) if it's set.
 
 - `COMMAND...`
 

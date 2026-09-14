@@ -1,6 +1,8 @@
 # HelpPrinter
 
-`HelpPrinter` is the interface that `argparse` uses to render help text.
+`HelpPrinter` is the interface that `argparse` uses to render help text. An object implementing it is created by
+[`Config.helpPrinterFactory`](Config.md#helpPrinterFactory) and is used everywhere help text is formatted: help
+screen, [usage line printed on error](Config.md#helpOnError) and lists of arguments in error messages.
 
 It contains only the functions that `argparse` calls itself. Everything a help screen is built from is a part of
 [`DefaultHelpPrinter`](DefaultHelpPrinter.md) and can be customized there, so in most cases the interface is not

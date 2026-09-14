@@ -57,9 +57,9 @@ unittest
 
 // Prints what accompanies an error message, as selected by Config.helpOnError.
 //
-// Config.helpPrinter is consulted for `full` only: that hook renders the help screen, which is what `full`
-// prints, whereas `usage` prints the short "Usage: ..." line that conventionally precedes an error and has no
-// corresponding hook.
+// Both settings render through the printer that `Config.helpPrinterFactory` provides: `full` prints the
+// whole help screen, whereas `usage` prints only the short "Usage: ..." line that conventionally precedes
+// an error message.
 private void onErrorHelp(alias printer = defaultErrorPrinter)(Config config, CommandHelpInfo[] cmds) nothrow
 {
     import std.algorithm.iteration: map;
@@ -144,18 +144,24 @@ unittest
         assert(printed is null);
     }
     {
-        // `full` renders the help screen, so it goes through Config.helpPrinter when one is provided
+        // `full` renders the help screen, so it goes through the printer that Config.helpPrinterFactory creates
+        import argparse.defaulthelpprinter: CapturingHelpPrinter;
+        import std.algorithm: startsWith;
+
         enum Config config = {
             helpOnError: Config.HelpOnError.full,
-            helpPrinter: (cfg, style, c) { assert(c.length == 2 && c[$-1].name == "sub"); },
+            stylingMode: Config.StylingMode.off,
+            helpPrinterFactory: (cfg, style) => new CapturingHelpPrinter(cfg, style),
         };
 
         printed = null;
+        CapturingHelpPrinter.captured = null;
         onErrorHelp!printer(config, cmds);
-        assert(printed is null);   // the printer is not used by `full`
+        assert(printed is null);   // the error printer is not used by `full`
+        assert(CapturingHelpPrinter.captured.startsWith("Usage: prog sub"));   // the whole command stack
     }
     {
-        // ... and it renders the help screen to stderr when no Config.helpPrinter is provided
+        // ... and it renders the help screen to stderr when no factory is provided
         enum Config config = {
             helpOnError: Config.HelpOnError.full,
             stylingMode: Config.StylingMode.off,
@@ -685,13 +691,15 @@ unittest
         @(NamedArgument.Required) string s;
     }
 
+    import argparse.defaulthelpprinter: CapturingHelpPrinter;
+
     // `usage` and `full` both need the help info, `none` doesn't
     static foreach(mode; [Config.HelpOnError.usage, Config.HelpOnError.full])
     {{
         enum Config config = {
             helpOnError: mode,
             stylingMode: Config.StylingMode.off,
-            helpPrinter: (cfg, style, cmds) { },
+            helpPrinterFactory: (cfg, style) => new CapturingHelpPrinter(cfg, style),
             errorHandler: (msg) { },
         };
 
@@ -710,13 +718,20 @@ unittest
         enum Config config = {
             helpOnError: Config.HelpOnError.none,
             stylingMode: Config.StylingMode.off,
-            helpPrinter: (cfg, style, cmds) => assert(false),
+            helpPrinterFactory: (cfg, style) => new CapturingHelpPrinter(cfg, style),
             errorHandler: (msg) { },
         };
 
         T t;
+
+        // A printer is still created to format the list of missing arguments for the error message,
+        // but `none` renders no help screen
+        CapturingHelpPrinter.captured = null;
         assert(CLI!(config, T).parseArgs(t, []).isError("The following argument is required"));
+        assert(CapturingHelpPrinter.captured is null);
+
         assert(CLI!(config, T).parseArgs(t, ["-s","S","extra"]).isError("Unrecognized arguments"));
+        assert(CapturingHelpPrinter.captured is null);
 
         // `none` must not compute the help info at all
         string[] unrecognizedArgs;

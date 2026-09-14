@@ -64,15 +64,10 @@ unittest
 public void printHelp(Config config, COMMAND...)()
 if(COMMAND.length > 0)
 {
-    static if(config.helpPrinter)
-        config.helpPrinter(config, ansiStylingArgument ? config.styling : Style.None, getCommandHelpInfos!(config, COMMAND));
-    else
-    {
-        import std.stdio: stdout;
-        scope auto output = stdout.lockingTextWriter();
+    import std.stdio: stdout;
+    scope auto output = stdout.lockingTextWriter();
 
-        printHelp!(config, COMMAND)(_ => output.put(_));
-    }
+    printHelp!(config, COMMAND)(_ => output.put(_));
 }
 
 public void printHelp(Config config, COMMAND...)(void delegate(string) sink)

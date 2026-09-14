@@ -65,19 +65,58 @@ public struct HelpScreen
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Creates the object that renders help text. Every place that formats help goes through this function so
-// that all of them consistently use the same implementation.
+// that `Config.helpPrinterFactory` is honored consistently.
 package HelpPrinter createHelpPrinter(const Config config, Style style)
 {
-    return new DefaultHelpPrinter(config, style);
+    return config.helpPrinterFactory !is null ?
+           config.helpPrinterFactory(config, style) :
+           new DefaultHelpPrinter(config, style);
+}
+
+version(unittest)
+{
+    // Help printer that keeps the help screen instead of printing it, so that tests can assert on it.
+    // The sink that `argparse` provides is ignored - that is how a user redirects the output.
+    package(argparse) class CapturingHelpPrinter : DefaultHelpPrinter
+    {
+        __gshared string captured;
+
+        this(const Config config, Style style) { super(config, style); }
+
+        override void printHelp(void delegate(string) sink, CommandHelpInfo[] commands)
+        {
+            import std.array: appender;
+
+            auto output = appender!string;
+            super.printHelp(_ => output.put(_), commands);
+
+            captured = output[];
+        }
+    }
 }
 
 unittest
 {
+    // No factory in config => the default implementation
     auto hp = createHelpPrinter(Config.init, Style.None);
 
     assert(hp !is null);
     assert(cast(DefaultHelpPrinter) hp !is null);
     assert(hp.formatCommandUsage(["prog"], CommandHelpInfo(name: "prog")) == "Usage: prog");
+}
+
+unittest
+{
+    // Config.helpPrinterFactory is used when it is provided
+    enum Config config = { helpPrinterFactory: (c, s) => new CapturingHelpPrinter(c, s) };
+
+    auto hp = createHelpPrinter(config, Style.None);
+
+    assert(cast(CapturingHelpPrinter) hp !is null);
+
+    CapturingHelpPrinter.captured = null;
+    hp.printHelp(_ => assert(false), [CommandHelpInfo(name: "prog")]);   // sink is ignored by the override
+    assert(CapturingHelpPrinter.captured == "Usage: prog\n\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

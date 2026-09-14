@@ -164,8 +164,8 @@ failed. It has the following type: `enum HelpOnError { none, usage, full }`:
 Whatever is printed belongs to the command that was being parsed when the error happened, so an error in a
 [subcommand](Subcommands.md) refers to that subcommand rather than to the top level command.
 
-[`Config.helpPrinter`](#helpPrinter) is used for `Config.HelpOnError.full` only, since that is the setting that
-customizes the help screen. There is no such hook for the usage line.
+Both settings render through [`Config.helpPrinterFactory`](#helpPrinterFactory) if it's set: `full` prints the whole
+help screen and `usage` prints only the usage line.
 
 Note that this setting is independent from [`Config.errorHandler`](#errorHandler): the latter receives the error
 message only, so providing a custom error handler does not suppress the usage line or the help screen.
@@ -219,19 +219,28 @@ Help text from the first part of the example code above:
 
 <img src="config_styling.png" alt="Config styling example" border-effect="rounded"/>
 
-## Help printer {id="helpPrinter"}
+## Help printer {id="helpPrinterFactory"}
 
-`Config.helpPrinter` is a handler function to print help screen.
-It receives the following parameters:
+`Config.helpPrinterFactory` is a function that creates an object that renders help text. It receives the following
+parameters and returns an implementation of [`HelpPrinter`](HelpPrinter.md) interface:
 - `Config config` - config object that was provided to parsing API.
 - `Style style` - style that should be applied to help screen.
-- `CommandHelpInfo[] cmds` - current stack of (sub)commands starting with top-level command.
-  For example, if command line contains `tool subcmd1 subcmd2 -h` then `cmd` will contain array of `CommandHelpInfo`
-  objects that corresponds to `tool`, `subcmd1`, `subcmd2` commands respectively.
+
+`argparse` calls this function every time it needs to format help text, so a single implementation is used for all of
+them: help screen, [usage line printed on error](#helpOnError) and lists of arguments in error messages. The usual way
+to provide one is to derive from [`DefaultHelpPrinter`](DefaultHelpPrinter.md) and to override the functions that
+should behave differently - everything else keeps the standard behavior.
+
+Default is `null` which means that `DefaultHelpPrinter` is used as is.
 
 Example:
 
-<code-block src="code_snippets/config_helpPrinter.d" lang="c++"/>
+<code-block src="code_snippets/config_helpPrinterFactory.d" lang="c++"/>
+
+> Note that this function is called at run time but it is stored in `Config` which is a compile-time value, so it must
+> be a function pointer, not a delegate - it can't capture anything from the enclosing scope.
+>
+{style="note"}
 
 
 ## Error handling {id="errorHandler"}

@@ -1,7 +1,7 @@
 module argparse.config;
 
+import argparse.helpprinter: HelpPrinter;
 import argparse.style: Style;
-import argparse.helpinfo: CommandHelpInfo;
 
 
 struct Config
@@ -116,10 +116,12 @@ struct Config
     StylingMode stylingMode = StylingMode.autodetect;
 
     /**
-       Function that processes error messages if they happen during argument parsing.
-       By default all errors are printed to stderr.
+       Function that creates an object that prints help screen. It is used everywhere `argparse` formats
+       help text - help screen, usage line and lists of arguments in error messages - so overriding a few
+       functions in a derived class changes all of them consistently.
+       Defaults to `DefaultHelpPrinter`.
      */
-    void function(Config config, Style style, CommandHelpInfo[] cmds) helpPrinter;
+    HelpPrinter function(const Config config, Style style) helpPrinterFactory;
 
     /**
        Function that processes error messages if they happen during argument parsing.
