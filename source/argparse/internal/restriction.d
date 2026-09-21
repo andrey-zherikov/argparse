@@ -44,16 +44,20 @@ unittest
 package Result missingRequiredArgumentsError(const Config config, const(ArgumentInfo)[] args)
 {
     import std.algorithm: map;
-    import std.array: array;
+    import std.array: array, appender;
     import std.string: chomp;
 
     assert(args.length > 0);
 
-    scope hp = createHelpPrinter(config, config.styling);
+    auto a = appender!string;
+
+    // The list of arguments is printed into a buffer that becomes a part of the error message
+    scope hp = createHelpPrinter(config, config.styling, _ => a.put(_));
+    hp.printArgumentList(args.map!((ref _) => _.helpInfo).array);
 
     return Result.Error(config.errorExitCode,
         "The following argument", args.length > 1 ? "s are" : " is", " required:\n",
-        hp.formatArgumentList(args.map!((ref _) => _.helpInfo).array).chomp);
+        a[].chomp);
 }
 
 unittest

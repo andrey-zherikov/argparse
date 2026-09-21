@@ -5,9 +5,9 @@ import argparse;
 // the lists of arguments in error messages.
 static class MyHelpPrinter : DefaultHelpPrinter
 {
-    this(const Config config, Style style)
+    this(const Config config, Style style, void delegate(string) sink)
     {
-        super(config, style);
+        super(config, style, sink);
     }
 
     override string formatArgumentUsage(in ArgumentHelpInfo helpInfo, bool usageString)
@@ -22,7 +22,7 @@ struct T
 }
 
 enum Config cfg = {
-    helpPrinterFactory: (config, style) => new MyHelpPrinter(config, style)
+    helpPrinterFactory: (config, style, sink) => new MyHelpPrinter(config, style, sink)
 };
 
 T t;

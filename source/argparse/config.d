@@ -119,9 +119,10 @@ struct Config
        Function that creates an object that prints help screen. It is used everywhere `argparse` formats
        help text - help screen, usage line and lists of arguments in error messages - so overriding a few
        functions in a derived class changes all of them consistently.
+       `sink` is where the created object should send the text to.
        Defaults to `DefaultHelpPrinter`.
      */
-    HelpPrinter function(const Config config, Style style) helpPrinterFactory;
+    HelpPrinter function(const Config config, Style style, void delegate(string) sink) helpPrinterFactory;
 
     /**
        Function that processes error messages if they happen during argument parsing.

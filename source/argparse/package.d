@@ -1043,17 +1043,16 @@ unittest
         @(PositionalArgument(1).AllowedValues("q","a")) string param1;
     }
 
-    import std.array: appender;
+    static string captured;
 
     enum Config config = {
         styling: Style.None,
-        helpPrinterFactory: (config, style) => new CapturingHelpPrinter(config, style),
+        helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
     };
 
     T t;
-    CapturingHelpPrinter.captured = null;
     assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
-    assert(CapturingHelpPrinter.captured == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
+    assert(captured == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
         "custom description\n\n"~
         "Required arguments:\n"~
         "  -f {apple,pear}, --fruit {apple,pear}\n"~
@@ -1096,17 +1095,16 @@ unittest
         @PositionalArgument string q;
     }
 
-    import std.array: appender;
+    static string captured;
 
     enum Config config = {
         styling: Style.None,
-        helpPrinterFactory: (config, style) => new CapturingHelpPrinter(config, style),
+        helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
     };
 
     T t;
-    CapturingHelpPrinter.captured = null;
     assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
-    assert(CapturingHelpPrinter.captured == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
+    assert(captured == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
         "group1:\n"~
         "  group1 description\n\n"~
         "  -a A\n"~
@@ -1144,18 +1142,17 @@ unittest
         SubCommand!(cmd1, CMD2) cmd;
     }
 
-    import std.array: appender;
-
     {
+        static string captured;
+
         enum Config config = {
             styling: Style.None,
-            helpPrinterFactory: (config, style) => new CapturingHelpPrinter(config, style),
+            helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
         };
 
         T t;
-        CapturingHelpPrinter.captured = null;
         assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
-        assert(CapturingHelpPrinter.captured == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
+        assert(captured == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
         "Available commands:\n"~
         "  cmd1          Perform cmd 1\n"~
         "  very-long-command-name-2\n"~
@@ -1166,15 +1163,16 @@ unittest
         "  -h, --help    Show this help message and exit\n\n");
     }
     {
+        static string captured;
+
         enum Config config = {
             styling: Style.None,
-            helpPrinterFactory: (config, style) => new CapturingHelpPrinter(config, style),
+            helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
         };
 
         T t;
-        CapturingHelpPrinter.captured = null;
         assert(CLI!(config, T).parseArgs(t, ["cmd1", "-h"]).isHelpWanted);
-        assert(CapturingHelpPrinter.captured == "Usage: MYPROG cmd1 [-a A] [-h]\n\n"~
+        assert(captured == "Usage: MYPROG cmd1 [-a A] [-h]\n\n"~
         "Optional arguments:\n"~
         "  -a A\n"~
         "  -h, --help    Show this help message and exit\n"~
@@ -1201,17 +1199,16 @@ unittest
         SubCommand!(Default!cmd1, cmd2) cmd;
     }
 
-    import std.array: appender;
+    static string captured;
 
     enum Config config = {
         styling: Style.None,
-        helpPrinterFactory: (config, style) => new CapturingHelpPrinter(config, style),
+        helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
     };
 
     T t;
-    CapturingHelpPrinter.captured = null;
     assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
-    assert(CapturingHelpPrinter.captured == "Usage: MYPROG [-c C] [-h] <command> [<args>]\n\n"~
+    assert(captured == "Usage: MYPROG [-c C] [-h] <command> [<args>]\n\n"~
     "Available commands:\n"~
     "  cmd1 (default)\n"~
     "  cmd2              Perform cmd 2\n\n"~
@@ -1232,17 +1229,16 @@ unittest
         void bar(bool value) {}
     }
 
-    import std.array: appender;
+    static string captured;
 
     enum Config config = {
         styling: Style.None,
-        helpPrinterFactory: (config, style) => new CapturingHelpPrinter(config, style),
+        helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
     };
 
     T t;
-    CapturingHelpPrinter.captured = null;
     assert(CLI!(config, T).parseArgs(t, ["cmd1", "-h"]).isHelpWanted);
-    assert(CapturingHelpPrinter.captured == "Usage: MYPROG [-f] [-b] [-h]\n\n"~
+    assert(captured == "Usage: MYPROG [-f] [-b] [-h]\n\n"~
     "Optional arguments:\n"~
     "  -f, --[no-]foo\n"~
     "  -b, --[no-]bar\n"~
@@ -1273,17 +1269,16 @@ unittest
         @(PositionalArgument(0).Optional)               string pos = "xyz";
     }
 
-    import std.array: appender;
+    static string captured;
 
     enum Config config = {
         styling: Style.None,
-        helpPrinterFactory: (config, style) => new CapturingHelpPrinter(config, style),
+        helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
     };
 
     T t;
-    CapturingHelpPrinter.captured = null;
     assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
-    assert(CapturingHelpPrinter.captured == "Usage: MYPROG [-a A] [-b B] [--mode {WALK,RUN}] --req {WALK,RUN} [--quiet {WALK,RUN}]"~
+    assert(captured == "Usage: MYPROG [-a A] [-b B] [--mode {WALK,RUN}] --req {WALK,RUN} [--quiet {WALK,RUN}]"~
     " [--forced FORCED] [-j J] [-k K] [--arr ARR ...] [--aa AA ...] [-h] [pos]\n\n"~
     "Required arguments:\n"~
     "  --req {WALK,RUN}\n\n"~

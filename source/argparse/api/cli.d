@@ -60,20 +60,21 @@ unittest
 // Both settings render through the printer that `Config.helpPrinterFactory` provides: `full` prints the
 // whole help screen, whereas `usage` prints only the short "Usage: ..." line that conventionally precedes
 // an error message.
-private void onErrorHelp(alias printer = defaultErrorPrinter)(Config config, CommandHelpInfo[] cmds) nothrow
+private void onErrorHelp(Config config, CommandHelpInfo[] cmds) nothrow
 {
-    import std.algorithm.iteration: map;
-    import std.array: array;
-
     // Bail out before creating the style and the help printer: nothing below is needed to print nothing
     if(config.helpOnError == Config.HelpOnError.none || cmds.length == 0)
         return;
 
     try
     {
+        import std.stdio: stderr;
+
         auto style = ansiStylingArgument.stderrStyling ? config.styling : Style.None;
 
-        scope hp = createHelpPrinter(config, style);
+        scope auto output = stderr.lockingTextWriter();
+
+        scope hp = createHelpPrinter(config, style, _ => output.put(_));
 
         final switch(config.helpOnError)
         {
@@ -83,20 +84,11 @@ private void onErrorHelp(alias printer = defaultErrorPrinter)(Config config, Com
             case Config.HelpOnError.usage:
                 // The usage line is built for the command that was being parsed (the last one in the stack)
                 // and it is prefixed with the names of all the commands that lead to it.
-                printer(hp.formatCommandUsage(cmds.map!((ref _) => _.name).array, cmds[$-1]));
+                hp.printUsage(cmds);
                 break;
 
             case Config.HelpOnError.full:
-                if(config.helpPrinter)
-                    config.helpPrinter(config, style, cmds);
-                else
-                {
-                    import std.stdio: stderr;
-
-                    scope auto output = stderr.lockingTextWriter();
-
-                    hp.printHelp(_ => output.put(_), cmds);
-                }
+                hp.printHelp(cmds);
                 break;
         }
     }
@@ -106,70 +98,74 @@ private void onErrorHelp(alias printer = defaultErrorPrinter)(Config config, Com
     }
 }
 
+version(unittest)
+{
+    import argparse.defaulthelpprinter: DefaultHelpPrinter;
+
+    // Behaves like a user's printer that fails
+    private class ThrowingHelpPrinter : DefaultHelpPrinter
+    {
+        this(const Config config, Style style, void delegate(string) sink) { super(config, style, sink); }
+
+        override void printUsage(const CommandHelpInfo[] commands)
+        {
+            throw new Exception("My Message.");
+        }
+    }
+}
+
 unittest
 {
-    static string printed;
-    static void printer(T...)(T m)
-    {
-        import std.conv: text;
+    import argparse.defaulthelpprinter: DefaultHelpPrinter;
 
-        printed = text(m);
-    }
+    import std.algorithm: startsWith;
 
     auto cmds = [CommandHelpInfo(name: "prog"), CommandHelpInfo(name: "sub")];
 
     static assert(Config.init.helpOnError == Config.HelpOnError.none);   // default
 
     {
+        static string captured;
+
         enum Config config = {
             helpOnError: Config.HelpOnError.usage,
             stylingMode: Config.StylingMode.off,
+            helpPrinterFactory: (cfg, style, sink) => new DefaultHelpPrinter(cfg, style, (_) { captured ~= _; }),
         };
 
-        // No help info attached => nothing is printed
-        printed = null;
-        onErrorHelp!printer(config, []);
-        assert(printed is null);
+        // No help info attached => a printer is not even created
+        captured = null;
+        onErrorHelp(config, []);
+        assert(captured is null);
 
         // Usage line of the whole command stack
-        printed = null;
-        onErrorHelp!printer(config, cmds);
-        assert(printed == "Usage: prog sub");
+        captured = null;
+        onErrorHelp(config, cmds);
+        assert(captured == "Usage: prog sub\n");
     }
     {
-        enum Config config = { helpOnError: Config.HelpOnError.none };
+        static string captured;
 
-        printed = null;
-        onErrorHelp!printer(config, cmds);
-        assert(printed is null);
+        enum Config config = {
+            helpOnError: Config.HelpOnError.none,
+            helpPrinterFactory: (cfg, style, sink) => new DefaultHelpPrinter(cfg, style, (_) { captured ~= _; }),
+        };
+
+        onErrorHelp(config, cmds);
+        assert(captured is null);
     }
     {
-        // `full` renders the help screen, so it goes through the printer that Config.helpPrinterFactory creates
-        import argparse.defaulthelpprinter: CapturingHelpPrinter;
-        import std.algorithm: startsWith;
+        static string captured;
 
+        // `full` renders the help screen
         enum Config config = {
             helpOnError: Config.HelpOnError.full,
             stylingMode: Config.StylingMode.off,
-            helpPrinterFactory: (cfg, style) => new CapturingHelpPrinter(cfg, style),
+            helpPrinterFactory: (cfg, style, sink) => new DefaultHelpPrinter(cfg, style, (_) { captured ~= _; }),
         };
 
-        printed = null;
-        CapturingHelpPrinter.captured = null;
-        onErrorHelp!printer(config, cmds);
-        assert(printed is null);   // the error printer is not used by `full`
-        assert(CapturingHelpPrinter.captured.startsWith("Usage: prog sub"));   // the whole command stack
-    }
-    {
-        // ... and it renders the help screen to stderr when no factory is provided
-        enum Config config = {
-            helpOnError: Config.HelpOnError.full,
-            stylingMode: Config.StylingMode.off,
-        };
-
-        printed = null;
-        onErrorHelp!printer(config, cmds);
-        assert(printed is null);   // the printer is not used by `full`
+        onErrorHelp(config, cmds);
+        assert(captured.startsWith("Usage: prog sub"));   // the whole command stack
     }
 }
 
@@ -177,19 +173,16 @@ unittest
 {
     import std.exception;
 
-    static void printer(T...)(T m)
-    {
-        throw new Exception("My Message.");
-    }
-
+    // `onErrorHelp` is nothrow, so an exception coming from the printer surfaces as an Error
     enum Config config = {
         helpOnError: Config.HelpOnError.usage,
         stylingMode: Config.StylingMode.off,
+        helpPrinterFactory: (cfg, style, sink) => new ThrowingHelpPrinter(cfg, style, sink),
     };
 
     auto cmds = [CommandHelpInfo(name: "prog")];
 
-    assert(collectExceptionMsg!Error(onErrorHelp!printer(config, cmds)) == "My Message.");
+    assert(collectExceptionMsg!Error(onErrorHelp(config, cmds)) == "My Message.");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -691,7 +684,7 @@ unittest
         @(NamedArgument.Required) string s;
     }
 
-    import argparse.defaulthelpprinter: CapturingHelpPrinter;
+    import argparse.defaulthelpprinter: DefaultHelpPrinter;
 
     // `usage` and `full` both need the help info, `none` doesn't
     static foreach(mode; [Config.HelpOnError.usage, Config.HelpOnError.full])
@@ -699,14 +692,13 @@ unittest
         enum Config config = {
             helpOnError: mode,
             stylingMode: Config.StylingMode.off,
-            helpPrinterFactory: (cfg, style) => new CapturingHelpPrinter(cfg, style),
             errorHandler: (msg) { },
         };
 
         T t;
 
         auto res = CLI!(config, T).parseArgs(t, []);
-        assert(res.isError("The following argument is required"));
+        assert(res.isError("The following argument is required", "-s"));
         assert(res.helpOnErrorCommandNames.length == 1);
 
         // Nothing is printed when parsing succeeds, but the help info is still carried by the result so that
@@ -718,7 +710,6 @@ unittest
         enum Config config = {
             helpOnError: Config.HelpOnError.none,
             stylingMode: Config.StylingMode.off,
-            helpPrinterFactory: (cfg, style) => new CapturingHelpPrinter(cfg, style),
             errorHandler: (msg) { },
         };
 
@@ -726,12 +717,9 @@ unittest
 
         // A printer is still created to format the list of missing arguments for the error message,
         // but `none` renders no help screen
-        CapturingHelpPrinter.captured = null;
         assert(CLI!(config, T).parseArgs(t, []).isError("The following argument is required"));
-        assert(CapturingHelpPrinter.captured is null);
 
         assert(CLI!(config, T).parseArgs(t, ["-s","S","extra"]).isError("Unrecognized arguments"));
-        assert(CapturingHelpPrinter.captured is null);
 
         // `none` must not compute the help info at all
         string[] unrecognizedArgs;

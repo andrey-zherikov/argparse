@@ -73,15 +73,14 @@ if(COMMAND.length > 0)
 public void printHelp(Config config, COMMAND...)(void delegate(string) sink)
 if(COMMAND.length > 0)
 {
-    scope hp = createHelpPrinter(config, ansiStylingArgument ? config.styling : Style.None);
-    hp.printHelp(sink, getCommandHelpInfos!(config, COMMAND));
+    scope hp = createHelpPrinter(config, ansiStylingArgument ? config.styling : Style.None, sink);
+    hp.printHelp(getCommandHelpInfos!(config, COMMAND));
 }
 
 unittest
 {
     import argparse.api.command;
     import argparse.api.subcommand;
-    import std.array: appender;
 
     struct B
     {
@@ -96,18 +95,17 @@ unittest
         SubCommand!B cmd;
     }
 
-    enum AB_golden = "Usage: MYPROG B [--bs BS] [-h]\n\n"~
-        "Optional arguments:\n"~
-        "  --bs BS\n"~
-        "  -h, --help    Show this help message and exit\n"~
-        "  --as AS\n\n";
-
-    auto output = appender!string;
+    string output;
 
     enum Config config = {
         styling: Style.None,
     };
 
-    printHelp!(config, A, B)(_ => output.put(_));
-    assert(output[] ==  AB_golden);
+    printHelp!(config, A, B)((_) { output ~= _; });
+    assert(output == "Usage: MYPROG B [--bs BS] [-h]\n\n"~
+        "Optional arguments:\n"~
+        "  --bs BS\n"~
+        "  -h, --help    Show this help message and exit\n"~
+        "  --as AS\n\n"
+    );
 }

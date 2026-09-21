@@ -225,6 +225,10 @@ Help text from the first part of the example code above:
 parameters and returns an implementation of [`HelpPrinter`](HelpPrinter.md) interface:
 - `Config config` - config object that was provided to parsing API.
 - `Style style` - style that should be applied to help screen.
+- `void delegate(string) sink` - where the created object should print help text to. `argparse` passes a different sink
+  depending on what is printed: for example, `stdout` for `-h` and `stderr` for the [usage line printed on error](#helpOnError).
+  The created object is expected to print to this sink: `argparse` also reads back from it the text that it embeds
+  into error messages.
 
 `argparse` calls this function every time it needs to format help text, so a single implementation is used for all of
 them: help screen, [usage line printed on error](#helpOnError) and lists of arguments in error messages. The usual way

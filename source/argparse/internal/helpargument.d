@@ -50,8 +50,8 @@ package struct HelpArgumentUDA
 
         scope auto output = stdout.lockingTextWriter();
 
-        scope hp = createHelpPrinter(*param.config, style);
-        hp.printHelp(_ => output.put(_), stack);
+        scope hp = createHelpPrinter(*param.config, style, _ => output.put(_));
+        hp.printHelp(stack);
 
         return Result.HelpWanted;
     }
