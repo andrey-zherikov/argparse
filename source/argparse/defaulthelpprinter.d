@@ -65,19 +65,45 @@ public struct HelpScreen
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Creates the object that renders help text. Every place that formats help goes through this function so
-// that all of them consistently use the same implementation.
-package HelpPrinter createHelpPrinter(const Config config, Style style)
+// that `Config.helpPrinterFactory` is honored consistently.
+package HelpPrinter createHelpPrinter(const Config config, Style style, void delegate(string) sink)
 {
-    return new DefaultHelpPrinter(config, style);
+    return config.helpPrinterFactory !is null ?
+           config.helpPrinterFactory(config, style, sink) :
+           new DefaultHelpPrinter(config, style, sink);
 }
 
 unittest
 {
-    auto hp = createHelpPrinter(Config.init, Style.None);
+    string output;
+
+    // No factory in config => the default implementation
+    auto hp = createHelpPrinter(Config.init, Style.None, (_) { output ~= _; });
 
     assert(hp !is null);
     assert(cast(DefaultHelpPrinter) hp !is null);
-    assert(hp.formatCommandUsage(["prog"], CommandHelpInfo(name: "prog")) == "Usage: prog");
+    hp.printUsage([CommandHelpInfo(name: "prog")]);
+    assert(output == "Usage: prog\n");   // the sink passed to createHelpPrinter is the one used
+}
+
+unittest
+{
+    // Config.helpPrinterFactory is used when it is provided, and it is given the sink to print to
+    static class MyHelpPrinter : DefaultHelpPrinter
+    {
+        this(const Config config, Style style, void delegate(string) sink) { super(config, style, sink); }
+    }
+
+    static string captured;
+
+    enum Config config = { helpPrinterFactory: (c, s, sink) => new MyHelpPrinter(c, s, sink) };
+
+    auto hp = createHelpPrinter(config, Style.None, (_) { captured ~= _; });
+
+    assert(cast(MyHelpPrinter) hp !is null);
+
+    hp.printHelp([CommandHelpInfo(name: "prog")]);
+    assert(captured == "Usage: prog\n\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,11 +112,13 @@ public class DefaultHelpPrinter : HelpPrinter
 {
     const Config config;
     Style style;
+    void delegate(string) sink;
 
-    this(const Config config, Style style)
+    this(const Config config, Style style, void delegate(string) sink)
     {
         this.config = config;
         this.style = style;
+        this.sink = sink;
     }
 
 
@@ -210,22 +238,28 @@ public class DefaultHelpPrinter : HelpPrinter
         return helpInfo.description.length > 0 ? helpInfo.description ~ " " ~ mark : mark;
     }
 
-    string formatCommandUsage(string[] commandName, in CommandHelpInfo helpInfo)
+    // Returns the usage line (`Usage: ...`) for the provided stack of (sub)commands.
+    // Both `printUsage` and the help screen use it, so overriding it changes the usage line everywhere.
+    string formatUsage(const CommandHelpInfo[] commands)
     {
-        string usage;
+        auto helpInfo = &commands[$-1];
 
         if(helpInfo.usage.length > 0)
-            usage = replace(helpInfo.usage, "%(PROG)", commandName.join(" "));
-        else
-        {
-            usage = chain(
-                    commandName,
-                    helpInfo.namedArguments.map!((ref _) => formatArgumentUsage(_, true)),       // named arguments
-                    helpInfo.positionalArguments.map!((ref _) => formatArgumentUsage(_, true)),  // positional arguments
-                    helpInfo.subCommands.length > 0 ? ["<command> [<args>]"] : []          // subcommands if any
-                ).join(" ");
-        }
-        return "Usage: " ~ usage;
+            return "Usage: " ~ replace(helpInfo.usage, "%(PROG)", commands.map!((ref _) => _.name).join(" "));
+
+        return "Usage: " ~ chain(
+                commands.map!((ref _) => _.name),
+                helpInfo.namedArguments.map!((ref _) => formatArgumentUsage(_, true)),       // named arguments
+                helpInfo.positionalArguments.map!((ref _) => formatArgumentUsage(_, true)),  // positional arguments
+                helpInfo.subCommands.length > 0 ? ["<command> [<args>]"] : []          // subcommands if any
+            ).join(" ");
+    }
+
+    // Prints the usage line (`Usage: ...`) for the provided stack of (sub)commands, terminated with `\n`.
+    void printUsage(const CommandHelpInfo[] commands)
+    {
+        sink(formatUsage(commands));
+        sink("\n");
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -290,8 +324,14 @@ public class DefaultHelpPrinter : HelpPrinter
         return groups;
     }
 
-    // Renders a list of arguments the way the help screen does: name column and wrapped description.
-    // Used for error messages that have to spell out which arguments they are about.
+    // Prints the provided arguments rendered as they appear on help screen: name column and wrapped
+    // description. Every line, including the last one, is terminated with `\n`.
+    void printArgumentList(const ArgumentHelpInfo[] args)
+    {
+        sink(formatArgumentList(args));
+    }
+
+    // Returns the text that `printArgumentList` prints.
     string formatArgumentList(const ArgumentHelpInfo[] args)
     {
         import std.array: appender;
@@ -310,18 +350,16 @@ public class DefaultHelpPrinter : HelpPrinter
         return res[];
     }
 
-    HelpScreen createHelpScreen(CommandHelpInfo[] commands)
+    HelpScreen createHelpScreen(const CommandHelpInfo[] commands)
     {
-        CommandHelpInfo* currentCmd = &commands[$-1];
+        auto currentCmd = &commands[$-1];
 
-        auto cmdFullName = commands.map!((ref _) => _.name).array;
-
-        auto helpScreen = HelpScreen(formatCommandUsage(cmdFullName, *currentCmd),
-                                     (*currentCmd).description,
-                                     (*currentCmd).epilog);
+        auto helpScreen = HelpScreen(formatUsage(commands),
+                                     currentCmd.description,
+                                     currentCmd.epilog);
 
         // sub commands go first
-        if((*currentCmd).subCommands.length > 0)
+        if(currentCmd.subCommands.length > 0)
             helpScreen.groups ~= createSubCommandGroup(*currentCmd);
 
         // then arguments
@@ -334,24 +372,27 @@ public class DefaultHelpPrinter : HelpPrinter
     // Printing functions
     ///////////////////////////////////////////////////////////////////////////
 
-    void printParameter(void delegate(string) sink, const ref HelpScreen.Parameter param, size_t descriptionOffset)
+    // These functions print to `output` rather than to `sink` so that a part of help screen can be rendered
+    // somewhere else - for example, `formatArgumentList` renders parameters into a string.
+
+    void printParameter(void delegate(string) output, const ref HelpScreen.Parameter param, size_t descriptionOffset)
     {
         string name = "  " ~ param.name;
         auto nameLength = name.getUnstyledTextLength();
 
         if(param.description.getUnstyledTextLength == 0)
         {
-            sink(name);
-            sink("\n");
+            output(name);
+            output("\n");
         }
         else if(nameLength + 2 > descriptionOffset) // 2 = two spaces between name and description
         {
             // long name; start description on the next line
-            sink(name);
-            sink("\n");
+            output(name);
+            output("\n");
 
             immutable descriptionIndent = ' '.repeat(descriptionOffset).array;
-            wrapText(sink, param.description, descriptionIndent, descriptionIndent);
+            wrapText(output, param.description, descriptionIndent, descriptionIndent);
         }
         else
         {
@@ -359,47 +400,46 @@ public class DefaultHelpPrinter : HelpPrinter
             // to render this correctly, we put name into first-line indent parameter
 
             immutable descriptionIndent = ' '.repeat(descriptionOffset).array;
-            wrapText(sink, param.description, name ~ descriptionIndent[nameLength..$], descriptionIndent);
+            wrapText(output, param.description, name ~ descriptionIndent[nameLength..$], descriptionIndent);
         }
     }
 
-    void printGroup(void delegate(string) sink, const ref HelpScreen.Group group, size_t descriptionOffset)
+    void printGroup(void delegate(string) output, const ref HelpScreen.Group group, size_t descriptionOffset)
     {
-        sink(group.title);
-        sink(":\n");
+        output(group.title);
+        output(":\n");
 
         if(group.description.getUnstyledTextLength > 0)
         {
-            sink("  ");
-            sink(group.description);
-            sink("\n\n");
+            output("  ");
+            output(group.description);
+            output("\n\n");
         }
 
         foreach(const ref entry; group.parameters)
-            printParameter(sink, entry, descriptionOffset);
+            printParameter(output, entry, descriptionOffset);
 
-        sink("\n");
+        output("\n");
     }
 
-    void printHelpScreen(void delegate(string) sink, const ref HelpScreen screen, size_t descriptionOffset)
+    void printHelpScreen(void delegate(string) output, const ref HelpScreen screen, size_t descriptionOffset)
     {
-        sink(screen.usage);
-
-        sink("\n\n");
+        output(screen.usage);
+        output("\n\n");
 
         if(screen.description.getUnstyledTextLength > 0)
         {
-            sink(screen.description);
-            sink("\n\n");
+            output(screen.description);
+            output("\n\n");
         }
 
         foreach(const ref entry; screen.groups)
-            printGroup(sink, entry, descriptionOffset);
+            printGroup(output, entry, descriptionOffset);
 
         if(screen.epilog.getUnstyledTextLength > 0)
         {
-            sink(screen.epilog);
-            sink("\n");
+            output(screen.epilog);
+            output("\n");
         }
     }
 
@@ -418,7 +458,7 @@ public class DefaultHelpPrinter : HelpPrinter
         return helpPosition + 2;
     }
 
-    void printHelp(void delegate(string) sink, CommandHelpInfo[] commands)
+    void printHelp(const CommandHelpInfo[] commands)
     {
         auto helpScreen = createHelpScreen(commands);
 
@@ -428,7 +468,7 @@ public class DefaultHelpPrinter : HelpPrinter
 
 unittest
 {
-    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None, null /* unused in this test */);
 
     auto test(string placeholder, bool optionalValue, bool multipleOccurrence)
     {
@@ -447,7 +487,7 @@ unittest
 
 unittest
 {
-    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None, null /* unused in this test */);
 
     auto test(bool optionalArgument, bool positional, bool usageString)
     {
@@ -473,7 +513,7 @@ unittest
 
 unittest
 {
-    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None, null /* unused in this test */);
 
     auto test(bool usageString)
     {
@@ -492,7 +532,7 @@ unittest
 
 unittest
 {
-    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None, null /* unused in this test */);
 
     auto test(string description, Nullable!string defaultValue, bool positional = false)
     {
@@ -512,15 +552,14 @@ unittest
 
 unittest
 {
-    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
-    auto res = hp.formatCommandUsage(["a","b"], CommandHelpInfo(usage: "%(PROG) my usage"));
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None, null /* unused in this test */);
 
-    assert(res == "Usage: a b my usage");
+    assert(hp.formatUsage([CommandHelpInfo("a"), CommandHelpInfo(name: "b", usage: "%(PROG) my usage")]) == "Usage: a b my usage");
 }
 
 unittest
 {
-    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None, null /* unused in this test */);
 
     CommandHelpInfo cmd = {
         subCommands: [
@@ -561,7 +600,9 @@ unittest
 
 unittest
 {
-    scope hp = new DefaultHelpPrinter(Config.init, Style.None);
+    string output;
+
+    scope hp = new DefaultHelpPrinter(Config.init, Style.None, (_) { output ~= _; });
 
     ArgumentHelpInfo[] args = [
         // name is too long to fit into the name column, so the description goes to the next line
@@ -572,11 +613,14 @@ unittest
         ArgumentHelpInfo(placeholder: "dest", description: "Where to upload", positional: true),
     ];
 
-    assert(hp.formatArgumentList(args) ==
+    hp.printArgumentList([]);
+    assert(output == "");
+
+    output = null;
+    hp.printArgumentList(args);
+    assert(output ==
         "  -i FILE, --input FILE\n"~
         "          File to read\n"~
         "  -v\n"~
         "  dest    Where to upload\n");
-
-    assert(hp.formatArgumentList([]) == "");
 }

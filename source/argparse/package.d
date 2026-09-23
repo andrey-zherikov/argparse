@@ -1043,38 +1043,32 @@ unittest
         @(PositionalArgument(1).AllowedValues("q","a")) string param1;
     }
 
-    import std.array: appender;
+    static string captured;
 
     enum Config config = {
         styling: Style.None,
-        helpPrinter: (config, style, stack) {
-            scope hp = new DefaultHelpPrinter(config, style);
-
-            auto output = appender!string;
-            hp.printHelp(_ => output.put(_), stack);
-
-            assert(output[]  == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
-                "custom description\n\n"~
-                "Required arguments:\n"~
-                "  -f {apple,pear}, --fruit {apple,pear}\n"~
-                "                   This is a help text for fruit. Very very very very very very\n"~
-                "                   very very very very very very very very very very very very\n"~
-                "                   very long text\n"~
-                "  param0           This is a help text for param0. Very very very very very very\n"~
-                "                   very very very very very very very very very very very very\n"~
-                "                   very long text\n"~
-                "  {q,a}\n\n"~
-                "Optional arguments:\n"~
-                "  -s S\n"~
-                "  -p VALUE\n"~
-                "  -i {1,4,16,8}\n"~
-                "  -h, --help       Show this help message and exit\n\n"~
-                "custom epilog\n");
-        }
+        helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
     };
 
     T t;
     assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
+    assert(captured == "Usage: MYPROG [-s S] [-p VALUE] -f {apple,pear} [-i {1,4,16,8}] [-h] param0 {q,a}\n\n"~
+        "custom description\n\n"~
+        "Required arguments:\n"~
+        "  -f {apple,pear}, --fruit {apple,pear}\n"~
+        "                   This is a help text for fruit. Very very very very very very\n"~
+        "                   very very very very very very very very very very very very\n"~
+        "                   very long text\n"~
+        "  param0           This is a help text for param0. Very very very very very very\n"~
+        "                   very very very very very very very very very very very very\n"~
+        "                   very long text\n"~
+        "  {q,a}\n\n"~
+        "Optional arguments:\n"~
+        "  -s S\n"~
+        "  -p VALUE\n"~
+        "  -i {1,4,16,8}\n"~
+        "  -h, --help       Show this help message and exit\n\n"~
+        "custom epilog\n");
 }
 
 unittest
@@ -1101,35 +1095,29 @@ unittest
         @PositionalArgument string q;
     }
 
-    import std.array: appender;
+    static string captured;
 
     enum Config config = {
         styling: Style.None,
-        helpPrinter: (config, style, stack) {
-            scope hp = new DefaultHelpPrinter(config, style);
-
-            auto output = appender!string;
-            hp.printHelp(_ => output.put(_), stack);
-
-            assert(output[]  == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
-                "group1:\n"~
-                "  group1 description\n\n"~
-                "  -a A\n"~
-                "  -b B\n"~
-                "  p\n\n"~
-                "group2:\n"~
-                "  group2 description\n\n"~
-                "  -c C\n"~
-                "  -d D\n\n"~
-                "Required arguments:\n"~
-                "  q\n\n"~
-                "Optional arguments:\n"~
-                "  -h, --help    Show this help message and exit\n\n");
-        }
+        helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
     };
 
     T t;
     assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
+    assert(captured == "Usage: MYPROG [-a A] [-b B] [-c C] [-d D] [-h] p q\n\n"~
+        "group1:\n"~
+        "  group1 description\n\n"~
+        "  -a A\n"~
+        "  -b B\n"~
+        "  p\n\n"~
+        "group2:\n"~
+        "  group2 description\n\n"~
+        "  -c C\n"~
+        "  -d D\n\n"~
+        "Required arguments:\n"~
+        "  q\n\n"~
+        "Optional arguments:\n"~
+        "  -h, --help    Show this help message and exit\n\n");
 }
 
 unittest
@@ -1154,52 +1142,42 @@ unittest
         SubCommand!(cmd1, CMD2) cmd;
     }
 
-    import std.array: appender;
-
     {
+        static string captured;
+
         enum Config config = {
             styling: Style.None,
-            helpPrinter: (config, style, stack) {
-                scope hp = new DefaultHelpPrinter(config, style);
-
-                auto output = appender!string;
-                hp.printHelp(_ => output.put(_), stack);
-
-                assert(output[]  == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
-                "Available commands:\n"~
-                "  cmd1          Perform cmd 1\n"~
-                "  very-long-command-name-2\n"~
-                "                Perform cmd 2\n\n"~
-                "Optional arguments:\n"~
-                "  -c C\n"~
-                "  -d D\n"~
-                "  -h, --help    Show this help message and exit\n\n");
-            }
+            helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
         };
 
         T t;
         assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
+        assert(captured == "Usage: MYPROG [-c C] [-d D] [-h] <command> [<args>]\n\n"~
+        "Available commands:\n"~
+        "  cmd1          Perform cmd 1\n"~
+        "  very-long-command-name-2\n"~
+        "                Perform cmd 2\n\n"~
+        "Optional arguments:\n"~
+        "  -c C\n"~
+        "  -d D\n"~
+        "  -h, --help    Show this help message and exit\n\n");
     }
     {
+        static string captured;
+
         enum Config config = {
             styling: Style.None,
-            helpPrinter: (config, style, stack) {
-                scope hp = new DefaultHelpPrinter(config, style);
-
-                auto output = appender!string;
-                hp.printHelp(_ => output.put(_), stack);
-
-                assert(output[]  == "Usage: MYPROG cmd1 [-a A] [-h]\n\n"~
-                "Optional arguments:\n"~
-                "  -a A\n"~
-                "  -h, --help    Show this help message and exit\n"~
-                "  -c C\n"~
-                "  -d D\n\n");
-            }
+            helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
         };
 
         T t;
         assert(CLI!(config, T).parseArgs(t, ["cmd1", "-h"]).isHelpWanted);
+        assert(captured == "Usage: MYPROG cmd1 [-a A] [-h]\n\n"~
+        "Optional arguments:\n"~
+        "  -a A\n"~
+        "  -h, --help    Show this help message and exit\n"~
+        "  -c C\n"~
+        "  -d D\n\n");
     }
 }
 
@@ -1221,28 +1199,22 @@ unittest
         SubCommand!(Default!cmd1, cmd2) cmd;
     }
 
-    import std.array: appender;
+    static string captured;
 
     enum Config config = {
         styling: Style.None,
-        helpPrinter: (config, style, stack) {
-            scope hp = new DefaultHelpPrinter(config, style);
-
-            auto output = appender!string;
-            hp.printHelp(_ => output.put(_), stack);
-
-            assert(output[]  == "Usage: MYPROG [-c C] [-h] <command> [<args>]\n\n"~
-            "Available commands:\n"~
-            "  cmd1 (default)\n"~
-            "  cmd2              Perform cmd 2\n\n"~
-            "Optional arguments:\n"~
-            "  -c C\n"~
-            "  -h, --help        Show this help message and exit\n\n");
-        }
+        helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
     };
 
     T t;
     assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
+    assert(captured == "Usage: MYPROG [-c C] [-h] <command> [<args>]\n\n"~
+    "Available commands:\n"~
+    "  cmd1 (default)\n"~
+    "  cmd2              Perform cmd 2\n\n"~
+    "Optional arguments:\n"~
+    "  -c C\n"~
+    "  -h, --help        Show this help message and exit\n\n");
 }
 
 unittest
@@ -1257,26 +1229,20 @@ unittest
         void bar(bool value) {}
     }
 
-    import std.array: appender;
+    static string captured;
 
     enum Config config = {
         styling: Style.None,
-        helpPrinter: (config, style, stack) {
-            scope hp = new DefaultHelpPrinter(config, style);
-
-            auto output = appender!string;
-            hp.printHelp(_ => output.put(_), stack);
-
-            assert(output[]  == "Usage: MYPROG [-f] [-b] [-h]\n\n"~
-            "Optional arguments:\n"~
-            "  -f, --[no-]foo\n"~
-            "  -b, --[no-]bar\n"~
-            "  -h, --help        Show this help message and exit\n\n");
-        }
+        helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
     };
 
     T t;
     assert(CLI!(config, T).parseArgs(t, ["cmd1", "-h"]).isHelpWanted);
+    assert(captured == "Usage: MYPROG [-f] [-b] [-h]\n\n"~
+    "Optional arguments:\n"~
+    "  -f, --[no-]foo\n"~
+    "  -b, --[no-]bar\n"~
+    "  -h, --help        Show this help message and exit\n\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1303,37 +1269,31 @@ unittest
         @(PositionalArgument(0).Optional)               string pos = "xyz";
     }
 
-    import std.array: appender;
+    static string captured;
 
     enum Config config = {
         styling: Style.None,
-        helpPrinter: (config, style, stack) {
-            scope hp = new DefaultHelpPrinter(config, style);
-
-            auto output = appender!string;
-            hp.printHelp(_ => output.put(_), stack);
-
-            assert(output[]  == "Usage: MYPROG [-a A] [-b B] [--mode {WALK,RUN}] --req {WALK,RUN} [--quiet {WALK,RUN}]"~
-            " [--forced FORCED] [-j J] [-k K] [--arr ARR ...] [--aa AA ...] [-h] [pos]\n\n"~
-            "Required arguments:\n"~
-            "  --req {WALK,RUN}\n\n"~
-            "Optional arguments:\n"~
-            "  -a A                  desc for a (default: abc)\n"~   // initialized with non-init value
-            "  -b B\n"~                                              // no initializer
-            "  --mode {WALK,RUN}     (default: WALK)\n"~             // enum
-            "  --quiet {WALK,RUN}\n"~                                // enum but explicitly disabled
-            "  --forced FORCED       (default: )\n"~                 // no initializer but explicitly enabled
-            "  -j J                  (default: number of CPUs)\n"~   // provided by a function
-            "  -k K\n"~                                              // suppressed by a function
-            "  --arr ARR ...         (default: x,y)\n"~
-            "  --aa AA ...           (default: a=1)\n"~
-            "  [pos]                 (default: xyz)\n"~
-            "  -h, --help            Show this help message and exit\n\n");
-        }
+        helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
     };
 
     T t;
     assert(CLI!(config, T).parseArgs(t, ["-h"]).isHelpWanted);
+    assert(captured == "Usage: MYPROG [-a A] [-b B] [--mode {WALK,RUN}] --req {WALK,RUN} [--quiet {WALK,RUN}]"~
+    " [--forced FORCED] [-j J] [-k K] [--arr ARR ...] [--aa AA ...] [-h] [pos]\n\n"~
+    "Required arguments:\n"~
+    "  --req {WALK,RUN}\n\n"~
+    "Optional arguments:\n"~
+    "  -a A                  desc for a (default: abc)\n"~   // initialized with non-init value
+    "  -b B\n"~                                              // no initializer
+    "  --mode {WALK,RUN}     (default: WALK)\n"~             // enum
+    "  --quiet {WALK,RUN}\n"~                                // enum but explicitly disabled
+    "  --forced FORCED       (default: )\n"~                 // no initializer but explicitly enabled
+    "  -j J                  (default: number of CPUs)\n"~   // provided by a function
+    "  -k K\n"~                                              // suppressed by a function
+    "  --arr ARR ...         (default: x,y)\n"~
+    "  --aa AA ...           (default: a=1)\n"~
+    "  [pos]                 (default: xyz)\n"~
+    "  -h, --help            Show this help message and exit\n\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

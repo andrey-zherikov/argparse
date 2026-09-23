@@ -13,15 +13,20 @@
 
 `DefaultHelpPrinter.style` holds an actual style that should be applied to the help screen text. This should be used instead of `config.style`.
 
+### sink
+
+`DefaultHelpPrinter.sink` holds the delegate that was passed to constructor. All the functions that print help text
+send it there.
+
 ## Public member functions
 
 ### Constructor
 
-Constructor of `DefaultHelpPrinter` initializes an object with specified `Config` and `Style` parameters.
+Constructor of `DefaultHelpPrinter` initializes an object with specified `Config`, `Style` and a sink to print to.
 
 **Signature**
 ```c++
-this(const Config config, Style style)
+this(const Config config, Style style, void delegate(string) sink)
 ```
 
 > Note that `style` must contain actual style that should be applied to help screen. Usually it's either `config.style` or `Style.None`
@@ -30,29 +35,41 @@ this(const Config config, Style style)
 {style="note"}
 
 
-### formatCommandUsage
+### formatUsage
 
-`formatCommandUsage` returns formatted string for command usage line which is usually `Usage: ...`.
+`formatUsage` returns the usage line which is usually `Usage: ...`. If the command has custom usage text then `%(PROG)`
+in it is replaced with the names of all commands in the stack.
+
+Both [`printUsage`](#printusage) and [`createHelpScreen`](#createhelpscreen) use this function, so overriding it changes
+the usage line everywhere.
 
 **Signature**
 
 ```c++
-string formatCommandUsage(string[] commandName, in CommandHelpInfo helpInfo)
+string formatUsage(const CommandHelpInfo[] commands)
 ```
 
 **Parameters**
 
-- `commandName`
+- `commands`
 
-  List of command names including names of parent commands starting with top-level command.
+  List of commands starting with top-level command. The usage line is built for the last one.
 
-- `helpInfo`
+### printUsage
 
-  Help info about command.
+`printUsage` prints the usage line built by [`formatUsage`](#formatusage), terminated with `\n`.
 
-**Return value**
+**Signature**
 
-String with formatted usage info.
+```c++
+void printUsage(const CommandHelpInfo[] commands)
+```
+
+**Parameters**
+
+- `commands`
+
+  List of commands starting with top-level command. The usage line is printed for the last one.
 
 ### formatArgumentUsage
 
@@ -122,6 +139,23 @@ string formatArgumentDescription(in ArgumentHelpInfo helpInfo)
 
 String with formatted argument description.
 
+### printArgumentList
+
+`printArgumentList` prints the list of arguments returned by [`formatArgumentList`](#formatargumentlist) to
+[`sink`](#sink).
+
+**Signature**
+
+```c++
+void printArgumentList(const ArgumentHelpInfo[] args)
+```
+
+**Parameters**
+
+- `args`
+
+  Arguments to be listed.
+
 ### formatArgumentList
 
 `formatArgumentList` returns a list of arguments formatted the same way the help screen formats them: every argument
@@ -157,7 +191,7 @@ This function creates [`HelpScreen`](HelpScreen.md) based on list of [commands](
 **Signature**
 
 ```c++
-HelpScreen createHelpScreen(CommandHelpInfo[] commands)
+HelpScreen createHelpScreen(const CommandHelpInfo[] commands)
 ```
 
 **Parameters**
@@ -213,19 +247,15 @@ Array of `HelpScreen.Group` objects representing groups of arguments.
 
 ### printHelp
 
-Function that creates help screen from commands info and prints through `sink`.
+Function that creates help screen from commands info and prints it to [`sink`](#sink).
 
 **Signature**
 
 ```c++
-void printHelp(void delegate(string) sink, CommandHelpInfo[] commands)
+void printHelp(const CommandHelpInfo[] commands)
 ```
 
 **Parameters**
-
-- `sink`
-
-  Delegate that receives output in pieces.
 
 - `commands`
 
@@ -234,17 +264,17 @@ void printHelp(void delegate(string) sink, CommandHelpInfo[] commands)
 
 ### printHelpScreen
 
-This function prints [`HelpScreen`](HelpScreen.md) object through `sink`.
+This function prints [`HelpScreen`](HelpScreen.md) object through `output`.
 
 **Signature**
 
 ```c++
-void printHelpScreen(void delegate(string) sink, const ref HelpScreen screen, size_t descriptionOffset)
+void printHelpScreen(void delegate(string) output, const ref HelpScreen screen, size_t descriptionOffset)
 ```
 
 **Parameters**
 
-- `sink`
+- `output`
 
   Delegate that receives output in pieces.
 
@@ -259,17 +289,17 @@ void printHelpScreen(void delegate(string) sink, const ref HelpScreen screen, si
 
 ### printGroup
 
-This function prints [`HelpScreen.Group`](HelpScreen.md#group) object through `sink`.
+This function prints [`HelpScreen.Group`](HelpScreen.md#group) object through `output`.
 
 **Signature**
 
 ```c++
-void printGroup(void delegate(string) sink, const ref HelpScreen.Group group, size_t descriptionOffset)
+void printGroup(void delegate(string) output, const ref HelpScreen.Group group, size_t descriptionOffset)
 ```
 
 **Parameters**
 
-- `sink`
+- `output`
 
   Delegate that receives output in pieces.
 
@@ -284,19 +314,20 @@ void printGroup(void delegate(string) sink, const ref HelpScreen.Group group, si
 
 ### printParameter
 
-This function prints [`HelpScreen.Parameter`](HelpScreen.md#parameter) object through `sink`.
+This function prints [`HelpScreen.Parameter`](HelpScreen.md#parameter) object through `output`.
 
 **Signature**
 
 ```c++
-  void printParameter(void delegate(string) sink, const ref HelpScreen.Parameter param, size_t descriptionOffset)
+  void printParameter(void delegate(string) output, const ref HelpScreen.Parameter param, size_t descriptionOffset)
 ```
 
 **Parameters**
 
-- `sink`
+- `output`
 
-  Delegate that receives output in pieces.
+  Delegate that receives output in pieces. Note that it is not necessarily [`sink`](#sink):
+  [`formatArgumentList`](#formatargumentlist) uses it to render arguments into a string.
 
 - `param`
 
