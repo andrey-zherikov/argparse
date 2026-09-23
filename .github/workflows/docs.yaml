@@ -5,10 +5,8 @@ on:
     branches: ["master"]
   pull_request:
 
-# Gives the workflow permissions to clone the repo and create a page deployment
 permissions:
-  id-token: write
-  pages: write
+  contents: read
 
 env:
   # Name of help module and instance id separated by a slash
@@ -71,6 +69,10 @@ jobs:
 
   deploy:
     if: ${{ github.ref_name == 'master' }}
+    # Gives the job permissions to create a page deployment
+    permissions:
+      id-token: write
+      pages: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
