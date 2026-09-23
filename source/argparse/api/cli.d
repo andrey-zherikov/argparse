@@ -144,15 +144,15 @@ unittest
         assert(captured == "Usage: prog sub\n");
     }
     {
-        static string captured;
+        import std.exception: collectExceptionMsg;
 
+        // Check that helpPrinterFactory is not used
         enum Config config = {
             helpOnError: Config.HelpOnError.none,
-            helpPrinterFactory: (cfg, style, sink) => new DefaultHelpPrinter(cfg, style, (_) { captured ~= _; }),
+            helpPrinterFactory: (cfg, style, sink) => assert(false),
         };
 
-        onErrorHelp(config, cmds);
-        assert(captured is null);
+        assert(collectExceptionMsg(onErrorHelp(config, cmds)) is null);
     }
     {
         static string captured;
