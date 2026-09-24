@@ -205,6 +205,35 @@ struct my_command
 }
 ```
 
+### EnvFallback
+
+`EnvFallback` makes an argument fall back to the value of an environment variable if the argument is not provided
+in command line. Value from command line always takes precedence over the environment variable.
+
+See [Fallback to environment variable](Environment-Fallback.md) for details.
+
+**Signature**
+
+```C++
+EnvFallback(auto ref ... argument, string variable)
+```
+
+**Parameters**
+
+- `variable`
+
+  Name of the environment variable.
+
+**Usage example**
+
+```C++
+struct my_command
+{
+  @(NamedArgument.EnvFallback("USER"))
+  string user;
+}
+```
+
 ### NumberOfValues
 
 `NumberOfValues` is used to limit number of values that an argument can accept.
