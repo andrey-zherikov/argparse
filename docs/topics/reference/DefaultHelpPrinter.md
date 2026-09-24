@@ -11,7 +11,7 @@
 
 ### style
 
-`DefaultHelpPrinter.style` holds an actual style that should be applied to the help screen text. This should be used instead of `config.style`.
+`DefaultHelpPrinter.style` holds an actual style that should be applied to the help screen text. This should be used instead of `config.styling`.
 
 ### sink
 
@@ -29,7 +29,7 @@ Constructor of `DefaultHelpPrinter` initializes an object with specified `Config
 this(const Config config, Style style, void delegate(string) sink)
 ```
 
-> Note that `style` must contain actual style that should be applied to help screen. Usually it's either `config.style` or `Style.None`
+> Note that `style` must contain actual style that should be applied to help screen. Usually it's either `config.styling` or `Style.None`
 > depending on run-time enablement ([environment](ANSI-coloring-and-styling.md#heuristic) or [command line option](ANSI-coloring-and-styling.md#enable/disable)).
 >
 {style="note"}
@@ -90,7 +90,7 @@ string formatArgumentUsage(in ArgumentHelpInfo helpInfo, bool usageString)
 
 - `usageString`
 
-  If `true` then the returned value wil be used in usage string, otherwise in argument description.
+  If `true` then the returned value will be used in usage string, otherwise in argument description.
 
 **Return value**
 
@@ -343,7 +343,7 @@ This function prints [`HelpScreen.Parameter`](HelpScreen.md#parameter) object th
 
 ### wrapText
 
-`wrapText` function wraps text into paragraphs by breaking it up into asequence of lines separated with `\n`, such that
+`wrapText` function wraps text into paragraphs by breaking it up into a sequence of lines separated with `\n`, such that
 the length of each line does not exceed specific limit. The last line is terminated with `\n`.
 
 This function is similar to `std.string.wrap` but with few adjustments:

@@ -14,7 +14,7 @@ Example:
 <code-block src="code_snippets/config_assignChar.d" lang="c++"/>
 
 
-## Assign character {id="assignKeyValueChar"}
+## Assign character for key-value pairs {id="assignKeyValueChar"}
 
 `Config.assignKeyValueChar` is an assignment character used in arguments that have associative array type: `-a=key=value`, `-boo=key=value`.
 
@@ -56,7 +56,7 @@ Example:
 
 ## Variadic named arguments {id="variadicNamedArgument"}
 
-`Config.variadicNamedArgument` flag controls whether named arguments should be follow [POSIX.1-2024](https://pubs.opengroup.org/onlinepubs/9799919799/)
+`Config.variadicNamedArgument` flag controls whether named arguments should follow [POSIX.1-2024](https://pubs.opengroup.org/onlinepubs/9799919799/)
 guidelines which allows only one value per named argument: `-a value1 -a value2`.
 
 Setting this flag to `true` allows multiple values to be passed to a named argument: `-a value1 value2`.
@@ -81,7 +81,7 @@ Example:
 
 ## Case sensitivity {id="caseSensitive"}
 
-`Config` type hase three data members to allow fine-grained tuning of case sensitivity:
+`Config` type has three data members to allow fine-grained tuning of case sensitivity:
 - `Config.caseSensitiveShortName` to control case sensitivity for short argument names.
 - `Config.caseSensitiveLongName` to control case sensitivity for long argument names.
 - `Config.caseSensitiveSubCommand` to control case sensitivity for subcommands.
@@ -132,8 +132,7 @@ Example:
 
 `Config.addHelpArgument` can be used to add (if `true`) or not (if `false`) `-h`/`--help` argument.
 In case if the command line has `-h` or `--help`, then the corresponding help text is printed and the parsing is stopped.
-If `CLI!(...).parseArgs(alias newMain)` or `CLI!(...).main(alias newMain)` is used, then provided `newMain` function will
-not be called.
+If `CLI!(...).main(alias newMain)` is used, then provided `newMain` function will not be called.
 
 Default is `true`.
 
@@ -255,7 +254,7 @@ It is a function that receives `string` parameter which would contain an error m
 Command line parsing can detect more than one error at a time, in which case the handler is called once per
 error message.
 
-> Function must ne `nothrow`
+> Function must be `nothrow`
 >
 {style="warning"}
 
@@ -269,6 +268,6 @@ This code prints `Detected an error: Unrecognized arguments: ["-b"]` to `stderr`
 
 ## Error exit code {id="errorExitCode"}
 
-`Config.errorExitCode` holds and exit code in case of error.
+`Config.errorExitCode` holds an exit code in case of error.
 
 Default value is `1`.
