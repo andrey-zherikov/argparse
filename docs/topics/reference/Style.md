@@ -33,3 +33,12 @@ Style for the value of positional argument. Default is `lightYellow`.
 
 Style for *Error:* prefix in error messages. Default is `red`.
 
+## Public constants
+
+### None
+
+`Style.None` is a style that has no styling at all: text is printed as is.
+
+### Default
+
+`Style.Default` is the style that is used by default: every member has the default value that is listed above.

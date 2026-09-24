@@ -77,8 +77,32 @@ Result parseArgs(ref COMMAND receiver, string[] args)
 
 **Return value**
 
-- In case of parsing error - `Result.exitCode` (`1` by default).
-- In case of success - `0`.
+`Result` object that can be cast to `bool` to check whether the parsing was successful or not.
+In case of parsing error, `Result.exitCode` holds [`Config.errorExitCode`](Config.md#errorExitCode) (`1` by default).
+
+### completeArgs
+
+`CLI.completeArgs` is a function that returns possible completions for the last argument in the command line.
+
+**Signature**
+
+```c++
+string[] completeArgs()(string[] args)
+```
+
+**Parameters**
+
+- `args`
+
+  Command line arguments (excluding `argv[0]` – first command line argument in `main` function).
+
+**Notes**
+
+See [Low level completion](Shell-completion.md#low-level-completion) for details.
+
+**Return value**
+
+List of all possible completions.
 
 ### complete
 
