@@ -528,6 +528,62 @@ unittest
     }
 }
 
+unittest
+{
+    // Config.requireSubCommand together with Config.helpOnError shows help when no subcommand is provided
+    @(Command("csa").Description("Generate a CSA"))
+    struct CSACommand {}
+    @(Command("sync-id").Description("Synchronize the ID"))
+    struct SyncIDCommand {}
+
+    @(Command("my-app-name").Description("Command line tool"))
+    struct T
+    {
+        SubCommand!(CSACommand, SyncIDCommand) cmd;
+    }
+
+    {
+        static string captured;
+
+        enum Config config = {
+            requireSubCommand: true,
+            helpOnError: Config.HelpOnError.full,
+            styling: Style.None,
+            stylingMode: Config.StylingMode.off,
+            helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
+            errorHandler: (msg) { captured ~= "Error: " ~ msg ~ "\n"; },
+        };
+
+        T t;
+        assert(CLI!(config, T).parseArgs(t, []).isError("Subcommand is required","csa","sync-id"));
+        assert(captured == "Usage: my-app-name [-h] <command> [<args>]\n\n"~
+        "Command line tool\n\n"~
+        "Available commands:\n"~
+        "  csa           Generate a CSA\n"~
+        "  sync-id       Synchronize the ID\n\n"~
+        "Optional arguments:\n"~
+        "  -h, --help    Show this help message and exit\n\n"~
+        "Error: Subcommand is required: csa, sync-id\n");
+    }
+    {
+        static string captured;
+
+        enum Config config = {
+            requireSubCommand: true,
+            helpOnError: Config.HelpOnError.usage,
+            styling: Style.None,
+            stylingMode: Config.StylingMode.off,
+            helpPrinterFactory: (config, style, sink) => new DefaultHelpPrinter(config, style, (_) { captured ~= _; }),
+            errorHandler: (msg) { captured ~= "Error: " ~ msg ~ "\n"; },
+        };
+
+        T t;
+        assert(CLI!(config, T).parseArgs(t, []).isError("Subcommand is required","csa","sync-id"));
+        assert(captured == "Usage: my-app-name [-h] <command> [<args>]\n"~
+        "Error: Subcommand is required: csa, sync-id\n");
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 unittest
@@ -898,6 +954,45 @@ unittest
     assert(res.errorMessages.length == 2);
     assert(res.isError("The following argument is required","--req"));
     assert(res.isError("Argument","-a","is not allowed with argument","-b"));
+}
+
+unittest
+{
+    // All missed required arguments are reported together with violated restriction, each error goes to errorHandler
+    struct T
+    {
+        @(NamedArgument.Required.Description("File to read the data from"))
+        string input;
+
+        @(PositionalArgument(0).Description("Where to upload the result"))
+        string destination;
+
+        @MutuallyExclusive()
+        {
+            @(NamedArgument.Description("Print more details"))
+            bool verbose;
+
+            @(NamedArgument.Description("Print nothing"))
+            bool quiet;
+        }
+    }
+
+    static string[] captured;
+
+    enum Config config = {
+        styling: Style.None,
+        stylingMode: Config.StylingMode.off,
+        errorHandler: (msg) { captured ~= msg; },
+    };
+
+    T t;
+    assert(CLI!(config, T).parseArgs(t, ["--verbose","--quiet"]).isError);
+    assert(captured == [
+        "The following arguments are required:\n"~
+        "  --input INPUT    File to read the data from\n"~
+        "  destination      Where to upload the result",
+        "Argument '--verbose' is not allowed with argument '--quiet'",
+    ]);
 }
 
 unittest
