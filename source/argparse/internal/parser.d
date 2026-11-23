@@ -256,6 +256,70 @@ unittest
 {
     import argparse.api.subcommand: Default, SubCommand;
 
+    struct sub1 {}
+    struct sub2 {}
+    struct c1 {
+        string foo;
+        SubCommand!(sub1, sub2) c;
+    }
+    struct c2 {}
+    struct cmd {
+        SubCommand!(Default!c1, c2) c;
+    }
+
+    enum Config cfg = { stylingMode: Config.StylingMode.off };
+
+    // Subcommands of a parent command must not replace the subcommand that is already selected
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(parseArgs!cfg(c, ["c1","c2"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["c2"]);
+        assert(c == cmd(typeof(c.c)(c1())));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(parseArgs!cfg(c, ["c1","sub1","c2"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["c2"]);
+        assert(c == cmd(typeof(c.c)(c1("", typeof(c1.c)(sub1())))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(parseArgs!cfg(c, ["c1","sub1","sub2"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["sub2"]);
+        assert(c == cmd(typeof(c.c)(c1("", typeof(c1.c)(sub1())))));
+    }
+    // Same when the subcommand is selected by default, through one of its arguments
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(parseArgs!cfg(c, ["--foo","FOO","c2"], unrecognizedArgs));
+        assert(unrecognizedArgs == ["c2"]);
+        assert(c == cmd(typeof(c.c)(c1("FOO"))));
+    }
+    // Subcommands of the selected one, and of the parent command beforehand, are still accepted
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(parseArgs!cfg(c, ["c1","sub2"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd(typeof(c.c)(c1("", typeof(c1.c)(sub2())))));
+    }
+    {
+        cmd c;
+        string[] unrecognizedArgs;
+        assert(parseArgs!cfg(c, ["c2"], unrecognizedArgs));
+        assert(unrecognizedArgs.length == 0);
+        assert(c == cmd(typeof(c.c)(c2())));
+    }
+}
+
+unittest
+{
+    import argparse.api.subcommand: Default, SubCommand;
+
     struct c1 {
         string foo;
         string boo;
