@@ -60,7 +60,7 @@ subcommands (`init` and `complete` accordingly).
 Before using completion, completer should be added to the shell. This can be achieved by using `init` subcommand. It
 accepts the following arguments (you can get them by running `<completer> init --help`):
 - `--bash`: provide completion for bash.
-- `--zsh`: provide completion for zsh. Note: zsh completion is done through bash completion so you should execute `bashcompinit` first.
+- `--zsh`: provide completion for zsh.
 - `--tcsh`: provide completion for tcsh.
 - `--fish`: provide completion for fish.
 - `--completerPath <path>`: path to completer. By default, the path to itself is used.
@@ -80,6 +80,13 @@ Example of completer output for `<completer> init --bash --commandName mytool --
 complete -C 'eval /path/to/completer --bash -- $COMP_LINE ---' mytool
 ```
 
+For zsh, the output is a native completion function, so it can either be sourced after `compinit` in `.zshrc`, or
+saved as `_<name>` in a directory listed in `$fpath` (e.g., `share/zsh/site-functions`). The latter needs no change to
+the user's shell configuration, which makes it the preferred way for packagers:
+```shell
+<completer> init --zsh > /path/to/site-functions/_mytool
+```
+
 Recommended workflow is to install completer into a system according to your installation policy and update shell
 initialization/config file to source the output of `init` command.
 
@@ -87,6 +94,7 @@ initialization/config file to source the output of `init` command.
 
 Argument completion is done by `complete` subcommand (it’s default one). It accepts the following arguments (you can get them by running `<completer> complete --help`):
 - `--bash`: provide completion for bash.
+- `--zsh`: provide completion for zsh.
 - `--tcsh`: provide completion for tcsh.
 - `--fish`: provide completion for fish.
 

@@ -59,6 +59,9 @@ private struct CompleteCmd
     {
         @(NamedArgument.Description("Provide completion for bash."))
         bool bash;
+        // zsh passes the words to complete as-is, so it needs no processing below
+        @(NamedArgument.Description("Provide completion for zsh."))
+        bool zsh;
         @(NamedArgument.Description("Provide completion for tcsh."))
         bool tcsh;
         @(NamedArgument.Description("Provide completion for fish."))
@@ -167,13 +170,24 @@ package(argparse) struct Complete(COMMAND)
             }
             else if(zsh)
             {
-                // We use bash completion for zsh
-                writeln("# Ensure that you called compinit and bashcompinit like below in your .zshrc:");
-                writeln("#       autoload -Uz compinit && compinit");
-                writeln("#       autoload -Uz bashcompinit && bashcompinit");
-                writeln("# And then add this source command after them into your .zshrc:");
+                // The output is a native completion function that works both when sourced and when autoloaded
+                // from `$fpath`. In the latter case, zsh uses the content of the file as the body of the function
+                // named after the file, so the function is defined again and has to be called on first use.
+                // The first word is the command name, which `completeArgs` doesn't expect.
+                const func = "_" ~ commandName;
+                writeln("#compdef ", commandName);
+                writeln("# Either save this output as '", func, "' in a directory listed in $fpath,");
+                writeln("# or add this source command after compinit into your .zshrc:");
                 writeln("#       source <(", completerPath, " init --zsh", commandNameArg, ")");
-                writeln("complete -C 'eval ", completerPath, " --bash -- $COMP_LINE ---' ", commandName);
+                writeln("compdef ", func, " ", commandName);
+                writeln(func, "() {");
+                writeln("    local -a candidates");
+                writeln(`    candidates=(${(f)"$(`, completerPath, ` --zsh -- "${(@Q)words[2,CURRENT]}" 2>/dev/null)"})`);
+                writeln("    compadd -a candidates");
+                writeln("}");
+                writeln(`if [ "$funcstack[1]" = "`, func, `" ]; then`);
+                writeln(`    `, func, ` "$@"`);
+                writeln("fi");
             }
             else if(tcsh)
                 {
