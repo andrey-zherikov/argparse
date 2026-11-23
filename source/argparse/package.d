@@ -654,6 +654,22 @@ unittest
 {
     struct T
     {
+        struct cmd1 {}
+        struct cmd2 {}
+
+        SubCommand!(cmd1, cmd2) cmd;
+    }
+
+    enum Config config = { caseSensitiveSubCommand: false };
+
+    assert(CLI!(config, T).completeArgs([""]) == ["--help","-h","cmd1","cmd2"]);
+    assert(CLI!(config, T).completeArgs(["c"]) == ["cmd1","cmd2"]);
+}
+
+unittest
+{
+    struct T
+    {
         @(NamedArgument.NumberOfValues(1,3))
         int[] a;
         @(NamedArgument.NumberOfValues(2))
