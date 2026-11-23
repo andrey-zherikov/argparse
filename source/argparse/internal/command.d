@@ -154,7 +154,9 @@ package struct Command
         import std.string: startsWith;
 
         // suggestions are names of all arguments and subcommands
-        auto suggestions_ = chain(arguments.namedArguments.filter!((ref _) => !_.hidden).map!((ref _) => _.displayNames).join, subCommands.byName.keys);
+        // Subcommand names are upper-cased for lookup if they are case-insensitive, so they can't be used here
+        auto suggestions_ = chain(arguments.namedArguments.filter!((ref _) => !_.hidden).map!((ref _) => _.displayNames).join,
+                                  subCommands.info.map!((ref _) => _.displayNames.dup).join);
 
         // empty prefix means that we need to provide all suggestions, otherwise they are filtered
         return prefix == "" ? suggestions_.array : suggestions_.filter!(_ => _.startsWith(prefix)).array;
