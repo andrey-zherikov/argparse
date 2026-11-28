@@ -88,13 +88,10 @@ package struct CommandStack
 
     auto findSubCommand(string name)
     {
-        // Look up in comand stack
-        foreach_reverse(ref cmd; stack)
-        {
-            auto res = cmd.getSubCommand(name);
-            if(res)
-                return res;
-        }
+        // Only the last subcommand is looked up
+        if(auto res = stack.back.getSubCommand(name))
+            return res;
+
         // Look up through default subcommands
         for(auto newStack = stack[]; newStack.back.defaultSubCommand !is null;)
         {
