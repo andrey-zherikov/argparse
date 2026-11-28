@@ -639,6 +639,8 @@ unittest
 
         environment.remove("COMP_LINE");
     }
+    assert(!CLI!T.complete(["--zsh","--",""]));
+    assert(!CLI!T.complete(["--zsh","--","c"]));
     {
         environment["COMMAND_LINE"] = "mytool ";
         assert(!CLI!T.complete(["--tcsh","--"]));
